@@ -16,7 +16,7 @@ import type { RunContext } from "@/server/agent/contracts";
 import {
   serializeTranscript,
   type StoredMessage,
-} from "@/server/agent/session/serializeTranscript";
+} from "@/server/agent/session";
 import { prisma } from "@/server/db/prisma";
 import {
   readMemory,

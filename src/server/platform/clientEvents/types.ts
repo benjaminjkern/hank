@@ -8,7 +8,7 @@ import { z } from "zod";
 
 import { stringField } from "@/utils/guards";
 
-export const CLIENT_EVENT_SOURCES = [
+const CLIENT_EVENT_SOURCES = [
   "sse_disconnect", // SSE chat stream dropped mid-turn (no terminal event seen)
   "chat_error", // chat route returned an error event / the POST failed (non-modal)
   "modal", // ApiKeyBlocker modal shown (context.reason = missing|invalid|no_credit|missing_deepseek)
@@ -18,7 +18,7 @@ export const CLIENT_EVENT_SOURCES = [
 ] as const;
 export type ClientEventSource = (typeof CLIENT_EVENT_SOURCES)[number];
 
-export const CLIENT_EVENT_SEVERITIES = ["info", "warn", "error"] as const;
+const CLIENT_EVENT_SEVERITIES = ["info", "warn", "error"] as const;
 export type ClientEventSeverity = (typeof CLIENT_EVENT_SEVERITIES)[number];
 
 // Wire shape the browser POSTs to /api/client-events. Note there's no

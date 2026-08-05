@@ -43,7 +43,7 @@ export type FixtureRegistryEntry = {
 // operation → static fixture set. Keys are UsageOperation values (the same
 // `operation` string SubAgentRun rows carry), so a real run joins to its
 // fixtures by `run.operation`.
-export const FIXTURE_REGISTRY: Record<string, FixtureRegistryEntry> = {
+const FIXTURE_REGISTRY: Record<string, FixtureRegistryEntry> = {
   scan_job: entry(
     "scan_job",
     "scan-job",
@@ -198,11 +198,4 @@ export function describeFixture(f: unknown): string {
 function strField(o: Record<string, unknown>, key: string): string | null {
   const v = o[key];
   return typeof v === "string" && v.trim() ? v.trim() : null;
-}
-
-// Every static fixture description for an operation, one per line (bullet list).
-export function describeFixturesForOperation(operation: string): string[] {
-  const e = fixturesForOperation(operation);
-  if (!e) return [];
-  return e.fixtures.map((f) => describeFixture(f));
 }

@@ -1,9 +1,4 @@
-import {
-  chromium,
-  type Browser,
-  type Page,
-  type BrowserContext,
-} from "playwright";
+import { chromium, type Browser, type BrowserContext } from "playwright";
 
 // Singleton headless-Chromium launcher. Most ATSes expose unauthenticated JSON
 // endpoints and need nothing here — this is the fallback for boards whose apply
@@ -78,7 +73,7 @@ type HeadlessPageOpts = {
 // afterwards. The context lets a caller open several pages concurrently (e.g. a
 // list page + fanned-out detail pages). Throws HeadlessUnavailableError if
 // Chromium can't launch — callers translate that to an `unsupported`/`error`
-// envelope. Use withHeadlessPage when you only need a single page.
+// envelope.
 export async function withHeadlessContext<T>(
   fn: (ctx: BrowserContext) => Promise<T>,
   opts: HeadlessPageOpts = {},
@@ -112,26 +107,6 @@ export async function withHeadlessContext<T>(
   } finally {
     opts.signal?.removeEventListener("abort", onAbort);
     await context.close().catch(() => {});
-  }
-}
-
-// Run `fn` against a single fresh page (most callers). See withHeadlessContext
-// when you need to open multiple pages concurrently.
-export async function withHeadlessPage<T>(
-  fn: (page: Page) => Promise<T>,
-  opts: HeadlessPageOpts = {},
-): Promise<T> {
-  return await withHeadlessContext((ctx) => ctx.newPage().then(fn), opts);
-}
-
-// True if Chromium can launch in this environment. Cheap probe for scripts /
-// startup checks; the launch is cached so this doesn't cost an extra browser.
-export async function isHeadlessAvailable(): Promise<boolean> {
-  try {
-    await getBrowser();
-    return true;
-  } catch {
-    return false;
   }
 }
 

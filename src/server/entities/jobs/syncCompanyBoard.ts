@@ -37,7 +37,6 @@ export async function syncCompanyBoard(args: {
   const scrapeStartedAt = new Date();
   const scrape = await scrapeUrl(
     args.sourceUrl,
-    args.userId,
     args.signal ? { signal: args.signal } : undefined,
   );
   if (!scrape.ok) return { ok: false, error: scrape.error };

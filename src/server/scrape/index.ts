@@ -55,9 +55,6 @@ export async function testScrape(url: string): Promise<TestScrapeResult> {
 // involvement, no cost beyond network. Non-ATS URLs fail; callers should
 // either supply an ATS URL or escalate to CANNOT_SCRAPE.
 //
-// `userId` is vestigial from when there was an LLM fallback that needed cost
-// tracking. Kept in the signature for now so call sites don't need to change.
-//
 // A user Stop THROWS out of here rather than returning `{ok:false}`, and that
 // distinction is load-bearing: callers read a failed scrape as "this board is
 // unreadable" and set the company BLOCKED / CANNOT_SCRAPE (walkthrough's
@@ -66,7 +63,6 @@ export async function testScrape(url: string): Promise<TestScrapeResult> {
 // the abort handling every tool dispatch already has.
 export async function scrapeUrl(
   url: string,
-  _userId?: string,
   opts?: ScrapeOpts,
 ): Promise<ScrapeResult> {
   opts?.signal?.throwIfAborted();

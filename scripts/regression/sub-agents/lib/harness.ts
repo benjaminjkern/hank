@@ -46,7 +46,7 @@ export function dbHost(): string {
 // Refuse to run against a non-localhost DB unless --live is explicitly passed.
 // Every audit is read-only / dryRun, but reading live data silently picks the
 // wrong fixtures (slugs/jobs that only exist in one DB) — fail loud instead.
-export function assertDbAllowed(): string {
+function assertDbAllowed(): string {
   const host = dbHost();
   const allowLive = process.argv.includes("--live");
   if (!isLocalHost(host) && !allowLive) {
@@ -66,7 +66,7 @@ export type AuditCtx = {
 
 // Resolve the host user (SEED_ADMIN_EMAIL or the first admin), an active
 // ChatSession to attribute usage to, and a judge client keyed by that user.
-export async function resolveAuditCtx(): Promise<AuditCtx> {
+async function resolveAuditCtx(): Promise<AuditCtx> {
   // AUDIT_USER_EMAIL pins the audits at a specific user (the prod test user);
   // falls back to SEED_ADMIN_EMAIL, then the first admin.
   const email = process.env.AUDIT_USER_EMAIL ?? process.env.SEED_ADMIN_EMAIL;
@@ -114,7 +114,7 @@ async function readFileIfExists(path: string): Promise<string | null> {
 
 // Append this run's cases to the day's report file (creating it if absent), so
 // run-all's sequential audits accumulate into one docs/audits/<date>.md.
-export async function appendRunReport(
+async function appendRunReport(
   runId: string,
   startedAt: string,
   cases: CaseReport[],

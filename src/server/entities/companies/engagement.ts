@@ -83,7 +83,7 @@ export async function computeCompanyEngagement(
 // Cost is FLAT in the number of companies — two reads and at most three writes,
 // because there are only three engagement statuses to move a company to, so the
 // updates group by target rather than going out one per company.
-export async function refreshCompaniesEngagement(
+async function refreshCompaniesEngagement(
   userId: string,
   companyIds: Array<string | null | undefined>,
   db: Db = prisma,

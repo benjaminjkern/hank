@@ -13,7 +13,7 @@
 // One page size for every list tool. It exists to keep a result token-bounded —
 // a watchlist of 400 companies must not blow out Hank's context in one call —
 // which is a property of the CHANNEL, not of any entity, so all of them share it.
-export const TOOL_PAGE_SIZE = 30;
+const TOOL_PAGE_SIZE = 30;
 
 // What a windowed query needs. Deliberately plain numbers: `entities/` cannot
 // import from the tool layer, so the list functions declare `skip`/`take`

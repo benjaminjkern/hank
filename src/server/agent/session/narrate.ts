@@ -16,7 +16,6 @@
 // why that distinction is load-bearing.
 
 import { Role } from "@/generated/prisma/client";
-import type { Prisma } from "@/generated/prisma/client";
 import type { TurnEvent } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
 

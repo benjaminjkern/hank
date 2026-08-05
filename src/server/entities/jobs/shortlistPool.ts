@@ -30,18 +30,6 @@ export function shortlistPoolStatusWhere(): Prisma.JobInteractionWhereInput {
   };
 }
 
-// The full pool predicate for one user + company.
-export function shortlistPoolWhere(
-  userId: string,
-  companyId: string,
-): Prisma.JobInteractionWhereInput {
-  return {
-    userId,
-    job: { companyId },
-    ...shortlistPoolStatusWhere(),
-  };
-}
-
 // "This row is ON the board" — carrying a stance OR placed under a group. Both
 // halves matter: a row the user cleared to undecided has no stance but is still
 // part of the open negotiation, and re-seeding over it would wipe their work.

@@ -5,7 +5,7 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 
-export const HALT_CATEGORIES = [
+const HALT_CATEGORIES = [
   "crash_error",
   "broken_widget",
   "looping_stuck",

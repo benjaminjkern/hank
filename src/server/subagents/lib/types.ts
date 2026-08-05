@@ -182,8 +182,3 @@ export type SubAgentRunOptions = {
   // do. Don't add such a flag back.
   toolDoubles?: AnyToolDef[];
 };
-
-// A def with its generics erased — for the runner's internals and for anything
-// that holds sub-agents generically.
-
-export type AnySubAgentDef = SubAgentDef<any, any, any>;

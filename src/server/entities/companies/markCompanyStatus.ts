@@ -38,7 +38,7 @@ export async function markCompanyReady(
 
 // No survivors but the company is on-thesis (could post a fit later): mark
 // CAUGHT_UP, not CLOSED. Clears all reason fields per clear-on-transition.
-export async function markCompanyCaughtUp(
+async function markCompanyCaughtUp(
   companyId: string,
   userId: string,
 ): Promise<void> {

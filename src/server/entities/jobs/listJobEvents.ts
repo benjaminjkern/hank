@@ -11,18 +11,8 @@ import type {
   JobInteractionStatus,
   JobCloseReason,
   JobDeferReason,
-  JobEventType,
-  EventSource,
 } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
-
-export type JobEventRow = {
-  id: string;
-  type: JobEventType;
-  occurredAt: Date;
-  notes: string | null;
-  source: EventSource;
-};
 
 export type JobEventHeader = {
   jobInteractionId: string;

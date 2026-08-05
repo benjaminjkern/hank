@@ -18,25 +18,15 @@ import {
   type ApplyChannel,
   type JobCloseReason,
   type CompanyBlockReason,
-  type CompanyCloseReason,
-  type CompanyPauseReason,
-  type JobDeferReason,
 } from "@/generated/prisma/client";
 import { formatFocusRefToken } from "@/lib/focusRefToken";
-import {
-  humanCompanyBlockReason,
-  humanCompanyCloseReason,
-  humanCompanyPauseReason,
-} from "@/server/entities/companies/humanCompanyReasonLabels";
-import {
-  humanJobCloseReason,
-  humanJobDeferReason,
-} from "@/server/entities/jobs/humanJobReasonLabels";
+import { humanCompanyBlockReason } from "@/server/entities/companies/humanCompanyReasonLabels";
+import { humanJobCloseReason } from "@/server/entities/jobs/humanJobReasonLabels";
 
-// Appended to all three company set-asides so the user sees one coherent
-// transition instead of [action] + [silent gap] + [next picker]. Same string
-// across the three so the post-action chrome reads consistently — the no-target
-// reentry branch in dispatchByEntryTarget matches it.
+// Appended to the company set-asides the machine performs so the user sees one
+// coherent transition instead of [action] + [silent gap] + [next picker]. Same
+// string across them so the post-action chrome reads consistently — the
+// no-target reentry branch in dispatchByEntryTarget matches it.
 const WRAP_DEBRIEF = " Pulling up what's next.";
 
 const MAX_NOTE_CHARS = 80;
@@ -58,15 +48,6 @@ function companyRef(companyId: string, companyName: string | null): string {
     : "this company";
 }
 
-export function narrateCompanyClose(args: {
-  companyId: string;
-  companyName: string | null;
-  reason: CompanyCloseReason;
-  note?: string;
-}): string {
-  return `Closed ${companyRef(args.companyId, args.companyName)} out — ${humanCompanyCloseReason(args.reason)}.${noteSuffix(args.note)}${WRAP_DEBRIEF}`;
-}
-
 export function narrateCompanyBlock(args: {
   companyId: string;
   companyName: string | null;
@@ -74,15 +55,6 @@ export function narrateCompanyBlock(args: {
   note?: string;
 }): string {
   return `Set ${companyRef(args.companyId, args.companyName)} aside — ${humanCompanyBlockReason(args.reason)}.${noteSuffix(args.note)}${WRAP_DEBRIEF}`;
-}
-
-export function narrateCompanyPause(args: {
-  companyId: string;
-  companyName: string | null;
-  reason: CompanyPauseReason;
-  note?: string;
-}): string {
-  return `Paused ${companyRef(args.companyId, args.companyName)} (${humanCompanyPauseReason(args.reason)}).${noteSuffix(args.note)}${WRAP_DEBRIEF}`;
 }
 
 // Keyed off the status that actually landed, so this doesn't say "caught up"
@@ -102,13 +74,6 @@ export function narrateCompanyCaughtUp(args: {
   return `${line}${WRAP_DEBRIEF}`;
 }
 
-export function narrateCompanySwitch(args: {
-  companyId: string;
-  companyName: string | null;
-}): string {
-  return `Switched to ${companyRef(args.companyId, args.companyName)}.`;
-}
-
 export function narrateCompanyRevive(args: {
   companyId: string;
   companyName: string | null;
@@ -123,15 +88,6 @@ export function narrateJobClose(args: {
   note?: string;
 }): string {
   return `Closed ${jobRef(args)} — ${humanJobCloseReason(args.reason)}.${noteSuffix(args.note)}`;
-}
-
-export function narrateJobDefer(args: {
-  jobTitle: string | null;
-  companyName: string | null;
-  reason: JobDeferReason;
-  note?: string;
-}): string {
-  return `Deferred ${jobRef(args)} (${humanJobDeferReason(args.reason)}).${noteSuffix(args.note)}`;
 }
 
 export function narrateJobApplied(args: {

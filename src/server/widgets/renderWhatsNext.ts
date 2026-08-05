@@ -11,7 +11,6 @@
 // show_whats_next handoff) — they all land on this function.
 
 import { Role } from "@/generated/prisma/client";
-import type { Prisma } from "@/generated/prisma/client";
 import type { RunContext, TurnEvent } from "@/server/agent/contracts";
 import { narrateStatus } from "@/server/agent/session";
 import { prisma } from "@/server/db/prisma";

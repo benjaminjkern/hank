@@ -22,7 +22,6 @@
 // Hank draft isn't reuse-eligible until the user opts it in) and re-baselines
 // proposedDrafts so a later panel edit diverges from what he actually wrote.
 
-import { Prisma } from "@/generated/prisma/client";
 import type { RunContext, TurnEvent } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
 import {

@@ -8,7 +8,6 @@
 // otherwise it returns what's already on Job.applicationQuestions. Persists the
 // fetched envelope. Job is global (not user-scoped), so this keys off jobId.
 
-import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { needsQuestionsRefresh } from "@/server/entities/jobs/questionsRefresh";
 import { fetchApplicationQuestions } from "@/server/scrape/ats";

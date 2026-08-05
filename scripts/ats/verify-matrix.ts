@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { scrapeUrl } from "../../src/server/scrape";
+import { closeHeadless } from "../../src/server/platform/browser/headless";
 import {
   extractGreenhouseSlugFromBoardUrl,
   fetchApplicationQuestions,
@@ -247,7 +248,11 @@ async function main() {
   }
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+main()
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  })
+  // The headless Chromium singleton keeps the event loop alive; without this
+  // an all-pass run never exits.
+  .finally(() => closeHeadless());

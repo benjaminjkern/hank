@@ -24,7 +24,7 @@
 import {
   serializeTranscript,
   type StoredMessage,
-} from "@/server/agent/session/serializeTranscript";
+} from "@/server/agent/session";
 import { validatePath } from "@/server/memory/paths";
 import type { LlmModel } from "@/server/platform/llm/models";
 import { SUB_AGENT_READ_TOOLS } from "@/server/subagents/lib/readTools";

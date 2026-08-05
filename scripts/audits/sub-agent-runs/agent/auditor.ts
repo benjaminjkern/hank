@@ -19,11 +19,7 @@ import {
 import { costOf } from "@/server/platform/usage/pricing";
 import { recordUsage } from "@/server/platform/usage/track";
 
-import {
-  getGraderClient,
-  graderBackend,
-  type GraderClient,
-} from "../../../lib/graderLlm";
+import { graderBackend, type GraderClient } from "../../../lib/graderLlm";
 import { describeFixture } from "../fixtureRegistry";
 
 import { OPERATION_PURPOSE } from "./purposes";

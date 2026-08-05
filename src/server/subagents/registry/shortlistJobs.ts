@@ -91,7 +91,7 @@ export type ShortlistJobsInput = {
   extraContext?: string;
 };
 
-export const SHORTLIST_STANCES = ["pick", "borderline", "pass"] as const;
+const SHORTLIST_STANCES = ["pick", "borderline", "pass"] as const;
 export type ShortlistStance = (typeof SHORTLIST_STANCES)[number];
 
 export type ShortlistJobsOutput = {

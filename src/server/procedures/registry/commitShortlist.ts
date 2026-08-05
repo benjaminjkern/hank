@@ -16,7 +16,7 @@
 
 import { ProposedBy, ProposedVerdict } from "@/generated/prisma/client";
 import type { RunContext } from "@/server/agent/contracts";
-import { appendPipelineActivity } from "@/server/agent/session/appendMessages";
+import { appendPipelineActivity } from "@/server/agent/session";
 import { prisma } from "@/server/db/prisma";
 import {
   commitShortlist,

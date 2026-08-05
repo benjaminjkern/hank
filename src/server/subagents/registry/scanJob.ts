@@ -34,14 +34,14 @@ import type {
 const MODEL: LlmModel = "deepseek-v4-flash";
 const MAX_TOKENS = 1024;
 
-export const SCAN_CLOSE_REASONS = [
+const SCAN_CLOSE_REASONS = [
   "NOT_A_MATCH",
   "LOCATION_MISMATCH",
   "OTHER",
 ] as const;
 export type ScanCloseReason = (typeof SCAN_CLOSE_REASONS)[number];
 
-export const SCAN_MATCH_BUCKETS = ["STRONG", "POSSIBLE", "WEAK"] as const;
+const SCAN_MATCH_BUCKETS = ["STRONG", "POSSIBLE", "WEAK"] as const;
 export type ScanMatchBucket = (typeof SCAN_MATCH_BUCKETS)[number];
 
 // The role as the model sees it. `summary` arrives already chosen (the enriched

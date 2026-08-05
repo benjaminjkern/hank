@@ -54,7 +54,7 @@ export function renderRunReport(run: RunReport): string {
   for (const [subAgent, cases] of bySubAgent) {
     lines.push(`## ${subAgent}`);
     lines.push("");
-    lines.push(renderSubAgentSummary(subAgent, cases));
+    lines.push(renderSubAgentSummary(cases));
     lines.push("");
     for (const c of cases) {
       lines.push(renderCase(c));
@@ -83,7 +83,7 @@ function renderSummary(run: RunReport): string {
   return lines.join("\n");
 }
 
-function renderSubAgentSummary(subAgent: string, cases: CaseReport[]): string {
+function renderSubAgentSummary(cases: CaseReport[]): string {
   const v = countVerdicts(cases);
   const cost = cases.reduce(
     (s, c) => s + c.subAgentUsdCost + c.judgeUsdCost,

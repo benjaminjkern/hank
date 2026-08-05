@@ -10,7 +10,7 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 
-export const COMMIT_RUNTIME_FINDINGS_TOOL: Anthropic.Tool = {
+const COMMIT_RUNTIME_FINDINGS_TOOL: Anthropic.Tool = {
   name: "commit_runtime_findings",
   description:
     "Forced once per chunk. Emit every finding for THIS chunk's runs (weird outputs AND coverage gaps) plus a forward-summary memo the next chunk of this same sub-agent reads as 'what you already found'. Emit nothing (empty findings) if every run looks reasonable and is covered by an existing fixture shape.",

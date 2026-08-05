@@ -25,10 +25,7 @@
 // mode="cold_start"; the company keeps whatever status it had (NEW at add time)
 // and whats_next lands on the top-up-sparse-memory rung next turn.
 
-import {
-  CompanyEventType,
-  type JobCloseReason,
-} from "@/generated/prisma/client";
+import { CompanyEventType } from "@/generated/prisma/client";
 import type { RunContext, RunTrace } from "@/server/agent/contracts";
 import { logCompanyEvents } from "@/server/entities/companies/logCompanyEvent";
 import { closeJobs } from "@/server/entities/jobs/closeJobs";

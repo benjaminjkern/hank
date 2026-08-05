@@ -15,7 +15,7 @@ import type { ShortlistJobsOutput } from "@/server/subagents/registry/shortlistJ
 // deterministic backstop: if the model picks more than this, keep the strongest
 // CAP by (scan bucket, scan score) and demote the rest to borderline — they
 // stay on the board with their reasons, just not picked.
-export const SHORTLIST_CAP = 5;
+const SHORTLIST_CAP = 5;
 
 export type ShortlistRankable = {
   id: string;

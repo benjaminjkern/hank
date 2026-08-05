@@ -17,11 +17,7 @@ import path from "path";
 
 import { PrismaPg } from "@prisma/adapter-pg";
 
-import {
-  PrismaClient,
-  type Role,
-  type Prisma,
-} from "../../../src/generated/prisma/client";
+import { PrismaClient } from "../../../src/generated/prisma/client";
 
 import { runAudit, DEFAULT_MODEL, DEFAULT_CHUNK_SIZE } from "./agent/auditor";
 import { attachEntitySnapshots } from "./driver/entitySnapshots";

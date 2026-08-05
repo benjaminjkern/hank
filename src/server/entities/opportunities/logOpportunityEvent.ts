@@ -23,7 +23,7 @@ import { prisma } from "@/server/db/prisma";
 // which kept only the agent-facing enum LISTS). INBOUND_RECEIVED / NOTE /
 // STATUS_CHANGED don't shift status — a STATUS_CHANGED is written by
 // updateOpportunity when it sets the status directly, not derived from this map.
-export const OPPORTUNITY_EVENT_TO_STATUS: Partial<
+const OPPORTUNITY_EVENT_TO_STATUS: Partial<
   Record<OpportunityEventType, OpportunityStatus>
 > = {
   CALL_SCHEDULED: OpportunityStatus.SCREENING,

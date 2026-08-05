@@ -103,7 +103,7 @@ export type FieldDivergence = {
 // Returns null if all match (run can skip the LLM); returns the array of
 // divergences if any fail (LLM judge still runs, with the divergence list
 // added to its context so it can assess whether the miss is acceptable).
-export function checkExpectedFields(
+function checkExpectedFields(
   expected: ExpectedFields | undefined,
   actual: Record<string, unknown> | undefined,
 ): FieldDivergence[] | null {

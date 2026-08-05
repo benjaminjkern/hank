@@ -12,11 +12,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 import type { RunContext, RunTrace } from "@/server/agent/contracts";
-import type {
-  AnyToolDef,
-  ToolContext,
-  ToolDef,
-} from "@/server/agent/tools/lib/types";
+import type { AnyToolDef, ToolContext } from "@/server/agent/tools/lib/types";
 import {
   SCRATCHPAD_FIELD,
   SCRATCHPAD_SCHEMA_NOTE,

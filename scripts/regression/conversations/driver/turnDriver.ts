@@ -11,7 +11,7 @@
 // clearActiveRun, so the next turn never trips the ALREADY_STREAMING guard.
 
 import type { WidgetKind } from "@/lib/widgetKinds";
-import type { LoopEvent, UiEvent } from "@/server/agent/contracts";
+import type { UiEvent } from "@/server/agent/contracts";
 import { runUserMessage } from "@/server/agent/runtime/runUserMessage";
 
 import { resolvePanelHint } from "./panelHint";

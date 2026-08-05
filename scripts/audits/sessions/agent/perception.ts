@@ -57,7 +57,7 @@ function renderTrace(t: { toolUseId: string; raw: unknown }): string {
   return [head, ...steps.map((s) => renderTraceStep(s, 1))].join("\n");
 }
 
-export function renderTurnForAuditor(turn: AuditTurn): string {
+function renderTurnForAuditor(turn: AuditTurn): string {
   const lines: string[] = [];
   lines.push(`========== Turn ${turn.turnIndex} ==========`);
   lines.push(`When: ${fmtTime(turn.userMessageAt)}`);

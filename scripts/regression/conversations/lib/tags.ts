@@ -2,7 +2,7 @@
 // database is identifiable and sweepable, with its own tag prefix so parallel
 // harnesses never collide on cleanup.
 
-export const QA_TAG = "[qa-audit]";
+const QA_TAG = "[qa-audit]";
 
 // Deterministic-ish run id. Date.now()/Math.random() are fine here — this is
 // a standalone CLI script, not React render scope, and not resumed.

@@ -3,6 +3,7 @@ import { Prisma } from "../../src/generated/prisma/client";
 import { prisma } from "../../src/server/db/prisma";
 import { roleAttrColumns } from "../../src/server/entities/jobs/roleAttrs";
 import { scrapeUrl } from "../../src/server/scrape";
+import { closeHeadless } from "../../src/server/platform/browser/headless";
 import { detectAts } from "../../src/server/scrape/ats";
 
 // Re-scrape every ATS-backed company and refresh the scrape-derived metadata on
@@ -124,4 +125,8 @@ main()
     console.error(e);
     process.exit(1);
   })
-  .finally(() => prisma.$disconnect());
+  // The headless Chromium singleton keeps the event loop alive too.
+  .finally(async () => {
+    await closeHeadless();
+    await prisma.$disconnect();
+  });

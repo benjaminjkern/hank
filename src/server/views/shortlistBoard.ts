@@ -42,7 +42,7 @@ export type ShortlistBoardTier =
 
 // Render order (also the collapse order — the UI opens the decision groups and
 // collapses the two tails).
-export const SHORTLIST_BOARD_TIERS: ShortlistBoardTier[] = [
+const SHORTLIST_BOARD_TIERS: ShortlistBoardTier[] = [
   "picks",
   "borderline",
   "pass",

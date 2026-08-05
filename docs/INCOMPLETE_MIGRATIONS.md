@@ -83,42 +83,41 @@ grep -rhoE "\]\((\.\./)?(src|scripts|prisma|docs)/[A-Za-z0-9_./-]+\)" docs/ AGEN
 ```
 
 ---
-
 ## E. Dead code
 
-Measured by scanning all 485 `.ts`/`.tsx` files (excluding `src/generated/`) for the 938 exported symbols, counting references outside the defining file. Two genuinely clean results worth recording: **zero dead DB columns** (every field in `schema.prisma` is referenced in code or a migration) and **zero unreferenced source files** — the only never-imported files are CLI scripts, Next.js convention files, and the ambient `src/lib/styled.d.ts`, all legitimate.
+Measured by enumerating the 1,252 exported symbols across 549 `.ts`/`.tsx` files (excluding `src/generated/`) and counting references outside the defining file. Two clean results: **zero unreferenced source files** (the only never-imported file is `scripts/regression/key-crypto.ts`, a CLI entry point) and **zero exported values used only inside their own file**.
 
-### E1. Fully dead values — defined, referenced nowhere at all (8)
+The last sweep deleted 12 dead symbols and one dead component, dropped the `export` from 22 internal-only values, and removed the `scrapeUrl` vestigial parameter. What remains is a short list of judgement calls.
 
-Delete outright.
+### E1. Fully dead values — referenced nowhere, kept deliberately (5)
 
-| Symbol | File | Note |
+Each survived the sweep because deleting it costs something a reader would want back. Decide per-item; don't bulk-delete.
+
+| Symbol | File | Why it wasn't deleted |
 | --- | --- | --- |
-| `ShortAnswerSchema` | [entities/jobs/jobInteractionInputs.ts](../src/server/entities/jobs/jobInteractionInputs.ts) | **AGENTS.md cites this by name** as the model example of "a domain input schema lives in `entities/`, and the tool imports it." No tool imports it. |
-| `refreshCompaniesEngagement` | [entities/companies/engagement.ts](../src/server/entities/companies/engagement.ts) | The batch variant. The singular `refreshCompanyEngagement` **is** used (`markJobApplied`) — so nothing ever re-derives `IN_FLIGHT`/`IN_PROCESS` in bulk. Worth checking that's intended before deleting. |
-| `looksLikeCuid` | [platform/slug/slugify.ts](../src/server/platform/slug/slugify.ts) | Dead in the exact module the slug-or-cuid compat in §A would use. |
-| `opportunityNotePath` | [memory/store.ts](../src/server/memory/store.ts) | Sibling path helpers are used; this one isn't. |
-| `isHeadlessAvailable` | [platform/browser/headless.ts](../src/server/platform/browser/headless.ts) | Providers check availability by catching `HeadlessUnavailableError` instead. |
-| `closeHeadless` | [platform/browser/headless.ts](../src/server/platform/browser/headless.ts) | **Nothing ever shuts down the Chromium singleton** — no shutdown hook calls this. |
-| `describeFixturesForOperation` | [audits/sub-agent-runs/fixtureRegistry.ts](../scripts/audits/sub-agent-runs/fixtureRegistry.ts) | |
+| `ShortAnswerSchema` | [entities/jobs/jobInteractionInputs.ts](../src/server/entities/jobs/jobInteractionInputs.ts) | The `{question, answer}` shape exists three times: this zod schema, the `ShortAnswer` **type** in [entities/jobs/types.ts](../src/server/entities/jobs/types.ts) (9 consumers), and an inline copy in the job-interaction PATCH route. Wiring the route to this schema removes the duplicate; deleting it means AGENTS.md needs a new example, since it cites this one by name. |
+| `humanJobDeferReason` | [entities/jobs/humanJobReasonLabels.ts](../src/server/entities/jobs/humanJobReasonLabels.ts) | Orphaned when `narrateJobDefer` went. Deleting it also strands `JOB_DEFER_REASON_LABELS`, the `Record<JobDeferReason, string>` that makes adding a defer reason without a label a compile error. The accessor is dead; the exhaustiveness guard isn't. |
+| `looksLikeCuid` | [platform/slug/slugify.ts](../src/server/platform/slug/slugify.ts) | Its own comment says it's "a cheap hint, never the sole arbiter" and that resolvers try slug-first-then-id — which they do, without it. Still nominally in scope for §A1's slug backfill. |
+| `opportunityNotePath` | [memory/store.ts](../src/server/memory/store.ts) | `companyNotePath` / `jobNotePath` have 13 and 10 callers; this one never got any, because no opportunity sub-agent exists. `getFocusedOpportunity` builds the same string inline from an already-loaded slug, so they aren't swappable without a wasted query. |
+| `urlOrigin` | [utils/url.ts](../src/utils/url.ts) | Sibling `urlHost` has 4 callers and AGENTS.md's `utils/` inventory names them as a pair. `utils/` is explicitly allowed to be a drawer — but the rule says "a single caller is fine," and this has none. |
 
-> **Scanner caveat for whoever re-runs this:** the headless module is reached by `await import("@/server/platform/browser/headless")` and used as `headless.withHeadlessContext(...)`. A scan that only looks at static `import` statements will wrongly call the whole module dead. Grep for the bare identifier, not the import.
+> **Scanner caveat for whoever re-runs this:** the headless module is reached by `await import("@/server/platform/browser/headless")` and used as `headless.withHeadlessContext(...)`. A scan that only looks at static `import` statements will wrongly call the whole module dead. Grep for the bare identifier, not the import — and note a bare-identifier grep counts **comment** mentions too, which is how `withHeadlessPage` read as "used internally" when its only other mention was a doc comment.
 
-### E2. Exported but used only inside their own file — drop the `export` (24)
+### E2. Barrel re-exports nobody imports through the barrel (9)
 
-Not dead code, but a false public surface: each one reads as an API other modules depend on. `renderTurnForAuditor` · `COMMIT_CHUNK_FINDINGS_TOOL` · `AUDIT_WRAP_UP_TOOL` · `COMMIT_RUNTIME_FINDINGS_TOOL` · `FIXTURE_REGISTRY` · `HALT_CATEGORIES` · `QA_TAG` · `assertDbAllowed` · `resolveAuditCtx` · `appendRunReport` · `checkExpectedFields` · `LIST_COMPANY_EVENTS_PAGE_SIZE` · `LIST_JOBS_PAGE_SIZE` · `LIST_JOB_EVENTS_PAGE_SIZE` · `LIST_OPPORTUNITY_EVENTS_PAGE_SIZE` · `OPPORTUNITY_EVENT_TO_STATUS` · `computeWhatsNextOptions` · `withHeadlessPage` · `CLIENT_EVENT_SOURCES` · `CLIENT_EVENT_SEVERITIES` · `loadPickableJobs` · `SCAN_CLOSE_REASONS` · `SCAN_MATCH_BUCKETS`. (`PRE_SCAN_VERDICT_VALUES` came off this list when the pre-scan skip vocabulary collapsed into the module-local `PRE_SCAN_SKIP_REASONS` table.)
+`StreamEventOf` · `TurnDone` ([agent/contracts](../src/server/agent/contracts/index.ts)) · `ChatArgs` ([procedures/registry/chat](../src/server/procedures/registry/chat/index.ts)) · `RunScanResult` ([scan](../src/server/procedures/registry/scan/index.ts)) · `ShortlistArgs` ([shortlist](../src/server/procedures/registry/shortlist/index.ts)) · `runEnrichCompanies`, `EnrichCompaniesResult`, `EnrichOutcome`, `EnrichProgressEvent` ([enrichCompanies](../src/server/procedures/registry/enrichCompanies/index.ts)).
 
-### E3. Exported types never imported anywhere (90)
+Left alone on purpose: each of those barrels documents itself as the procedure's **public surface** ("import from here, not a deep path"), so a curated-but-not-yet-imported name is the intended shape, not a tombstone. Trimming them to only what has a caller today would make the surface arbitrary — an entry's args type sitting beside the entry is coherent.
 
-Cosmetic — no runtime cost, and often a deliberate courtesy export next to a function. Flagged only so a future sweep knows the number and doesn't re-derive it. Not worth a dedicated pass; clean them up opportunistically when touching the file.
+The failure mode to watch for is the opposite one, and it was real: `serializeTranscript` read as an unused re-export because three consumers **bypassed** the barrel via a deep path. The barrel was missing `StoredMessage`, so they had to. Before removing a re-export, check whether the name is being imported from the source module instead — that's a redirect, not a deletion.
 
-### E4. Vestigial parameters
+### E3. Exported types never imported anywhere (131)
 
-- **`scrapeUrl(url, _userId, trace)`** — [scrape/index.ts:63](../src/server/scrape/index.ts#L63): both are unused, "kept in the signature for now so call sites don't need to change" (from when an LLM fallback needed cost tracking + trace emission). Drop both + update call sites.
+Cosmetic — no runtime cost, and often a deliberate courtesy export next to a function. Flagged only so a future sweep knows the number and doesn't re-derive it. Not worth a dedicated pass; clean them up opportunistically when touching the file. (The count rose from 90 as `views/` split types out of the old `entities/*/types.ts` files.)
 
 ### Re-running this scan
 
-No dead-code tooling is installed (`knip` / `ts-prune` / `depcheck` are all absent). The scan above was a throwaway script: enumerate `export (function|const|class|type|interface|enum) <name>`, then for each name count `\b<name>\b` matches across every other file. Word-grep rather than import-graph — that's what makes it robust to namespace imports and dynamic `await import()`. Worth installing `knip` if this becomes routine.
+No dead-code tooling is installed (`knip` / `ts-prune` / `depcheck` are all absent). Two passes, and you want both: a TypeScript-AST pass over every `export` to build the import graph, then a **word-grep of each name across code files only** to catch dynamic `await import()` and string registries. Exclude markdown from the grep — this section names most of these symbols, so including docs makes the scan mask its own findings. `tsc --noEmit --noUnusedLocals --noUnusedParameters` covers unused locals/imports/params and is currently clean. Worth installing `knip` if this becomes routine.
 
 ---
 

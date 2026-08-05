@@ -109,8 +109,11 @@ export async function resolveCompanyBySlug(
 }
 
 // ── Job (global row) ─────────────────────────────────────────────────────────
+// `_userId` is ignored on purpose: Job is global, so there is nothing to scope
+// the lookup by. It stays in the signature to match the other three resolvers —
+// callers pass it, then scope the JobInteraction they load with the id.
 export async function resolveJobBySlug(
-  userId: string,
+  _userId: string,
   slugOrCuid: string,
 ): Promise<SlugLookup<ResolvedJob>> {
   const trimmed = slugOrCuid.trim();

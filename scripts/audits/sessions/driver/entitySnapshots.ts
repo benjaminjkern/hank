@@ -128,7 +128,6 @@ function collectTurnRefs(
 ): Map<number, EntityRefs> {
   const out = new Map<number, EntityRefs>();
   let focusJobId: string | null = null;
-  let focusCompanyId: string | null = null;
 
   for (const turn of turns) {
     const refs = emptyRefs();
@@ -146,7 +145,6 @@ function collectTurnRefs(
     for (const t of turn.subAgentTraces) scanTraceRefs(t.raw, refs);
 
     // Advance the focus cursor from whatever this turn touched.
-    for (const id of refs.companyIds) focusCompanyId = id;
     for (const id of refs.jobIds) focusJobId = id;
 
     // Walkthrough draft / status with no explicit job → attach the focused job.

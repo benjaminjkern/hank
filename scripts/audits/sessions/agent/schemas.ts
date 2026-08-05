@@ -46,7 +46,7 @@ const FINDING_PROPERTIES = {
   },
 } as const;
 
-export const COMMIT_CHUNK_FINDINGS_TOOL: Anthropic.Tool = {
+const COMMIT_CHUNK_FINDINGS_TOOL: Anthropic.Tool = {
   name: "commit_chunk_findings",
   description:
     "Forced once per chunk. Emit every distinct finding from this chunk's turns AND a forward-summary memo for the next chunk. " +
@@ -95,7 +95,7 @@ export const COMMIT_CHUNK_FINDINGS_TOOL: Anthropic.Tool = {
   },
 };
 
-export const AUDIT_WRAP_UP_TOOL: Anthropic.Tool = {
+const AUDIT_WRAP_UP_TOOL: Anthropic.Tool = {
   name: "audit_wrap_up",
   description:
     "Forced after the last chunk. You'll receive every chunk's forwardSummary plus the final state snapshot. " +

@@ -6,17 +6,7 @@
 // Windowed rather than paged: which window, and how the "more pages" line
 // reads, belong to the channel asking — see tools/lib/paginate.ts.
 
-import type { CompanyEventType, EventSource } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
-
-export type CompanyEventRow = {
-  id: string;
-  type: CompanyEventType;
-  occurredAt: Date;
-  notes: string | null;
-  jobTitle: string | null;
-  source: EventSource;
-};
 
 export function companyEventsQuery(userId: string, companyId: string) {
   const where = { userId, companyId };

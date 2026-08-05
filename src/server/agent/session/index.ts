@@ -4,7 +4,7 @@
 
 export { getOrCreateActiveSession, endActiveSessions } from "./chatSession";
 export { loadSessionMessages } from "./loadTranscript";
-export { serializeTranscript } from "./serializeTranscript";
+export { serializeTranscript, type StoredMessage } from "./serializeTranscript";
 export {
   appendUserMessage,
   appendAssistantMessage,
