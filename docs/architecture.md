@@ -1,0 +1,102 @@
+# Architecture
+
+## Focus vs panel view (don't conflate them)
+
+**Focus is ephemeral — there is NO persisted focus slot.** "Focus" is just the entity the deterministic pipeline is working on for the duration of ONE turn: the walkthrough state machine takes an `entryTarget` (`EntryTarget = { kind: "company"; id; direction? } | { kind: "job" | "opportunity"; id } | { kind: "discovery"; direction? }`, in [contracts/entryTarget.ts](../src/server/agent/contracts/entryTarget.ts)) threaded in-memory and dispatches on it. Nothing is written to `ChatSession`. Continuity across turns rides on **widget payloads** (every picker/confirm carries its `companyId`/`jobId`, and the user's next click carries it back) and, in free chat, on **Hank re-supplying a slug** via a tool. This replaced the old sticky `ChatSession.focused*` columns + the `set_focus` tool + the three companion markers — **all removed** (migration `20260724130000_drop_ephemeral_focus_columns`).
+
+**View** = what the user is displaying in the right panel (`chatStore.viewed*` + `panelMode`), transient and client-only. It is the only durable "what's on screen" state now.
+
+**Focus switches are legible + clickable via the `focus_ref` chip.** Every focus-change seam emits a `focus_ref` token — **server-side, never typed by Hank** — that renders as a clickable chip in chat ("Picking up **Stripe**"). Click = **view-only** navigation to that entity's detail page (like `<job-ref/>`; see [ui.md → chat message shape](ui.md#chat-message-shape)). The token rides inside a `pipeline_status` block, reusing that channel's persist / stream / strip-for-the-LLM provenance ([focusRefToken.ts](../src/lib/focusRefToken.ts)). The chip is the durable, replayable record of where focus went — but it is **never read back** to determine "current focus" (that would be re-deriving sticky state; deliberately not done).
+
+**The dispatch signal is threaded, not read.** `dispatchByEntryTarget(args)` in the walkthrough procedure ([dispatchByEntryTarget.ts](../src/server/procedures/registry/walkthrough/dispatchByEntryTarget.ts)) routes on `args.entryTarget` (precedence still job > company > opportunity), supplied by whoever triggered the pass:
+
+- **Picker silent-entry** — `dispatchNextCompanyPicker` returns the picked entity as `entryTarget`; `runUserMessage` threads it into the first runner call, then clears it.
+- **Handoff tool** — `work_on_job` / `company_walkthrough` / `scrape_jobs_for_company` return an `entryTarget` in their `ToolResult`; the turn runner captures the last one and threads it into the walkthrough state machine.
+- **Widget submission** — `handleWidgetSubmission` reads the ids straight off the submission payload (no slot, no entryTarget needed).
+
+**Two verbs, split on purpose.** DISPLAY (no work): `show_company` / `show_job` / `show_opportunity` / `show_shortlist_board` — put an entity's page (or a company's shortlist board) on screen, change no state (non-handoff). ENGAGE (run the pipeline): `work_on_job` (job arm) / `company_walkthrough` (company arm) — thread the id into the state machine + hand off. Record-only mutations (`close_job` / `defer_job` / `mark_job_applied`) move no panel; the user navigates next.
+
+**Free chat has no focus.** Hank's walkthrough prompt has no "you're focused on X" block — he works from the conversation + the chips. To put something on screen he calls a `show_*` tool; to work on it, `work_on_job` / `company_walkthrough`. Tools that used to default to the focused entity (`close_job`, `defer_job`, `save_application_answer`, `show_next_role`, …) now **require an explicit slug** (the resolver no longer falls back to a focused entity) — Hank supplies it from context.
+
+**Panel-sync is `buildShowEvents(userId, target)`** ([showEvents.ts](../src/server/views/showEvents.ts)) — takes the entity explicitly (no slot read), emits a `show` UI event (updates only `viewed*`/`panelMode`, never a sticky pill — there isn't one) + `panel_mode`, precedence job > opportunity > company > dashboard. Pass `{}` for the dashboard fallback (after a wrap). The deterministic mutators call it with the entity they just acted on; `/api/session` cold-load has no focus to restore, so a reload opens on the **dashboard**.
+
+**All UI navigation is view-only.** Dashboard / breadcrumb / entity rows / `focus_ref` chips call `viewDashboard()` / `viewCompany(id)` / `viewJob(id)` / `viewOpportunity(id)` in [chatStore.ts](../src/lib/chatStore.ts), which fetch `/api/<entity>/[id]` and update `viewed*` + `panelMode`. There is no `goToFocus()` and no `set_focus`/`show_focus` — those are gone with the slot.
+
+**Non-entity panel modes** (no `viewed*` slot): `dashboard`, `documents`, `analytics`, reached from the TopBar. A `show` event with no entity resolves to `dashboard`. If you add another, follow the shape (a `panelMode` value + a `view*()` action + self-fetching component) rather than inventing focus state. (`shortlist-board` is entity-scoped — `viewedBoard` + `viewShortlistBoard(companyId)` — and gets its show events from the sibling builder `buildShortlistBoardEvents`, since `buildShowEvents` derives its mode from which entity loaded and a per-company board isn't distinguishable that way.)
+
+### Flow is gone too — there is no persisted per-session pipeline state
+
+`ChatSession.currentFlow` (physical column `currentMode`) has been **removed** along with the three flow runners it selected between. Nothing persists "which flow am I in" across turns: [`runChatTurn`](../src/server/procedures/registry/chat/runChatTurn.ts) derives Hank's prompt per turn — profile-intake body when [`isProfileObviouslyEnriched`](../src/server/entities/profile/profileInventory.ts) says the memory slots are thin, walkthrough body otherwise — and the walkthrough state machine is entered by an explicit handoff, widget submission, or silent continuation rather than by a flow flag. So focus and flow are no longer siblings: **neither is persisted.** See [AGENTS.md → Chat entry point](../AGENTS.md).
+
+**The three companion markers are GONE** (`pausedWalkthroughCompanyId` / `draftingPausedJobId` / `coWriteJobId`) — they existed only because focus was sticky-across-turns, and focus is ephemeral now:
+
+- **Side-trip detection + `resume_walkthrough`** — removed. There's no sticky company to abandon, so nothing to "Resume". If the user wants a company back, they say so and Hank re-engages via `company_walkthrough`.
+- **`resume_drafting`** — removed. Re-entering a job just re-runs the draft procedure; the partial drafts live on `JobInteraction`, so it picks up where it left off.
+- **Co-write** — no marker. The job arm emits its opening (the `ask_user` items) once; the user answers over free-chat turns (Hank saves each via `save_application_answer` with the job's slug), and re-entering the job (`work_on_job` / the next-role picker) re-derives what's still pending from `JobInteraction.draftDecision`. The how-to is a static `CO_WRITE_GUIDE` in [hank/system.ts](../src/server/agent/hank/system.ts), not a per-turn injection.
+
+`create_opportunities` no longer parks focus (there's no slot); it emits a `focus_ref` chip for the new lead like any other display seam.
+
+There is no "add a fifth flow" recipe any more, because there is no flow registry to add to. A new user-facing sequence is a **procedure** under [procedures/registry/](../src/server/procedures/registry/) entered by a `handoff: true` tool, plus (only if it needs its own voice) a body in [hank/system.ts](../src/server/agent/hank/system.ts) selected by a per-turn derived condition. Don't reintroduce a persisted mode column to pick between them.
+
+### Breadcrumbs (+ the retired focused-state cascade)
+
+The dashboard's old focused-state **visual cascade** (a Company/Opportunity group glowing when a child matched `focus.jobId`) is now **inert** — there's no sticky focus to match, so nothing glows. `chatStore.focus` survives as an always-null field the DashboardView / CompanyContextView tint logic still reads; removing the tint code entirely is follow-up polish. The clickable `focus_ref` chips are the new "where did focus go" signal.
+
+Breadcrumbs in [RightPanel.tsx](../src/components/RightPanel/RightPanel.tsx) are derived from the _viewed_ entities (what's displayed) — unchanged:
+
+| Panel mode                               | Breadcrumb                                                                                    |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `dashboard`                              | (none)                                                                                        |
+| `documents`                              | `Dashboard / Documents` (current node non-clickable)                                          |
+| `company-context`                        | `Dashboard / <CompanyName>`                                                                   |
+| `job-detail` with `job.company` set      | `Dashboard / <CompanyName> / <JobTitle>`                                                      |
+| `job-detail` with `job.company === null` | `Dashboard / <unaffiliated> / <JobTitle>` (middle slot is a non-navigable italic placeholder) |
+| `opportunity-detail`                     | `Dashboard / <OpportunityLabel>` (leads span multiple companies, so no company crumb)         |
+
+The lead context for an opportunity-linked job lives on the JobDetailView itself (a `← Pitched via <lead label>` chip), not the breadcrumb — keeping breadcrumbs as pure navigation.
+
+## Views (single source of truth for surface payloads)
+
+The rich `FocusedCompanyView` / `FocusedJobView` / `FocusedOpportunityView` payloads live in [src/server/views/](../src/server/views/), each type declared with the loader that returns it — [`getFocusedCompanyView`](../src/server/views/getFocusedCompany.ts), [`getFocusedJobView`](../src/server/views/getFocusedJob.ts), [`getFocusedOpportunityView`](../src/server/views/getFocusedOpportunity.ts) — used by the `/api/<entity>/[id]` routes, the `show_*` tools, and `buildShowEvents`. (The names are historical — "focused" here just means "the rich detail-page payload"; there's no focus slot anymore.) Add a field in the loader once; all surfaces pick it up. Don't inline a hand-rolled query in a tool or route.
+
+`FocusedCompanyView` carries the company's `status` (`CompanyStatusName`, incl. `APPLYING` / `IN_FLIGHT` / `IN_PROCESS` / `PAUSED` / `BLOCKED`) plus the reason/note pairs the status implies: `closeReason`/`closeNote` (CLOSED), `pauseReason`/`pauseNote` (PAUSED), `blockReason`/`blockNote` (BLOCKED — the technical "couldn't read the board" set-aside, distinct from a CLOSED fit judgment). Mirror that select-and-pass-through shape if you add another reason-carrying company status.
+
+When you add a fourth detail-view entity type: (1) a view file under [views/](../src/server/views/), (2) a GET-by-id route that calls it, (3) include it in [buildShowEvents](../src/server/views/showEvents.ts) so the SSE `show` event carries it. Skipping any creates a page-hydration-vs-live-streaming discrepancy (panel renders one field set on cold load, another after the agent runs).
+
+Note: `CompanyStatusName` / `CompanyCloseReasonName` / `CompanyBlockReasonName` / `OpportunityStatusName` are string-literal shadows of the Prisma enums (so the SSE payloads have types independent of the generated client). They live with the view whose payload spells them — [getFocusedCompany.ts](../src/server/views/getFocusedCompany.ts) / [getFocusedOpportunity.ts](../src/server/views/getFocusedOpportunity.ts) — and [tools/lib/types.ts](../src/server/agent/tools/lib/types.ts) re-exports them for the client barrel. Add a new enum value to the matching shadow union in the same commit or the boundary type-errors.
+
+## Cascading deletes — DB for hard delete, explicit for user-scoped
+
+Two delete shapes coexist; pick the right one. **Admin hard-delete of a `Company` / `Job`** (the `/admin/deletions` Approve button) relies on schema-level FK cascade — `Company → CompanyInteraction` (Cascade), `Company → Job → JobInteraction → Event` (Cascade), `Company → MemoryNote` / `Contact` (SetNull — content survives as `null`, not a dangling pointer), `JobInteraction → Opportunity.sourceJobInteractionId` (SetNull). (`ChatSession` no longer holds any focus/marker FK to the deleted entity — those columns are gone.) The API routes issue a single `prisma.company.delete` / `prisma.job.delete` and let Postgres do the rest atomically. **User-scoped untracks** (`untrack_job`, `untrack_company`) delete only this user's tracking rows: `untrack_job` is a single `JobInteraction` delete (its `JobEvent`s cascade via `onDelete: Cascade`); `untrack_company` uses a `prisma.$transaction([...])` to drop the `CompanyInteraction` **and** the user's `JobInteraction`s for that company's jobs (their events cascade). The global `Job` / `Company` / `MemoryNote`s stay (other users may track the same rows).
+
+The principle: **DB cascade is for "the entity is going away for everyone"; user-scoped untracks are for "this user is unsubscribing while the entity stays."** Don't re-implement an FK cascade with `$transaction` — the explicit version is subtly wrong (it would leave `Opportunity.sourceJobInteractionId` dangling instead of SetNull). The agent hard-deletes only user-scoped tracking rows (the untracks above); it never hard-deletes the global `Company` / `Job` — for those it flags via `recommend_*_for_deletion` and the admin approves at [`/admin/deletions`](../src/app/admin/deletions/).
+
+## Opportunity owns the conversation, Jobs own the role state
+
+When a recruiter pitches the user before there's a committed role, the conversation lives as an `Opportunity` row (the **lead**) with one or more child `JobInteraction` rows linked back via `JobInteraction.opportunityId` (the **pitched roles**, each a regular Job). A single lead can carry roles at multiple companies (the common case for agency recruiters). Design rules:
+
+- **Recruiting agencies are never `Company` rows.** A `Company` is somewhere the user might _work_. The agency name lives on `Contact.agency` (string). Reaching for `create_companies` on a recruiting firm is wrong — create a `Contact` with `agency` set.
+- **The lead is the dashboard group; pitched jobs are the rows inside.** Each `Opportunity` renders as one dashboard section (like a watched `Company`); each linked `JobInteraction` is one row inside. Leads describe the conversation ("McKenley Talent → Arcadia"); jobs describe the role. Leads don't have titles; jobs don't have agencies.
+- **No promotion step.** A pitched role is a `Job` from the moment `create_jobs([{opportunity, ...}])` runs (`opportunity` = the lead slug). It starts at `JobInteraction.status=PITCHED` and walks the normal pipeline. The only manual step is attaching a real `Company` via `create_companies` + `update_job({company})` once the hiring company is known — flipping `Job.companyId` from null and auto-clearing `Job.companyName`. The lead doesn't auto-close when one linked job moves forward.
+
+`Opportunity` owns the conversation: lead-level status (`OPEN` / `SCREENING` / `AWAITING` / `CLOSED`; legacy `INBOUND` / `CONVERTED` tombstoned), the lead's `OpportunityEvent` timeline, the `opportunity-detail` panel mode, the dashboard section, the loader. The pitched jobs use the same `JobInteraction` / `Event` machinery as scan-flow jobs — regular jobs with a back-reference. The two tables stay separate because the Job pipeline is "the user is driving" (scan → shortlist → apply) and the Opportunity is "the other side is driving" (received → screening → awaiting reply). **`Job.companyId` is nullable** so an agency-pitched role can exist before the hiring company is disclosed; `Job.companyName` (string) carries the human-readable fallback until the FK is set.
+
+**Cascade on delete.** `OpportunityContact` / `OpportunityEvent` are `onDelete: Cascade` to `Opportunity`; linked `JobInteraction.opportunityId` is `ON DELETE SET NULL` (deleting a lead leaves the pitched jobs intact but unlinked). This cluster is the only place using cascade-on-delete. See [lifecycle.md → Opportunity lifecycle](lifecycle.md#opportunity-lead-with-jobs) and [flows.md → Inbound opportunity intake](flows.md#opportunity-flow-intake-lead-with-jobs).
+
+## Two entry points for jobs (scrape vs manual)
+
+A `Job` row is created two ways: `scrape_jobs_for_company` scraping a careers page, or `create_jobs` capturing one-offs from chat (referrals, email-only postings, historical applications). The downstream lifecycle is identical — both create a `JobInteraction(NEW)` + `SURFACED` event and feed the same shortlist + walkthrough flow. But the manually-created `Job` can be sparser: `Job.sourceUrl` and `Job.rawContent` are both nullable (scraped jobs always populate them; manual jobs may not). Code reading these must tolerate `null`. The `@unique` index on `sourceUrl` stays (Postgres treats multiple NULLs as distinct); `create_jobs` enforces no-duplicate-URL per item at the tool boundary. See [flows.md → Manual job entry](flows.md#manual-job-entry-no-scrape).
+
+## Attachments pipeline
+
+User-uploaded files flow through one route ([`POST /api/attachments`](../src/app/api/attachments/route.ts)) and one model (`Attachment`), then fan out: (1) into the `<attachments>` manifest prepended to the user message; (2) into real Anthropic content blocks via [`toAnthropicBlock`](../src/server/platform/storage/contentBlocks.ts) — `document` for PDFs, `image` for images, inline `text` for everything else; (3) into a `[attached: name]` placeholder on _historical_ turns at replay time (full blocks would re-bill every prior attachment every turn).
+
+The API doesn't read `.docx` natively, so the upload route runs [mammoth](https://www.npmjs.com/package/mammoth)'s `extractRawText` at upload time ([docx.ts](../src/server/platform/storage/docx.ts)), persists the extracted text, and preserves the original MIME on `Attachment.fileMime` (with `mediaKind = "text"`) so downstream code can tell a docx-derived text attachment from a real `.txt`. Attaching a resume to the profile keys its input off this: [`parseResumeSubAgent`](../src/server/subagents/registry/parseResume.ts) takes a `source` of `{kind:"pdf", bytes}` (a `document` block) or `{kind:"text", text}` (docx-derived), one def either way. [`attach_resume_to_profile`](../src/server/agent/tools/registry/attachResumeToProfile.ts) accepts a `pdf` attachment or a `text` attachment whose `fileMime === DOCX_MIME` and picks the matching source; other text uploads are not accepted as resumes. If you add another convert-at-upload format, follow the pattern: store the converted payload, preserve the original MIME, set `mediaKind` to whatever drives downstream rendering.
+
+## Computed-vs-stored: Company.logoUrl as override
+
+`Company.logoUrl` is an **optional override**, not authoritative storage. The rendered URL is computed by [`companyLogoUrl(sourceUrl, override)`](../src/lib/companyLogo.ts) — return the override when set, else derive a Google favicon URL from the domain. The derivation is wrong when the ATS slug doesn't match the real domain; the override exists to correct that without changing `sourceUrl`. Loaders compute the URL at read time and ship the result — if you add a surface that shows a company logo, select `sourceUrl + logoUrl` and call `companyLogoUrl(...)` rather than reading the raw column. UI consumers use the shared chip pattern with an [`initial(name)`](../src/utils/text.ts) fallback. The agent can only act on user reports — [`update_company`](../src/server/agent/tools/registry/updateCompany.ts) accepts an optional `logoUrl` (pass `null` to clear the override).
+
+## Adding a status / enum / event value
+
+Adding, removing, or renaming a value in `JobInteractionStatus`, `CompanyStatus`, `JobCloseReason`, `CompanyCloseReason`, `JobDeferReason`, `CompanyPauseReason`, or `JobEventType` touches ~11 surfaces in lockstep (schema, migration, `statusColors`, Hank's per-flow prompt bodies, dashboard route + view, `whatsNext`, loaders, shadow unions, docs). Follow the full checklist in [AGENTS.md → Adding a new JobInteractionStatus / CompanyStatus value](../AGENTS.md); the reason-carrying-status invariants (required enum + clear-on-transition) are in [AGENTS.md → Reason-carrying status pattern](../AGENTS.md).

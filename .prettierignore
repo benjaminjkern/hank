@@ -1,0 +1,11 @@
+# Generated / build output — never format
+.next/
+out/
+build/
+src/generated/
+next-env.d.ts
+pnpm-lock.yaml
+
+# Docs are hand-wrapped prose; Prettier's reflow would fight the authored
+# line breaks in AGENTS.md and docs/. Formatting is owned by the author here.
+*.md

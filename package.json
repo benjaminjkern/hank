@@ -1,0 +1,73 @@
+{
+  "name": "hank",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "postinstall": "prisma generate",
+    "start": "next start",
+    "lint": "eslint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "db:generate": "prisma generate",
+    "usage": "tsx scripts/cost/usage.ts",
+    "scenarios": "tsx scripts/scenarios/run.ts",
+    "regression:sub-agents": "tsx scripts/regression/sub-agents/run-all.ts",
+    "regression:conversations": "tsx scripts/regression/conversations/run.ts",
+    "audit:sessions": "tsx scripts/audits/sessions/audit.ts",
+    "audit:sub-agent-runs": "tsx scripts/audits/sub-agent-runs/audit.ts",
+    "audit:sub-agent-runs:backfill": "tsx scripts/audits/sub-agent-runs/backfill.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.197",
+    "@anthropic-ai/sdk": "^0.99.0",
+    "@auth/prisma-adapter": "^2.11.2",
+    "@prisma/adapter-pg": "^7.8.0",
+    "kysely": "^0.28.7",
+    "mammoth": "^1.12.0",
+    "next": "16.2.6",
+    "next-auth": "5.0.0-beta.31",
+    "pg": "^8.21.0",
+    "planck": "^1.5.0",
+    "playwright": "^1.61.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "styled-components": "^6.4.2",
+    "web-push": "^3.6.7",
+    "zod": "^4.4.3",
+    "zustand": "^5.0.13"
+  },
+  "devDependencies": {
+    "@prisma/client": "^7.8.0",
+    "@types/node": "^20",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
+    "dotenv": "^17.4.2",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.6",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-boundaries": "^7.1.0",
+    "eslint-plugin-import-x": "^4.17.1",
+    "prettier": "^3.9.6",
+    "prisma": "^7.8.0",
+    "tsx": "^4.22.3",
+    "typescript": "^5",
+    "typescript-eslint": "^8.66.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma"
+    ]
+  }
+}

@@ -1,0 +1,934 @@
+// Hank — schema for v0. See docs/lifecycle.md for the status / event
+// vocabulary and docs/architecture.md for the cross-cutting change checklist
+// before adding or renaming enum values.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// -- Users ----------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String?   @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?
+  isAdmin       Boolean   @default(false) // gates /admin/*
+  createdAt     DateTime  @default(now())
+
+  // Per-user LLM credentials. Key precedence (own key wins → server key iff
+  // canUseServerKey → throw) is in docs/llm-providers.md; the AES-256-GCM
+  // envelope in platform/llm/keyCrypto.ts. *Hint = last-4 plaintext for the
+  // /settings UI. DeepSeek is the sole runtime provider (main agent + every
+  // sub-agent); Anthropic is kept only for the vision carve-out (resume-parse +
+  // logo-verify). canUseServerKey gates BOTH server keys with one flag.
+  canUseServerKey          Boolean  @default(false)
+  anthropicKeyEncrypted    String?
+  anthropicKeyHint         String?
+  anthropicKeyUpdatedAt    DateTime?
+  deepseekKeyEncrypted     String?
+  deepseekKeyHint          String?
+  deepseekKeyUpdatedAt     DateTime?
+
+  accounts      Account[]
+  authSessions  Session[]
+  companyInteractions CompanyInteraction[]
+  jobInteractions JobInteraction[]
+  notes         MemoryNote[]
+  sessions      ChatSession[]
+  resumes       Resume[]
+  attachments   Attachment[]
+  contacts      Contact[]
+  opportunities Opportunity[]
+  adminNotes    AdminNote[]
+  pushSubscriptions PushSubscription[]
+  clientEvents  ClientEvent[]
+  companyEvents CompanyEvent[]
+}
+
+// -- Auth.js (NextAuth v5) tables ----------------------------------------
+// Standard schema for @auth/prisma-adapter. The adapter accesses these as
+// `prisma.account`, `prisma.session`, `prisma.verificationToken` — model
+// names must stay as-is. The chat-domain `ChatSession` lives at
+// `prisma.chatSession`, so there's no collision. Field names below MUST
+// match the adapter (snake_case OAuth token fields, `sessionToken` PK).
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  sessionToken String   @id
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// User-uploaded files attached to chat messages. Bytes inline like Resume;
+// swap to R2 before deploy when Resume does.
+model Attachment {
+  id        String   @id @default(cuid())
+  userId    String
+  sessionId String?
+  messageId String?
+  fileName  String
+  fileMime  String
+  fileBytes Bytes
+  fileSize  Int
+  mediaKind String // "pdf" | "image" | "text"
+  createdAt DateTime @default(now())
+
+  user    User         @relation(fields: [userId], references: [id])
+  session ChatSession? @relation(fields: [sessionId], references: [id])
+  message ChatMessage? @relation(fields: [messageId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([messageId])
+}
+
+// An uploaded resume FILE, many per user. This row is the file and nothing else:
+// what the resume SAYS lives in the `resume.md` memory note, which every upload
+// merges into (see subagents/registry/parseResume.ts). fileBytes holds the
+// mammoth-extracted text for a .docx, not the original bytes.
+// Swap to R2 before deploy. See docs/architecture.md → Attachments pipeline.
+model Resume {
+  id         String   @id @default(cuid())
+  userId     String
+  fileName   String
+  fileMime   String // application/pdf for PDF uploads, the docx MIME for promoted-from-docx
+  fileBytes  Bytes
+  uploadedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, uploadedAt])
+}
+
+// -- Companies (global) ---------------------------------------------------
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique // memory paths use this: companies/{slug}.md
+  // Careers URL we scrape. Nullable: stub rows exist before the hunter finds one,
+  // and it stays null on a BLOCKED outcome. @unique allows multiple NULLs;
+  // readers must tolerate null.
+  sourceUrl String?  @unique
+  // Greenhouse board slug (null off-Greenhouse / un-hunted). Reused to rebuild
+  // the canonical embed URL at apply-form time — see docs/ats-scrapers.md.
+  greenhouseSlug String?
+  // Logo override; null ⇒ derived from sourceUrl by src/lib/companyLogo.ts, set
+  // by the logo verifier when the derivation is wrong. See docs/architecture.md.
+  logoUrl   String?
+  description String? // one-line factual blurb from the hunter; panel header
+  // Transient "Scanning…" signal: set when the hunter starts, cleared on
+  // completion; >2min old ⇒ crashed mid-run (retryable). See docs/lifecycle.md.
+  huntingStartedAt DateTime?
+  // Enrichment provenance (global): stamped on success so passes don't re-run;
+  // enrich_companies(force) re-runs both passes regardless of them.
+  basicInfoHuntedAt DateTime? // URL/ATS + name + description hunter completed
+  atsVerifiedAt     DateTime? // a scrape against sourceUrl succeeded at least once
+  logoVerifiedAt    DateTime? // logo vision-verifier ran (any verdict)
+  createdAt DateTime @default(now())
+  // Agent-flagged for admin review + hard deletion (recommend_company_for_deletion);
+  // cleared manually in Prisma Studio. Null = none pending.
+  deletionRecommendedAt     DateTime?
+  deletionRecommendedReason String?
+
+  jobs                          Job[]
+  companyInteractions           CompanyInteraction[]
+  events                        CompanyEvent[]
+  notes                         MemoryNote[]
+  contacts                      Contact[]
+}
+
+model CompanyInteraction {
+  userId          String
+  companyId       String
+  status          CompanyStatus      @default(NEW)
+  // Reason + freeform note per reason-carrying status (CLOSED/PAUSED/BLOCKED);
+  // each set is cleared on transition out. Semantics + tone in docs/lifecycle.md.
+  closeReason     CompanyCloseReason?
+  closeNote       String?
+  pauseReason    CompanyPauseReason?
+  pauseNote      String?
+  blockReason    CompanyBlockReason?
+  blockNote      String?
+  // Last successful board scrape for this user; drives the scrape-if-stale gate
+  // (only successes stamp it, so a failed scrape retries on the next entry).
+  lastScrapedJobsAt DateTime?
+  lastDiscussedAt DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id])
+  // Cascade so an admin Company delete tears down its watchlist entry too.
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, companyId])
+}
+
+// User-facing status for a watched company. Per-status meaning / tone / buckets
+// live in docs/lifecycle.md; CLOSED/PAUSED/BLOCKED carry a structured reason.
+enum CompanyStatus {
+  NEW // on the watchlist, no scan yet
+  READY // scanned, has survivors, awaiting walkthrough ("Not started" bucket with NEW)
+  APPLYING // walkthrough in progress; manually held (job events don't auto-move it)
+  IN_FLIGHT // auto-derived: an application submitted and live, awaiting reply
+  IN_PROCESS // auto-derived: employer engaged (reply / interview); outranks IN_FLIGHT
+  CAUGHT_UP // auto-derived tail: worked through, nothing to do; NOT a dead-end judgment
+  PAUSED // user-driven set-aside (required pauseReason); no timer, revive to resume
+  BLOCKED // technical: couldn't read the board (see blockReason); NOT a fit judgment
+  CLOSED // genuine dead-end (see closeReason); "maybe later" is CAUGHT_UP, unread board is BLOCKED
+}
+
+// Structured "why" for CLOSED. Cleared on transition out. See docs/lifecycle.md.
+enum CompanyCloseReason {
+  NOT_A_MATCH
+  LOCATION_MISMATCH
+  OTHER
+}
+
+// Structured "why" for PAUSED (user-driven set-aside). Cleared on transition out.
+enum CompanyPauseReason {
+  USER_PAUSED
+  OTHER
+}
+
+// Structured "why" for BLOCKED (board couldn't be read). Recoverable — revive
+// re-hunts. Cleared on transition out.
+enum CompanyBlockReason {
+  CANNOT_SCRAPE // exhausted ATS hunt + own careers page; nothing scrapeable
+  AMBIGUOUS_NAME // multiple companies match; couldn't pin down the board
+  NO_OWN_BOARD // sub-brand that only hires under a parent (track the parent)
+  AUTH_WALLED // board behind login / SPA / auth we can't read
+  OTHER
+}
+
+// -- Jobs (global) --------------------------------------------------------
+
+model Job {
+  id         String   @id @default(cuid())
+  // Nullable for recruiter-pitched roles with an undisclosed/un-watchlisted
+  // company (agency case); such Jobs appear only under their Opportunity. When
+  // null the label lives on companyName. Scraped jobs always have it.
+  companyId  String?
+  companyName String? // human-readable label when companyId is null; cleared once set
+  title      String
+  // Global slug the agent uses instead of the cuid (e.g. "stripe-senior-swe").
+  // Minted once at creation (src/server/entities/jobs/jobSlug.ts); resolvers fall back to id
+  // when null. See docs/entity-slugs.md.
+  slug       String?  @unique
+  // Nullable for manually-added jobs with no public URL; unique-when-set dedupes
+  // scraper upserts.
+  sourceUrl  String?  @unique
+  rawContent String? // raw posting text/markdown (used for drafting); null if manual
+  // Promoted ATS scalars for cheap pre-filtering without loading rawContent.
+  // locationAndArrangement blends place + work arrangement (remote/hybrid/on-site);
+  // the enrich pass folds in arrangement. @map: physical column kept as "location".
+  locationAndArrangement String?  @map("location")
+  department     String?
+  compensation   String?
+  employmentType String?
+  // Uncurated raw ATS response (minus description blobs → rawContent); the promoted
+  // columns above are the cleaned view, this the auditable snapshot. Fed to
+  // prescan/shortlist via attributePairs(). See docs/ats-scrapers.md.
+  attributes Json?
+  // Scraped application questions (Greenhouse only). Envelope:
+  // {status:"ok",questions,fetchedAt} | {status:"empty",fetchedAt} |
+  // {status:"unsupported"} | {status:"error",error,fetchedAt}. Null = no fetch yet.
+  applicationQuestions Json?
+  // User-CONTRIBUTED application questions — added by hand when the ATS form
+  // couldn't be scraped (login/SPA-gated, unsupported ATS). GLOBAL like the
+  // scraped set (shared across every user of the job) but each entry carries
+  // provenance so it's auditable and flagged as unverified: [{question, type?,
+  // required?, addedByUserId, addedAt}]. Merged with applicationQuestions at
+  // read time (loadMergedQuestions) and surfaced to the UI with a "user-added"
+  // badge. Kept separate from applicationQuestions so a re-scrape (which
+  // overwrites that column) never wipes them. Null = none added.
+  userAddedQuestions Json?
+  // Enrichment computed ONCE per Job (user-independent), reused across users. See
+  // src/server/subagents/enrichJob.ts + docs/flows.md (Enrich step). enrichedSummary:
+  // terse lossless prose summary of rawContent; enrichedAttributes: scalars pulled
+  // from it + backfill provenance (kept out of the raw `attributes` bag). Null = lazy.
+  enrichedSummary    String?
+  enrichedAttributes Json?
+  // Stamped every scrape upsert. Older than the company's lastScrapedJobsAt ⇒ the
+  // posting fell off the board (expired). Null for legacy + manually-created jobs.
+  lastSeenAt DateTime?
+  // Global "posting taken down" date, set on a verified-complete re-fetch that no
+  // longer returns it (suspicious-closure-guarded). Per-user projection is
+  // JobInteraction → DELISTED. See docs/lifecycle.md. Null = still posted.
+  closedAt DateTime?
+  // Agent-flagged for admin review + hard deletion (recommend_job_for_deletion);
+  // cleared manually in Prisma Studio. Null = none pending.
+  deletionRecommendedAt     DateTime?
+  deletionRecommendedReason String?
+  createdAt  DateTime @default(now())
+
+  // Cascade so an admin Company delete removes its Jobs (→ JobInteractions → events).
+  company      Company?         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  jobInteractions JobInteraction[]
+  notes        MemoryNote[]
+
+  @@index([companyId])
+}
+
+model JobInteraction {
+  id           String            @id @default(cuid())
+  userId       String
+  jobId        String
+  status       JobInteractionStatus @default(NEW) // denormalized; events are truth
+  closeReason  JobCloseReason?
+  closeNote    String?
+  // Short "they're all ___" phrase for the company-level "everything set aside"
+  // summary — grouped + tallied across a company's closes when a walkthrough
+  // surfaced nothing. Distinct from closeNote, which is the full per-role message
+  // (role + contrast); this is just the group label ("sales roles", "in Europe").
+  closeSummaryLabel String?
+  // Per-user match verdict from the scan match pass, written on NEW → SCANNED.
+  // matchBucket is the coarse calibration-safe signal (shortlist ranks by bucket,
+  // not raw score); matchScore optional tie-break; matchReason the user-facing
+  // one-liner. Null until match runs. See docs/flows.md (Match step).
+  matchBucket  MatchBucket?
+  matchScore   Int?
+  matchReason  String?
+  // Populated when status=DEFERRED ("could apply, outranked now"); cleared on exit.
+  deferReason  JobDeferReason?
+  deferNote    String?
+  // Shortlist-board stance — the negotiated pre-commit verdict. Non-null on any
+  // row while a negotiation is open at its company; all cleared when the board
+  // is committed (commit_shortlist maps PICK→SHORTLISTED,
+  // BORDERLINE→DEFERRED/OUTRANKED, PASS→CLOSED). proposedBy = who last moved
+  // it; null proposedVerdict on an open board = undecided. See
+  // docs/flows.md (shortlist).
+  proposedVerdict ProposedVerdict?
+  proposedReason  String?
+  proposedBy      ProposedBy?
+  proposedAt      DateTime?
+  // Which group the board DISPLAYS this row under. Diverges from
+  // proposedVerdict only between a user's panel edit and their next chat
+  // message: their marks stay put (pending) until that message relays them to
+  // Hank, which is what stops rows from jumping tier mid-review. Hank's own
+  // moves set both, so a difference always means "unrelayed user edit".
+  placementVerdict ProposedVerdict?
+  coverLetter  String?
+  shortAnswers Json? // [{question, answer}]
+  // The application text as HANK last wrote it: {coverLetter, answers:[{question,text}]}.
+  // Divergence from the live coverLetter/shortAnswers above is what marks a user
+  // edit as not-yet-relayed — the same proposal-vs-what's-there test the board
+  // runs on proposedVerdict vs placementVerdict, so editing back to Hank's
+  // wording is a no-op rather than a change to report. Relaying (and submit)
+  // re-baselines it. Null entry = the user authored that item outright.
+  // See docs/application-page.md.
+  proposedDrafts Json?
+  // Cached application-decider output (src/server/subagents/applicationDecider.ts):
+  // {questions:[{question,verdict:"draft"|"skip"|"ask_user",reason}],
+  //  coverLetter?:{verdict,reason}, decidedAt}. Re-decided only when null. See
+  // docs/flows.md + docs/pipelines.md (decider).
+  draftDecision Json?
+  // "Ok to use this when drafting future applications" — the ONLY signal on a
+  // draft artifact, set by the user editing it, copying it, or flipping the
+  // switch; every agent write sets false. Only `true` includes (null and false
+  // both exclude). shortAnswersReuse parallels shortAnswers. See docs/ui.md
+  // (Reuse toggle).
+  coverLetterReuse    Boolean?
+  shortAnswersReuse   Json?
+  // Set (at status=PITCHED) when this role belongs to an inbound lead; the
+  // Opportunity owns the conversation, this row owns the pipeline state.
+  opportunityId String?
+  // How the user applied (set on APPLIED). Tools default it from opportunityId
+  // (set ⇒ RECRUITER, unset ⇒ DIRECT); REFERRAL is agent opt-in. Null = unknown.
+  applyChannel ApplyChannel?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id])
+  // Cascade so an admin Job delete takes its interactions with it.
+  job    Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  events JobEvent[]
+  // Inbound leads triggered by this row (e.g. applied direct, then a recruiter
+  // spun off more roles). Set by create_opportunity({sourceJobInteractionId}).
+  sourcedOpportunities Opportunity[]      @relation("OpportunitySource")
+  opportunity          Opportunity?       @relation("OpportunityJobs", fields: [opportunityId], references: [id])
+
+  @@unique([userId, jobId])
+  @@index([opportunityId])
+}
+
+// Per-user job-interaction status. Meaning / tone / gates in docs/lifecycle.md.
+// Closed jobs are CLOSED with a structured closeReason (incl. WITHDRAWN).
+enum JobInteractionStatus {
+  PITCHED // recruiter-pitched via an Opportunity, no triage; off the shortlist/CAUGHT_UP gates
+  NEW // surfaced by a scan, no decision yet
+  SCANNED // full description read; awaiting shortlist decision
+  SHORTLISTED // user approved the pick — ready to apply
+  CLOSED // user/agent won't pursue — see closeReason
+  DEFERRED // "could apply, outranked now"; no timer, revive to act. See deferReason
+  APPLIED
+  RESPONDED
+  INTERVIEW_SCHEDULED // on the calendar; nothing to do until the date passes
+  INTERVIEW_DEBRIEF // date passed; ask how it went
+  WAITING_ON_RESPONSE // ball in their court; resting (not owed), resurfaces after ~14d silence
+  OFFERED
+  REJECTED // company-side rejection
+  DELISTED // system-set: posting removed from the board (per-user projection of Job.closedAt). Terminal; only from the non-terminal set
+}
+
+// Coarse per-job match verdict (only 3 buckets — per-job scores don't calibrate;
+// the shortlist ranks by bucket). See docs/flows.md (Match step).
+enum MatchBucket {
+  STRONG // clear fit at the right level — pre-checked in the shortlist widget
+  POSSIBLE // plausible, worth surfacing, not a slam-dunk
+  WEAK // survived match but a stretch — usually not pre-checked
+}
+
+// Structured "why" for a CLOSED job (WITHDRAWN = applied then pulled; rest pre-apply).
+enum JobCloseReason {
+  WITHDRAWN
+  NOT_A_MATCH
+  LOCATION_MISMATCH // role's locations don't match the user's geo filters
+  USER_REJECTED // user unchecked a viable job via the shortlist widget; also covers shortlist non-picks
+  OTHER
+}
+
+// Structured "why" for a DEFERRED job (intends to return, unlike JobCloseReason).
+// Cleared on transition out.
+enum JobDeferReason {
+  OUTRANKED // shortlist "defer-the-rest" default (server-set on board commit)
+  OTHER
+}
+
+// Stance on the shortlist board (pre-commit, reversible; see docs/flows.md).
+enum ProposedVerdict {
+  PICK // recommended: apply
+  BORDERLINE // visible, not recommended; the user decides
+  PASS // recommended: don't apply — closes the role at commit
+}
+
+// Who last set a board stance. What the board renders and what the edit relay reports.
+enum ProposedBy {
+  HANK
+  USER
+}
+
+// How a JobInteraction reached APPLIED (set on the APPLIED event; null for legacy).
+// RECRUITER = anyone mediating the apply; REFERRAL = a contact pointed them at it;
+// DIRECT = scan-flow / careers page.
+enum ApplyChannel {
+  DIRECT
+  RECRUITER
+  REFERRAL
+}
+
+// -- Events (timeline) ----------------------------------------------------
+
+// Per-job timeline (parallel to OpportunityEvent). @@map keeps the physical
+// table "Event". Event vocab in docs/lifecycle.md.
+model JobEvent {
+  id               String       @id @default(cuid())
+  jobInteractionId String
+  type             JobEventType
+  occurredAt       DateTime
+  notes            String?
+  source           EventSource
+  createdAt        DateTime     @default(now())
+
+  // Cascade so an admin Job→JobInteraction delete doesn't strand orphan events.
+  jobInteraction JobInteraction @relation(fields: [jobInteractionId], references: [id], onDelete: Cascade)
+
+  @@index([jobInteractionId])
+  @@map("Event")
+}
+
+enum JobEventType {
+  SURFACED // job scraped + JobInteraction(NEW) created
+  SCANNED // full description fetched
+  SHORTLISTED
+  CLOSED
+  APPLIED
+  RESPONDED
+  INTERVIEW_SCHEDULED // occurredAt is the call time
+  INTERVIEW_HAPPENED // interview took place; usually paired with a note
+  AWAITING_RESPONSE // debriefed, nothing owed → JobInteractionStatus.WAITING_ON_RESPONSE
+  OFFERED
+  REJECTED
+  WITHDRAWN
+  DEFERRED // job deferred ("could apply, outranked now") — replaces the old bare NOTE
+  DELISTED // posting taken down (per-user projection of Job.closedAt)
+  DRAFT_USED // LEGACY tombstone — no longer emitted (usage lives on JobInteraction.*UsedAt); historical rows only
+  NOTE
+
+  @@map("EventType")
+}
+
+enum EventSource {
+  CHAT_EXTRACTED
+  USER_LOGGED
+}
+
+// Per-user, per-company activity timeline. SOLE source of the company
+// "Recent activity" card (parallel to JobEvent/OpportunityEvent). Mechanical
+// batches collapse to one summary row (JOBS_CLOSED/SCAN_FOUND/SHORTLIST_RAN);
+// low-volume per-role milestones (APPLIED/RESPONDED/…) dual-write here AND to
+// the JobEvent timeline, carrying jobId+jobTitle; company status changes write
+// a status row. This is the sole status-transition record (the old parallel
+// markdown `## Status history` note is gone) and is read into the agent's
+// focused-company context. Event vocab in docs/lifecycle.md. Seam-written via
+// logCompanyEvent; agent-writable via log_company_events / edit_company_event /
+// delete_company_event.
+model CompanyEvent {
+  id         String           @id @default(cuid())
+  userId     String
+  companyId  String
+  type       CompanyEventType
+  occurredAt DateTime
+  notes      String?
+  source     EventSource
+  // Set on per-role dual-write rows (APPLIED/RESPONDED/…); null on summary
+  // (JOBS_CLOSED/SCAN_FOUND/SHORTLIST_RAN) + company-status rows. jobId is a
+  // bare label column (not an FK) — the feed renders from the jobTitle snapshot,
+  // so it survives an admin Job delete without a cascade rule.
+  jobId      String?
+  jobTitle   String?
+  createdAt  DateTime         @default(now())
+
+  user    User    @relation(fields: [userId], references: [id])
+  // Cascade mirrors CompanyInteraction: an admin Company delete tears down its
+  // feed too.
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([userId, companyId, occurredAt])
+}
+
+// Company-level event vocab. Semantics in docs/lifecycle.md; the no-raw-enum
+// label map is companyEventLabel() in src/lib/statusColors.ts.
+enum CompanyEventType {
+  // Collapsed mechanical batches
+  JOBS_CLOSED // "Closed 45 roles: not a match"
+  SCRAPE_FOUND // "Found 158 new roles"
+  SHORTLIST_RAN // "Shortlisted 5, deferred 12"
+  // Per-role milestones (dual-written with the JobEvent)
+  APPLIED
+  RESPONDED
+  INTERVIEW_SCHEDULED
+  INTERVIEW_HAPPENED
+  OFFERED
+  REJECTED
+  WITHDRAWN
+  // Company-only status changes
+  PAUSED
+  BLOCKED
+  CLOSED // company closed (distinct from the JOBS_CLOSED batch)
+  CAUGHT_UP
+  REVIVED
+}
+
+// -- Memory (notes addressed by path) -------------------------------------
+
+model MemoryNote {
+  userId        String
+  path          String // see src/server/memory/paths.ts for the allowed path patterns
+  content       String
+  companyId     String?
+  jobId         String?
+  opportunityId String?
+  contactId     String?
+  updatedAt     DateTime @updatedAt
+
+  user        User         @relation(fields: [userId], references: [id])
+  // SetNull on the denormalized FKs: the note content survives an admin delete
+  // of its associated Company/Job/Opportunity/Contact (path-addressed; the FK
+  // is just an index hint). Cascade would silently nuke memory notes during a
+  // Company delete.
+  company     Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  job         Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  contact     Contact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@id([userId, path])
+}
+
+// -- Chat sessions --------------------------------------------------------
+
+model ChatSession {
+  id                      String    @id @default(cuid())
+  userId                  String
+  summary                 String? // running summary of compacted messages (model-side only)
+  summarizedUpToMessageId String? // id of the last ChatMessage included in summary
+  // Set by compactSession on success; the loop reads it to surface a post-compaction
+  // hint. compactionDeferredCount counts loop iterations where compaction was
+  // overdue but not run (systemPrompt escalates on it; compactSession resets).
+  compactedAt             DateTime?
+  compactionDeferredCount Int       @default(0)
+  startedAt               DateTime  @default(now())
+  endedAt                 DateTime?
+
+  user                     User          @relation(fields: [userId], references: [id])
+  messages                 ChatMessage[]
+  attachments              Attachment[]
+  adminNotes               AdminNote[]
+  clientEvents             ClientEvent[]
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      Role
+  content   Json // Anthropic content blocks
+  // Sub-agent traces keyed by parent tool_use id: recursive { steps: (text|tool) }.
+  // ASSISTANT rows only; stripped from replay (informational).
+  traces        Json?
+  // Turn the user interrupted via Stop: content may be partial + tool_uses orphaned
+  // (repaired on replay via repairOrphanToolUses). Drives the "Stopped by user" pill.
+  stoppedByUser Boolean  @default(false)
+  // Run-tree capture (admin /admin/runs inspector). runId groups all rows produced
+  // by one runUserMessage call; turnIndex orders the LLM turns within it. Nullable:
+  // pre-instrumentation rows have neither and render in degraded/heuristic mode.
+  runId         String?
+  turnIndex     Int?
+  createdAt     DateTime @default(now())
+
+  session     ChatSession  @relation(fields: [sessionId], references: [id])
+  attachments Attachment[]
+  adminNotes  AdminNote[]
+  clientEvents ClientEvent[]
+
+  @@index([runId, createdAt])
+}
+
+// Agent-recorded confusion / flow-friction observations, written via the (hidden)
+// record_observation tool and triaged in /admin/notes. Always upsert via
+// upsertAdminNote (dedup, severity escalation); see docs/admin.md. Deleted only
+// via the dismiss UI.
+model AdminNote {
+  id        String   @id @default(cuid())
+  userId    String
+  sessionId String
+  messageId String? // most recent ChatMessage at note time; optional
+  // Free-form (no migration to add one). Agent set: user_confusion / agent_confusion
+  // / flow_friction / capability_request / tool_misbehavior / self_improvement; plus
+  // client_error, fanned out from ClientEvent.
+  category  String
+  severity  String   @default("MEDIUM") // LOW/MEDIUM/HIGH; admin sorts by severity, count, lastSeenAt
+  summary   String
+  context   String?
+  // Dedup key `<source>:<failure mode>:<input shape>` (e.g.
+  // get_application_form:unsupported:greenhouse). A matching non-dismissed row
+  // bumps occurrenceCount + severity instead of inserting. Null = no dedup.
+  dedupKey         String?
+  occurrenceCount  Int      @default(1)
+  lastSeenAt       DateTime @default(now()) // bumped on each dedup match
+  dismissed        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  user    User         @relation(fields: [userId], references: [id])
+  session ChatSession  @relation(fields: [sessionId], references: [id])
+  message ChatMessage? @relation(fields: [messageId], references: [id])
+
+  @@index([userId, dismissed, createdAt])
+  @@index([userId, category, dedupKey, dismissed]) // dedup lookup (non-dismissed only)
+}
+
+// Browser-side error/diagnostic events (SSE drops, modal triggers, render crashes,
+// Stop, widget failures) that never otherwise reach the agent/admin. Injected into
+// the next turn as <recent-client-errors>; the "problem" subset fans out to
+// AdminNote (same dedup).
+model ClientEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  sessionId String
+  messageId String? // related assistant ChatMessage, when known
+  source    String // "sse_disconnect" | "modal" | "render_error" | "stop" | "widget_failure" | "chat_error"
+  severity  String   @default("warn") // client-side "info" | "warn" | "error"
+  summary   String // user-safe one-liner, surfaced to the agent verbatim
+  context   Json? // shape varies by source: { toolName?, eventsSeen?, reason?, component?, widgetKind?, errorMessage? }
+  dedupKey  String? // stable `<source>:<failure mode>:<shape>` grouping key (mirrors the AdminNote convention). Derived server-side; no live consumer since the AdminNote fan-out was removed — kept as a grouping key for a future client-event audit/analytics ingest. Null = no key derivable.
+  createdAt DateTime @default(now())
+
+  user    User         @relation(fields: [userId], references: [id])
+  session ChatSession  @relation(fields: [sessionId], references: [id])
+  message ChatMessage? @relation(fields: [messageId], references: [id])
+
+  @@index([sessionId, createdAt]) // turn-start "since last assistant message"
+  @@index([userId, dedupKey, createdAt]) // grouping key for a future client-event audit/analytics ingest (no live consumer today)
+}
+
+enum Role {
+  USER
+  ASSISTANT
+  TOOL
+}
+
+// -- Token usage (one row per LLM API call) -------------------------------
+// Where tokens go + cost-regression tracking. Recorded by
+// src/server/platform/usage/track.ts; summarized by `pnpm usage`. See docs/cost.md.
+model TokenUsage {
+  id                       String   @id @default(cuid())
+  userId                   String
+  createdAt                DateTime @default(now())
+  // A `UsageOperation` value — the closed union in src/server/platform/usage/track.ts
+  // is authoritative (it carries the retired values too, with why each is kept).
+  // Don't re-list them here; this comment went stale twice already.
+  operation                String
+  model                    String
+  inputTokens              Int
+  outputTokens             Int
+  cacheCreationInputTokens Int      @default(0)
+  cacheReadInputTokens     Int      @default(0)
+  webSearchRequests        Int      @default(0)
+  sessionId                String?
+  notes                    String?
+  // First tool_use block in the assistant reply for chat ops, and the first
+  // READ tool a judgement sub-agent dispatched on that turn. Null for
+  // compact_summary, end_turn-only replies, and every sub-agent turn that only
+  // emitted its output schema (that is not a tool call — see subAgent.ts;
+  // `operation` attributes that spend, and SubAgentRun.outputSchemaName records
+  // which shape came back). Lets `pnpm usage` attribute cost to e.g. search_jobs
+  // vs get_job_details without joining against ChatMessage by timestamp.
+  toolName                 String?
+  // Who paid: true = server key fallback, false = user's own key (set from the key
+  // the resolver used). The admin usage page splits "billed to us" vs "to users".
+  billedToServer           Boolean  @default(true)
+  // Run-tree capture (admin /admin/runs). This model is the per-LLM-call spine of
+  // the tree. runId groups a call under its run; messageId points at the assistant
+  // ChatMessage the call produced (main-agent turns); parentToolUseId is set for
+  // sub-agent calls (= the main-agent tool_use that spawned the sub-agent).
+  // requestParams captures { maxTokens, thinkingBudget, toolChoice, toolNames[] }
+  // plus the volatile system-prompt pieces; systemPromptHash references the deduped
+  // PromptSnapshot skeleton. All nullable (pre-instrumentation rows lack them).
+  runId                    String?
+  messageId                String?
+  parentToolUseId          String?
+  requestParams            Json?
+  systemPromptHash         String?
+
+  @@index([userId, createdAt])
+  @@index([operation, createdAt])
+  @@index([runId])
+}
+
+// -- Sub-agent runs (per judgement/transform invocation) ------------------
+// Captures WHAT each sub-agent returned (TokenUsage only records that it ran).
+// Read by the runtime audit (scripts/subagent-runtime-audit/). Written by
+// recordSubAgentRun (src/server/agent/subAgentRun.ts); full untruncated payloads.
+model SubAgentRun {
+  id            String   @id @default(cuid())
+  userId        String
+  sessionId     String?
+  operation     String // UsageOperation value, e.g. "shortlist_jobs"
+  model         String
+  class         String // "judgement" | "transform"
+  ok            Boolean  @default(true) // false = sub-agent errored / exhausted turns
+  // Which output schema the sub-agent emitted — the branch it took in
+  // multi-output mode (e.g. commit_shortlist_picks vs decline_shortlist). NOT a
+  // tool the sub-agent called; see subAgent.ts's header. Physical column is
+  // still `finalToolName` via @map, so the rename needs no migration.
+  outputSchemaName String? @map("finalToolName")
+  input         Json // { system, initialUserContent } as sent to the model
+  output        Json? // the emitted schema's payload (structured output); null on failure
+  error         String? // populated when ok=false
+  turns         Int? // judgement loop turn count
+  seeded        Boolean  @default(false) // true = reconstructed by backfill, not a live capture
+  // Run-tree capture (admin /admin/runs). runId groups this sub-agent under its run;
+  // parentMessageId + parentToolUseId locate the exact main-agent tool_use that
+  // spawned it, so the viewer nests the sub-agent under its parent tool node.
+  // Nullable (pre-instrumentation rows lack them).
+  runId           String?
+  parentMessageId String?
+  parentToolUseId String?
+  createdAt     DateTime @default(now())
+
+  @@index([operation, createdAt]) // per-operation cursor scan (primary access path)
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([runId])
+  @@index([parentToolUseId])
+}
+
+// -- System-prompt snapshots (deduped) ------------------------------------
+// The Hank system prompt is ~70KB rebuilt every turn but the static skeleton is
+// identical across turns of a given flow/code version. buildHankSystem splits it
+// into a static skeleton (hashed + stored once here) + small volatile pieces
+// (today/profile/client-errors, stashed per-call in TokenUsage.requestParams).
+// The /admin/runs viewer reconstructs the exact prompt = skeleton + volatile.
+model PromptSnapshot {
+  hash        String   @id // stable hash of the static skeleton text
+  flow        String // "profile" | "walkthrough" | "watchlist" | "default"
+  text        String // the static skeleton, stored once per distinct hash
+  firstSeenAt DateTime @default(now())
+}
+
+// -- Contacts & Opportunities --------------------------------------------
+// Inbound flow: a recruiter's lead becomes an Opportunity (the conversation) +
+// a Contact; each pitched role is a Job + JobInteraction linked via
+// opportunityId (status PITCHED → normal pipeline). See docs/flows.md.
+
+model Contact {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  slug        String? // per-user slug from name; resolvers fall back to id. See docs/entity-slugs.md
+  role        String? // "Recruiter", "Hiring Manager", "Engineer", etc.
+  // Agency name (a string, not a Company FK — agencies aren't watchlist
+  // Companies). In-house recruiters link via companyId instead.
+  agency      String?
+  companyId   String? // when in-house at a Company we already track
+  email       String?
+  phone       String?
+  linkedinUrl String?
+  channel     String? // "LinkedIn DM", "referral via Alex", "cold email"
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user                  User                  @relation(fields: [userId], references: [id])
+  // SetNull so a recruiter Contact survives an admin delete of the linked
+  // Company — the human is still useful even if the company is gone (in-house
+  // recruiters move; agency recruiters work across many companies).
+  company               Company?              @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  primaryFor            Opportunity[]         @relation("PrimaryContact")
+  opportunityContacts   OpportunityContact[]
+  memoryNotes           MemoryNote[]
+
+  @@unique([userId, slug])
+  @@index([userId, name])
+  @@index([companyId])
+}
+
+// A lead — one inbound conversation anchored on a Contact; its roles are
+// JobInteraction rows linked via opportunityId (a lead can span companies). The
+// dashboard groups it like a Company groups jobs.
+model Opportunity {
+  id                          String              @id @default(cuid())
+  userId                      String
+  // Free-form lead label ("McKenley Talent → Arcadia"); dashboard header + focus
+  // pill caption. Write it for the user.
+  label                       String
+  slug                        String? // per-user slug from label; resolvers fall back to id
+  status                      OpportunityStatus   @default(OPEN)
+  // Set when this inbound was triggered by an existing application (applied direct,
+  // then a recruiter spun off roles). Null for agency-posting inbounds.
+  sourceJobInteractionId      String?
+  primaryContactId            String?
+  // Next meaningful moment (call, expected reply); drives the dashboard sort.
+  nextStepAt                  DateTime?
+  notes                       String?
+  closedReason                String? // freeform; set when status → CLOSED
+  createdAt                   DateTime            @default(now())
+  updatedAt                   DateTime            @updatedAt
+
+  user                  User                  @relation(fields: [userId], references: [id])
+  // SetNull so an Opportunity outlives the JobInteraction that triggered it
+  // (admin Job delete shouldn't take its inbound conversation with it).
+  sourceJobInteraction  JobInteraction?       @relation("OpportunitySource", fields: [sourceJobInteractionId], references: [id], onDelete: SetNull)
+  primaryContact        Contact?              @relation("PrimaryContact", fields: [primaryContactId], references: [id])
+  opportunityContacts   OpportunityContact[]
+  events                OpportunityEvent[]
+  jobInteractions       JobInteraction[]      @relation("OpportunityJobs")
+  memoryNotes           MemoryNote[]
+
+  @@unique([userId, slug])
+  @@index([userId, status])
+  @@index([userId, nextStepAt])
+}
+
+// M:M join between Contact and Opportunity. The headline contact stays on
+// Opportunity.primaryContactId so the dashboard needn't load the join.
+model OpportunityContact {
+  opportunityId String
+  contactId     String
+  createdAt     DateTime @default(now())
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  contact     Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([opportunityId, contactId])
+  @@index([contactId])
+}
+
+// Opportunity timeline (parallel to JobEvent). Status auto-caching mirrors
+// EVENT_TO_STATUS (CALL_SCHEDULED → SCREENING, NEXT_STEP_RECEIVED → AWAITING,
+// CLOSED → CLOSED); NOTE / STATUS_CHANGED / INBOUND_RECEIVED don't shift status.
+model OpportunityEvent {
+  id            String                 @id @default(cuid())
+  opportunityId String
+  type          OpportunityEventType
+  occurredAt    DateTime
+  notes         String?
+  source        EventSource
+  createdAt     DateTime               @default(now())
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@index([opportunityId, occurredAt])
+}
+
+enum OpportunityStatus {
+  OPEN // conversation alive; no call scheduled yet. Default for new leads.
+  SCREENING // screen/call scheduled, or just happened and we're waiting
+  AWAITING // process started; they owe us the next step
+  CLOSED // ended without converting (ghosted, mutual pass, etc.)
+}
+
+enum OpportunityEventType {
+  INBOUND_RECEIVED
+  CALL_SCHEDULED
+  CALL_HAPPENED
+  NEXT_STEP_RECEIVED
+  STATUS_CHANGED
+  CLOSED
+  NOTE
+}
+
+// -- Web Push subscriptions ----------------------------------------------
+// One row per (user, browser/PWA install); notifyAdmin() iterates admin rows and
+// auto-prunes stale ones (404/410). endpoint is the unique identity (upsert by it);
+// p256dh + auth are the VAPID keys, rotated on re-subscribe.
+model PushSubscription {
+  id             String    @id @default(cuid())
+  userId         String
+  endpoint       String    @unique
+  p256dh         String
+  auth           String
+  userAgent      String?
+  createdAt      DateTime  @default(now())
+  lastNotifiedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

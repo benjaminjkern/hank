@@ -1,0 +1,11 @@
+-- Drop the runner-selection column.
+--
+-- It stored which of three flow runners fielded the next message
+-- ("profile" | "walkthrough" | "default" | the legacy "watchlist"). There is one
+-- runner now: profile intake is derived per turn from the user's memory slots,
+-- and "default" was never a flow. Nothing has read or written the column since
+-- the one-runner collapse, so this drops dead state — no backfill needed.
+--
+-- The Prisma field was `currentFlow`; the physical column kept its original
+-- name `currentMode` via @map, which is what we drop here.
+ALTER TABLE "ChatSession" DROP COLUMN "currentMode";

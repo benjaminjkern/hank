@@ -1,0 +1,12 @@
+-- Add a SHORTLIST_PASSED_OVER value to JobDeferReason. Under the new
+-- "defer-the-rest" shortlist model, a role the user doesn't pick in a shortlist
+-- round is DEFERRED (reversible) instead of CLOSED. This reason marks those
+-- auto-passovers so that "generate a new shortlist" can reset ONLY them back to
+-- SCANNED, leaving jobs the user intentionally deferred (NEEDS_PREP, timing,
+-- etc.) untouched.
+--
+-- Additive enum value only. The value is NOT used in this same transaction
+-- (Postgres restriction on newly-added enum values) — the commit path that
+-- writes it ships in application code, not here. Mirrors the ADD VALUE pattern
+-- in 20260622170000_add_company_blocked_status.
+ALTER TYPE "JobDeferReason" ADD VALUE IF NOT EXISTS 'SHORTLIST_PASSED_OVER';

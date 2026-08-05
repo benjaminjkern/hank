@@ -1,0 +1,236 @@
+// The company_checklist submission: create stubs for the picked names, then
+// enrich them.
+//
+// "Enrich" here is identity only — careers URL, canonical name, description,
+// logo. Roles are NOT pulled in: that happens the first time the user walks the
+// company (or on an explicit scrape_jobs_for_company). So the ✓ lines carry no
+// role count, and every company lands at NEW, which is where whats_next's
+// backlog picks them up.
+//
+// Fully conversational: no add_more_companies widget at the end — the ✓ lines
+// are the narration and the user just keeps chatting. A disambiguation picker is
+// the one exception, because it's a genuine wait-for-user question.
+
+import { Role } from "@/generated/prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
+import type {
+  RunContext,
+  TurnEvent,
+  WidgetKind,
+} from "@/server/agent/contracts";
+import { narrateStatus, narrateText } from "@/server/agent/session";
+import { prisma } from "@/server/db/prisma";
+import { createCompanyStubs } from "@/server/entities/companies/createCompanyStubs";
+import type {
+  PickedCompany,
+  DisambiguationResolution,
+} from "@/server/widgets/parse";
+
+import { runEnrichCompanies } from "./enrichCompanies";
+
+import type { CompanyEnrichResult } from "./types";
+
+type ChecklistAddArgs = RunContext & { sessionId: string };
+
+// Every line this procedure emits goes through narrateStatus / narrateText
+// (agent/session/narrate.ts), which stream the event AND persist it as its own
+// assistant ChatMessage row. The row is not optional here: a top-level dispatch
+// has no outer buffer collecting and persisting its events the way the
+// walkthrough state machine does, so without it the streamed line vanishes on
+// refresh.
+
+async function* persistWidget(
+  args: ChecklistAddArgs,
+  kind: WidgetKind,
+  payload: unknown,
+): AsyncGenerator<TurnEvent> {
+  const toolUseId = `pipeline-${kind}-${crypto.randomUUID()}`;
+  await prisma.chatMessage.create({
+    data: {
+      sessionId: args.sessionId,
+      role: Role.ASSISTANT,
+      content: [
+        { type: "pipeline_widget", toolUseId, kind, payload },
+      ] as unknown as Prisma.InputJsonValue,
+      runId: args.runId ?? null,
+    },
+  });
+  yield { type: "widget", toolUseId, kind, payload };
+}
+
+// Shape the disambiguation widget renders + round-trips. `companyId` is the
+// stub (unresolved, NEW) the picker resolves on selection; each candidate
+// carries the verified board URL the hunter offered.
+type AmbiguousCompanyForPicker = {
+  companyId: string;
+  name: string;
+  candidates: Array<{
+    chosenUrl: string;
+    canonicalName: string;
+    shortDescription: string;
+  }>;
+};
+
+// One user-facing line per finished company. Terminal outcomes stay plain — the
+// raw hunter reason (ATS slugs, 404s, fetch_url) is developer-speak.
+function lineFor(result: CompanyEnrichResult): string | null {
+  switch (result.outcome.kind) {
+    case "enriched":
+    case "already_enriched":
+      return `✓ Added ${result.name}.`;
+    case "cannot_scrape":
+      return `I couldn't find a readable job board for ${result.name} — they're on your list, but I've set them aside. If you have their careers link, send it over.`;
+    case "hunter_failed":
+      return `I couldn't look up ${result.name} just now — they're on your list and we can try again.`;
+    case "not_found":
+      return null;
+    case "ambiguous":
+      // Deferred to the picker — don't claim it was added.
+      return null;
+  }
+}
+
+export async function* runChecklistAdd(
+  picks: PickedCompany[],
+  args: ChecklistAddArgs,
+): AsyncGenerator<TurnEvent> {
+  // Create stubs first (dedupe-aware), then enrich the fresh ones. Each pick's
+  // disambiguation context (suggestion reasoning) + captured board URL ride
+  // through createCompanyStubs onto the outcome so the enrich step can forward
+  // them to the URL hunter. Names already on the list come back `existed` and
+  // are skipped.
+  const stubs = await createCompanyStubs(
+    args.userId,
+    picks.map((p) => ({
+      name: p.name,
+      context: p.context,
+      candidateUrl: p.url,
+    })),
+  );
+  const toEnrich = stubs
+    .filter((s) => s.kind !== "existed")
+    .map((s) => ({
+      companyId: s.companyId,
+      slug: s.slug,
+      name: s.name,
+      context: s.context,
+      candidateUrl: s.candidateUrl,
+    }));
+
+  if (toEnrich.length === 0) {
+    yield* narrateText(
+      args.sessionId,
+      picks.length === 1
+        ? `That one's already on your list.`
+        : `Those are already on your list.`,
+      args.runId,
+    );
+    return;
+  }
+
+  const willRun = toEnrich.length;
+  yield* narrateStatus(
+    args.sessionId,
+    `Looking up ${willRun} ${willRun === 1 ? "company" : "companies"} — I check each careers page, so give me a moment…`,
+    args.runId,
+  );
+
+  const it = runEnrichCompanies({ ...args, companies: toEnrich });
+
+  // Companies the hunter couldn't disambiguate — collected here and surfaced as
+  // ONE picker at the end of the batch rather than pausing mid-loop (the pool
+  // can't yield a widget and wait per company).
+  const ambiguous: AmbiguousCompanyForPicker[] = [];
+  let step = await it.next();
+  while (!step.done) {
+    const ev = step.value;
+    if (ev.type === "company_started") {
+      yield { type: "pipeline_status", text: `Looking up ${ev.name}…` };
+    } else {
+      const { result } = ev;
+      if (result.outcome.kind === "ambiguous") {
+        ambiguous.push({
+          companyId: result.companyId,
+          name: result.name,
+          candidates: result.outcome.candidates.map((c) => ({
+            chosenUrl: c.sourceUrl,
+            canonicalName: c.canonicalName,
+            shortDescription: c.shortDescription,
+          })),
+        });
+      } else {
+        const line = lineFor(result);
+        if (line) yield* narrateText(args.sessionId, line, args.runId);
+        // This company is now persisted — show it on the dashboard immediately
+        // rather than waiting for the whole batch to finish.
+        yield { type: "refresh_viewed_state" };
+      }
+    }
+    // eslint-disable-next-line no-await-in-loop -- draining a generator — each step is produced by the previous one
+    step = await it.next();
+  }
+
+  // Name collisions: surface the disambiguation picker (a genuine wait-for-user
+  // question). Resolving it chains into runDisambiguationResolution.
+  if (ambiguous.length > 0) {
+    yield* narrateText(
+      args.sessionId,
+      ambiguous.length === 1
+        ? `One name matched more than one company — which did you mean?`
+        : `A few names matched more than one company — pick which you meant.`,
+      args.runId,
+    );
+    yield* persistWidget(args, "company_disambiguation", {
+      companies: ambiguous,
+    });
+  }
+}
+
+// Resolve the user's disambiguation picks: commit the chosen board URL through
+// the same chain (which skips the hunt because the URL is already decided) and
+// narrate one line each.
+export async function* runDisambiguationResolution(
+  resolved: DisambiguationResolution[],
+  args: ChecklistAddArgs,
+): AsyncGenerator<TurnEvent> {
+  const companies = await prisma.company.findMany({
+    where: { id: { in: resolved.map((r) => r.companyId) } },
+    select: { id: true, slug: true },
+  });
+  const slugById = new Map(companies.map((c) => [c.id, c.slug]));
+
+  const toEnrich = resolved
+    // A stub removed between render and submit just drops out.
+    .filter((r) => slugById.has(r.companyId))
+    .map((r) => ({
+      companyId: r.companyId,
+      slug: slugById.get(r.companyId)!,
+      name: r.canonicalName,
+      resolved: {
+        canonicalName: r.canonicalName,
+        sourceUrl: r.chosenUrl,
+        shortDescription: r.shortDescription,
+      },
+    }));
+  if (toEnrich.length === 0) return;
+
+  const it = runEnrichCompanies({ ...args, companies: toEnrich });
+
+  let step = await it.next();
+  while (!step.done) {
+    const ev = step.value;
+    if (ev.type === "company_started") {
+      yield* narrateStatus(
+        args.sessionId,
+        `Setting up ${ev.name}…`,
+        args.runId,
+      );
+    } else {
+      const line = lineFor(ev.result);
+      if (line) yield* narrateText(args.sessionId, line, args.runId);
+      yield { type: "refresh_viewed_state" };
+    }
+    // eslint-disable-next-line no-await-in-loop -- draining a generator — each step is produced by the previous one
+    step = await it.next();
+  }
+}
