@@ -81,11 +81,11 @@ export async function updateJobInteraction(
     if (updates.deferNote !== undefined) data.deferNote = updates.deferNote;
     // Stance clear-on-transition (same rule logJobEvents applies): a status
     // correction ends whatever the shortlist board proposed for this row.
-    data.proposedVerdict = null;
+    data.agentVerdict = null;
+    data.agentReason = null;
+    data.userVerdict = null;
     data.placementVerdict = null;
-    data.proposedReason = null;
-    data.proposedBy = null;
-    data.proposedAt = null;
+    data.stanceAt = null;
   }
 
   await prisma.jobInteraction.upsert({

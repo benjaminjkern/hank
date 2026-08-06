@@ -153,6 +153,28 @@ const RowReason = styled.div`
   font-style: italic;
 `;
 
+// Deliberately a labelled button, not a fourth mark: this row is out of the
+// pool, so the action is un-closing it — "pass" on an already-closed role would
+// be a no-op button sitting next to two live ones.
+const ReviveButton = styled.button`
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  color: ${({ theme }) => theme.colors.textMuted};
+  background: transparent;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    color: ${({ theme }) => theme.colors.accent};
+    border-color: ${({ theme }) => theme.colors.accent};
+  }
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+`;
+
 const StanceRow = styled.div`
   display: flex;
   align-items: center;
@@ -329,6 +351,7 @@ function BoardRow({
 }) {
   const viewJob = useChatStore((s) => s.viewJob);
   const editShortlistBoard = useChatStore((s) => s.editShortlistBoard);
+  const reviveFilteredJob = useChatStore((s) => s.reviveFilteredJob);
   const readOnly = useChatStore((s) => s.impersonateSessionId !== null);
   const [busy, setBusy] = useState(false);
 
@@ -350,6 +373,16 @@ function BoardRow({
     }
   }
 
+  async function revive() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await reviveFilteredJob(companyId, row.jobId);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <RowCard $pending={row.pending}>
       <RowTop>
@@ -357,13 +390,19 @@ function BoardRow({
       </RowTop>
       {rowMeta(row) && <RowMeta>{rowMeta(row)}</RowMeta>}
       {row.reason && <RowReason>{row.reason}</RowReason>}
-      {row.matchBucket && row.stanceable && (
+      {row.overriddenAgentVerdict && (
         <ScanTag>
-          First read: {row.matchBucket.toLowerCase()}
-          {row.matchReason ? ` — ${row.matchReason}` : ""}
+          Hank had this as {row.overriddenAgentVerdict.toLowerCase()}
+          {row.overriddenAgentReason ? ` — ${row.overriddenAgentReason}` : ""}
         </ScanTag>
       )}
+      {row.scanDissent && <ScanTag>⚠ {row.scanDissent}</ScanTag>}
       <StanceRow>
+        {!readOnly && row.revivable && (
+          <ReviveButton disabled={busy} onClick={() => void revive()}>
+            Actually, consider this
+          </ReviveButton>
+        )}
         {!readOnly &&
           row.stanceable &&
           STANCES.map((s) => (

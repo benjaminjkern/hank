@@ -1,9 +1,16 @@
-// A stance on a shortlist row: where the board DRAWS the row, what the mark is
-// called, and the relay that carries a user's hand-edits into the next message.
+// A stance on a shortlist row: whose verdict is live, where the board DRAWS the
+// row, and the relay that carries a user's hand-edits into the next message.
 // The board view groups by these rules; the relay is the only path from a panel
 // click to Hank's context.
+//
+// Two sides, never one column. `agentVerdict`/`agentReason` are Hank's and only
+// he writes them; `userVerdict` is the override, where **null means "I accept
+// his"**. That's what makes re-marking a row back to his proposal restore his
+// reason for free rather than leaving it destroyed — the same
+// revert-is-a-no-op property the application page gets from `proposedDrafts`.
 
 import {
+  CompanyEventType,
   JobDeferReason,
   JobInteractionStatus,
   ProposedVerdict,
@@ -33,6 +40,29 @@ export type PlaceableRow = {
   deferReason: JobDeferReason | null;
 };
 
+// Both sides of the negotiation on one row.
+export type StancedRow = {
+  agentVerdict: ProposedVerdict | null;
+  agentReason: string | null;
+  userVerdict: ProposedVerdict | null;
+};
+
+// The stance in force: the user's when they've set one, otherwise Hank's.
+export function liveVerdict(row: StancedRow): ProposedVerdict | null {
+  return row.userVerdict ?? row.agentVerdict;
+}
+
+// The user has overruled Hank on this row — the one case worth showing his
+// reasoning next to theirs, since on an untouched row his reason IS the row's.
+export function isOverridden(row: StancedRow): boolean {
+  return row.userVerdict !== null && row.userVerdict !== row.agentVerdict;
+}
+
+// On the board at all: someone has a verdict, or it's drawn somewhere.
+export function isOnBoard(row: StancedRow & { placementVerdict: ProposedVerdict | null }): boolean {
+  return liveVerdict(row) !== null || row.placementVerdict !== null;
+}
+
 export function placedVerdict(row: PlaceableRow): ProposedVerdict | null {
   if (row.placementVerdict) return row.placementVerdict;
   if (row.status === JobInteractionStatus.SHORTLISTED) {
@@ -51,11 +81,38 @@ export function placedVerdict(row: PlaceableRow): ProposedVerdict | null {
 // Requires the row to be ON the board: a committed row carries neither a stance
 // nor a placement, and `placedVerdict`'s status fallback would otherwise read
 // every settled pick as a pending change to undecided.
-export function isPending(
-  row: PlaceableRow & { proposedVerdict: ProposedVerdict | null },
-): boolean {
-  const onBoard = row.proposedVerdict !== null || row.placementVerdict !== null;
-  return onBoard && row.proposedVerdict !== placedVerdict(row);
+export function isPending(row: PlaceableRow & StancedRow): boolean {
+  return isOnBoard(row) && liveVerdict(row) !== placedVerdict(row);
+}
+
+// When the round that produced the current board began. Closes at or after it
+// are this round's automatic filtering; older ones belong to rounds the user
+// already worked through, so they stay off the board.
+//
+// The board pull is the natural start (prescan runs on what the scrape just
+// brought in), and a commit ends a round — so whichever is later wins. Null
+// when the company has never been scraped: nothing to anchor on, so nothing
+// closed is shown.
+export async function roundStartedAt(
+  userId: string,
+  companyId: string,
+): Promise<Date | null> {
+  const [interaction, lastCommit] = await Promise.all([
+    prisma.companyInteraction.findUnique({
+      where: { userId_companyId: { userId, companyId } },
+      select: { lastScrapedJobsAt: true },
+    }),
+    prisma.companyEvent.findFirst({
+      where: { userId, companyId, type: CompanyEventType.SHORTLIST_RAN },
+      orderBy: { occurredAt: "desc" },
+      select: { occurredAt: true },
+    }),
+  ]);
+  const scraped = interaction?.lastScrapedJobsAt ?? null;
+  const committed = lastCommit?.occurredAt ?? null;
+  if (!scraped) return committed;
+  if (!committed) return scraped;
+  return scraped > committed ? scraped : committed;
 }
 
 export type BoardEditRelay = {
@@ -64,7 +121,10 @@ export type BoardEditRelay = {
   companyName: string | null;
   // The stance the user landed on. Null = they cleared it back to undecided.
   verdict: ProposedVerdict | null;
-  reason: string | null;
+  // What Hank had proposed, so the relay can say what they moved it FROM —
+  // "you had this as a pass" is the half he needs to respond to.
+  agentVerdict: ProposedVerdict | null;
+  agentReason: string | null;
 };
 
 // Board rows the user marked but hasn't sent a message about yet — the edit
@@ -72,24 +132,25 @@ export type BoardEditRelay = {
 // new user row (chip for the user, prose for the model), which is the ONLY
 // relay: an edit persists immediately but never wakes Hank on its own.
 //
-// "Unrelayed" is the divergence between a row's mark and where it's DRAWN
-// (`placedVerdict`), not a timestamp window: the user's edits move
-// `proposedVerdict` alone, and `settleRelayedBoardEdits` below catches
-// placement up once they've been reported. So this is order-independent (no
-// anchor row to race) and a mark that lands back where the row already sits
-// reports nothing at all, because nothing about the board changed.
+// "Unrelayed" is the divergence between a row's live stance and where it's
+// DRAWN (`placedVerdict`), not a timestamp window: the user's edits move
+// `userVerdict` alone, and `settleRelayedBoardEdits` below catches placement up
+// once they've been reported. So this is order-independent (no anchor row to
+// race) and a mark that lands back where the row already sits reports nothing at
+// all, because nothing about the board changed.
 export async function listUnrelayedBoardEdits(
   userId: string,
 ): Promise<BoardEditRelay[]> {
   const rows = await prisma.jobInteraction.findMany({
     where: { userId, ...onBoardWhere() },
-    orderBy: { proposedAt: "asc" },
+    orderBy: { stanceAt: "asc" },
     select: {
       status: true,
       deferReason: true,
-      proposedVerdict: true,
+      agentVerdict: true,
+      agentReason: true,
+      userVerdict: true,
       placementVerdict: true,
-      proposedReason: true,
       job: {
         select: {
           id: true,
@@ -103,8 +164,9 @@ export async function listUnrelayedBoardEdits(
     jobId: r.job.id,
     title: r.job.title,
     companyName: r.job.company?.name ?? null,
-    verdict: r.proposedVerdict,
-    reason: r.proposedReason,
+    verdict: liveVerdict(r),
+    agentVerdict: r.agentVerdict,
+    agentReason: r.agentReason,
   }));
 }
 
@@ -137,10 +199,15 @@ export async function settleRelayedBoardEdits(
 // snapshotted into the block, so replay needs no renderer and can't drift.
 export function renderBoardEditRelayText(edits: BoardEditRelay[]): string {
   const lines = edits.map((e) => {
-    const move = e.verdict
-      ? `moved to ${STANCE_WORDS[e.verdict]}`
-      : "cleared back to undecided";
-    return `- ${e.title}${e.companyName ? ` (${e.companyName})` : ""}: ${move}${e.reason ? ` — "${e.reason}"` : ""}`;
+    const to = e.verdict
+      ? `moved it to ${STANCE_WORDS[e.verdict]}`
+      : "cleared it back to undecided";
+    // What he had it as is the half he can actually respond to — "they moved
+    // your pass to a pick" is a disagreement; "it's a pick now" is just state.
+    const from = e.agentVerdict
+      ? ` (you had it as ${STANCE_WORDS[e.agentVerdict]}${e.agentReason ? `: "${e.agentReason}"` : ""})`
+      : "";
+    return `- ${e.title}${e.companyName ? ` (${e.companyName})` : ""}: ${to}${from}`;
   });
-  return `(From the shortlist board — the user changed ${edits.length === 1 ? "this row" : "these rows"} by hand since their last message:\n${lines.join("\n")})`;
+  return `(From the shortlist board — the user changed ${edits.length === 1 ? "this row" : "these rows"} by hand since their last message. Your own reasoning is preserved on each row, so engage with the disagreement rather than restating it:\n${lines.join("\n")})`;
 }

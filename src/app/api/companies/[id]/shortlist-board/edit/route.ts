@@ -5,11 +5,12 @@
 
 import { z } from "zod";
 
-import { ProposedBy, ProposedVerdict } from "@/generated/prisma/client";
+import { ProposedVerdict } from "@/generated/prisma/client";
 import { getCurrentUser } from "@/server/auth/currentUser";
 import { rejectImpersonatedWrite } from "@/server/auth/viewerScope";
 import { prisma } from "@/server/db/prisma";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
+import { reviveFilteredJob } from "@/server/entities/jobs/reviveFilteredJob";
 import { runReconsiderJob } from "@/server/procedures/registry/reconsiderJob";
 import { loadShortlistBoard } from "@/server/views/shortlistBoard";
 
@@ -17,9 +18,14 @@ export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({
   jobId: z.string(),
+  // "actually, consider this" on a row the automatic filtering closed. Its own
+  // verb rather than a fourth stance: a closed row isn't undecided-with-a-mark,
+  // it's out of the pool, so the honest action is un-closing it. It comes back
+  // unmarked and picks up the ordinary three marks from there.
+  action: z.literal("revive").optional(),
   // "undecided" is the un-select — the user clearing their own (or Hank's)
   // mark rather than replacing it.
-  verdict: z.enum(["pick", "borderline", "pass", "undecided"]),
+  verdict: z.enum(["pick", "borderline", "pass", "undecided"]).optional(),
   reason: z.string().optional(),
 });
 
@@ -44,7 +50,7 @@ export async function POST(
   if (!parsed.success) {
     return Response.json({ error: "bad body" }, { status: 400 });
   }
-  const { jobId, verdict, reason } = parsed.data;
+  const { jobId, action, verdict, reason } = parsed.data;
 
   // Only while a proposal is on the table. A committed board is a record, not
   // a working surface — the UI hides the buttons, and this is the seam that
@@ -59,6 +65,23 @@ export async function POST(
     );
   }
 
+  if (action === "revive") {
+    const revived = await reviveFilteredJob({ userId: user.id, jobId });
+    if (!revived.ok) {
+      return Response.json(
+        { error: "that role isn't one this round filtered out" },
+        { status: 409 },
+      );
+    }
+    const board = await loadShortlistBoard(user.id, companyId);
+    if (!board) return Response.json({ error: "not found" }, { status: 404 });
+    return Response.json(board);
+  }
+
+  if (!verdict) {
+    return Response.json({ error: "bad body" }, { status: 400 });
+  }
+
   // runReconsiderJob handles both cases uniformly: a row already on the board
   // takes the stance directly (staying in its current group until the user's
   // next message); a still-unread role is read first, then pulled in.
@@ -67,7 +90,7 @@ export async function POST(
     jobId,
     verdict: VERDICT_FOR[verdict],
     reason: reason?.trim() || null,
-    by: ProposedBy.USER,
+    by: "user",
   });
   if (result.kind === "not_reconsiderable") {
     return Response.json(

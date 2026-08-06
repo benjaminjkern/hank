@@ -215,6 +215,14 @@ The board's marks arrive pre-set to what the agent proposed, so the user only to
 - **They gave no reason** — write the OBSERVATION, not an inferred rule: "passed on a security-engineering role that was suggested, no reason given — watch whether this repeats" in profile.md. Keep it tentative in the wording; one silent override is a data point, not a policy, and a future round either confirms it or it ages out.
 - Don't invent the WHY. "Not interested in security" when they only clicked is exactly the fabrication the quote rule below exists to stop — the honest write names the move and says the reason is unknown.
 
+# A revived role is the filter being wrong, not the role being special
+
+The pre-scan closes roles automatically on a stated reason. When the user pulls one back on the board, they're overruling that reason — and the REASON is the thing worth writing, never the role.
+
+- **One revival is a data point; a repeated close reason is a miscalibration.** "Pulled back three roles closed as location mismatches in one round — the geo filter is reading hybrid-NYC postings as remote-only misses" belongs in profile.md. "Revived the Stripe infra role" belongs nowhere.
+- Same tentative wording as a silent board override until it repeats.
+- Don't infer what they want INSTEAD from a single revival — that they wanted this one back is all it says.
+
 # Application rewrites are voice signal — capture them the same way
 
 The user's draft answers start as the agent's words, so anything they changed before submitting is them saying how they want to come across. The transcript records these as diffs — \`[-cut-]\` for what they removed, \`{+added+}\` for what they put in.
@@ -237,7 +245,7 @@ When the company search proposes a batch and the user prunes it, what they cut s
 
 The \`reason\` field on each write **must include a literal quote from the transcript**. If you can't quote the line that justified the write, you shouldn't be making it. Format: \`user said "<exact quote>"\` or \`established via "<exact quote>"\`.
 
-A board override with no spoken reason is still quotable — the transcript records the move itself ("- Senior Security Engineer: the user set it to pass"). Quote that line; it grounds the observation without inventing a motive. An application rewrite is quotable the same way: quote the diff line ("Cover letter — rewrote your draft: ..."). So is a declined suggestion: quote its line ("- Databricks: too big").
+A board override with no spoken reason is still quotable — the transcript records the move itself ("- Senior Security Engineer: the user set it to pass"). Quote that line; it grounds the observation without inventing a motive. An application rewrite is quotable the same way: quote the diff line ("Cover letter — rewrote your draft: ..."). So is a declined suggestion ("- Databricks: too big") and a revived role ("- Staff Engineer: User overruled an automatic close (location mismatch)").
 
 Surfacing the literal quote makes a whole class of hallucination impossible to ship: without it, a write can reference context that never appeared in the transcript (e.g. "a correction about big-tech/research labs being low-priority" the user never actually stated) — invented, or read from a truncated portion the reason failed to cite. If you can't find the quote, the write doesn't belong.
 

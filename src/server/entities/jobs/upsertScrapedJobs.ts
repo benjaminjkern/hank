@@ -285,11 +285,11 @@ async function detectAndApplyClosures(args: {
           status: JobInteractionStatus.DELISTED,
           // Clear-on-transition: a role that just came down can't still be
           // carrying a shortlist stance from the round it was proposed in.
-          proposedVerdict: null,
+          agentVerdict: null,
+      userVerdict: null,
           placementVerdict: null,
-          proposedReason: null,
-          proposedBy: null,
-          proposedAt: null,
+          agentReason: null,
+          stanceAt: null,
         },
       }),
       prisma.jobEvent.createMany({

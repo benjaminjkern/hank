@@ -36,7 +36,8 @@ export function shortlistPoolStatusWhere(): Prisma.JobInteractionWhereInput {
 export function onBoardWhere(): Prisma.JobInteractionWhereInput {
   return {
     OR: [
-      { proposedVerdict: { not: null } },
+      { agentVerdict: { not: null } },
+      { userVerdict: { not: null } },
       { placementVerdict: { not: null } },
     ],
   };
@@ -65,13 +66,13 @@ export async function listOpenShortlistBoards(
 ): Promise<Array<{ companyId: string; lastProposedAt: Date }>> {
   const rows = await prisma.jobInteraction.findMany({
     where: { userId, ...onBoardWhere() },
-    select: { proposedAt: true, job: { select: { companyId: true } } },
+    select: { stanceAt: true, job: { select: { companyId: true } } },
   });
   const latestByCompany = new Map<string, Date>();
   for (const r of rows) {
     const companyId = r.job.companyId;
     if (!companyId) continue;
-    const at = r.proposedAt ?? new Date(0);
+    const at = r.stanceAt ?? new Date(0);
     const prior = latestByCompany.get(companyId);
     if (!prior || at > prior) latestByCompany.set(companyId, at);
   }

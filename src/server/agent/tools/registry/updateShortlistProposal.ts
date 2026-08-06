@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ProposedBy, ProposedVerdict } from "@/generated/prisma/client";
+import { ProposedVerdict } from "@/generated/prisma/client";
 import { resolveJobBySlug } from "@/server/entities/resolveBySlug";
 import { runReconsiderJob } from "@/server/procedures/registry/reconsiderJob";
 
@@ -61,7 +61,7 @@ export const updateShortlistProposalTool: ToolDef<{
       jobId: r.value.id,
       verdict: VERDICT_FOR[input.verdict],
       reason: input.reason.trim() || null,
-      by: ProposedBy.HANK,
+      by: "agent",
     });
     if (result.kind === "not_reconsiderable") {
       return toolError(
