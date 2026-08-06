@@ -63,7 +63,7 @@ export type ApplicationView = {
   jobStatus: string;
   // The posting itself — where the user actually submits.
   postingUrl: string | null;
-  company: { id: string; name: string; logoUrl: string } | null;
+  company: { id: string; slug: string; name: string; logoUrl: string } | null;
   companyName: string;
   // Applied and onwards: the page stays editable (the text is reusable
   // elsewhere) but stops relaying edits and stops offering submit.
@@ -102,7 +102,13 @@ export async function loadApplicationView(
           sourceUrl: true,
           companyName: true,
           company: {
-            select: { id: true, name: true, sourceUrl: true, logoUrl: true },
+            select: {
+              id: true,
+              slug: true,
+              name: true,
+              sourceUrl: true,
+              logoUrl: true,
+            },
           },
         },
       },
@@ -212,6 +218,7 @@ export async function loadApplicationView(
     company: job.company
       ? {
           id: job.company.id,
+          slug: job.company.slug,
           name: job.company.name,
           logoUrl: companyLogoUrl(job.company.sourceUrl, job.company.logoUrl),
         }

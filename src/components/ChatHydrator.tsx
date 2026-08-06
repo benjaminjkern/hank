@@ -3,12 +3,17 @@
 import { useEffect } from "react";
 
 import { useChatStore, type ApiKeyBlockerReason } from "@/lib/chatStore";
+import type { PanelView } from "@/server/views/panelView";
 
 export function ChatHydrator({
   initialApiKeyBlocker,
+  initialPanel,
   impersonateSessionId,
 }: {
   initialApiKeyBlocker: ApiKeyBlockerReason | null;
+  // The panel the URL names, loaded server-side. Absent on the impersonation
+  // shell, which has no addressable panel state of its own.
+  initialPanel?: PanelView;
   // Present only on /admin/session/[sessionId]. Once seeded, every read fetch
   // in chatStore carries `?impersonate={id}` so the server returns the
   // target session's owner's data instead of the caller's.
@@ -16,6 +21,7 @@ export function ChatHydrator({
 }) {
   const hydrate = useChatStore((s) => s.hydrate);
   const setApiKeyBlocker = useChatStore((s) => s.setApiKeyBlocker);
+  const showPanelView = useChatStore((s) => s.showPanelView);
   const setImpersonateSessionId = useChatStore(
     (s) => s.setImpersonateSessionId,
   );
@@ -30,12 +36,17 @@ export function ChatHydrator({
     // key is on file — waiting for /api/session would let the chat surface
     // flash in unblocked for a tick.
     if (initialApiKeyBlocker) setApiKeyBlocker(initialApiKeyBlocker);
+    // Same reason: the panel this URL names is already loaded, so paint it
+    // rather than flashing the dashboard until /api/session lands.
+    if (initialPanel) showPanelView(initialPanel);
     void hydrate();
   }, [
     hydrate,
     setApiKeyBlocker,
+    showPanelView,
     setImpersonateSessionId,
     initialApiKeyBlocker,
+    initialPanel,
     impersonateSessionId,
   ]);
 

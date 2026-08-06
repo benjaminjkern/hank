@@ -73,9 +73,6 @@ type MessageView = {
   stoppedByUser?: boolean;
 };
 
-type PanelMode =
-  "dashboard" | "company-context" | "job-detail" | "opportunity-detail";
-
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
@@ -145,10 +142,6 @@ export async function GET(req: Request) {
     return Response.json({ messages, hasMore });
   }
 
-  // Focus is ephemeral — there's no persisted focus to restore on cold load, so
-  // the panel always opens on the dashboard and the user navigates from there.
-  const panelMode: PanelMode = "dashboard";
-
   return Response.json({
     sessionId: session.id,
     // True when a runUserMessage is in flight for this session right now —
@@ -160,7 +153,6 @@ export async function GET(req: Request) {
     // registry, same process as the ALREADY_STREAMING guard — consistent by
     // construction.
     runActive: getActiveRun(session.id) !== null,
-    panelMode,
     messages,
     hasMore,
   });

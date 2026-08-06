@@ -24,6 +24,9 @@ export type EventView = {
 
 export type FocusedJobView = {
   id: string;
+  // The role's URL segment (/dashboard/<company>/<slug>). Null on rows minted
+  // before slugs; the URL falls back to the cuid.
+  slug: string | null;
   title: string;
   sourceUrl: string | null;
   description: string | null; // Job.rawContent — full posting text
@@ -45,7 +48,7 @@ export type FocusedJobView = {
   // null when this Job is an unaffiliated pitched role (no company on the
   // watchlist yet). In that case `companyNameFallback` carries the human-
   // readable name the agent captured from the recruiter.
-  company: { id: string; name: string; logoUrl: string } | null;
+  company: { id: string; slug: string; name: string; logoUrl: string } | null;
   companyNameFallback: string | null;
   jobInteraction: {
     status: string;
@@ -101,6 +104,7 @@ export async function getFocusedJobView(
     where: { id: jobId },
     select: {
       id: true,
+      slug: true,
       title: true,
       sourceUrl: true,
       rawContent: true,
@@ -110,7 +114,13 @@ export async function getFocusedJobView(
       companyName: true,
       closedAt: true,
       company: {
-        select: { id: true, name: true, sourceUrl: true, logoUrl: true },
+        select: {
+          id: true,
+          slug: true,
+          name: true,
+          sourceUrl: true,
+          logoUrl: true,
+        },
       },
       jobInteractions: {
         where: { userId },
@@ -167,6 +177,7 @@ export async function getFocusedJobView(
 
   return {
     id: job.id,
+    slug: job.slug,
     title: job.title,
     sourceUrl: job.sourceUrl,
     description: job.rawContent,
@@ -175,6 +186,7 @@ export async function getFocusedJobView(
     company: job.company
       ? {
           id: job.company.id,
+          slug: job.company.slug,
           name: job.company.name,
           logoUrl: companyLogoUrl(job.company.sourceUrl, job.company.logoUrl),
         }

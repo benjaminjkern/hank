@@ -1,6 +1,6 @@
 # Entity slugs
 
-The main Hank agent addresses companies / jobs / opportunities / contacts by **human-readable slugs**, never opaque cuid ids. Slugs are self-checking — `stripe-senior-software-engineer` is far harder for the model to transpose, truncate, or hallucinate than `cmxy9f3k2q8a1b2c3d4e5f6g7`, and a close-but-wrong slug is visibly wrong. This is scoped to the **LLM-facing surface only**: sub-agents, deterministic widget round-trips, the in-memory `EntryTarget` (the ephemeral dispatch signal), and internal server code keep cuids.
+The main Hank agent addresses companies / jobs / opportunities / contacts by **human-readable slugs**, never opaque cuid ids. Slugs are self-checking — `stripe-senior-software-engineer` is far harder for the model to transpose, truncate, or hallucinate than `cmxy9f3k2q8a1b2c3d4e5f6g7`, and a close-but-wrong slug is visibly wrong. Two surfaces are slug-addressed: the **LLM-facing** one (tool params, tool results, memory paths) and the **URL** (`/dashboard/<company>/<job>` — see [ui.md → The panel's address](ui.md)), for the same reason in both cases: a human reads them. Everything else keeps cuids — sub-agents, deterministic widget round-trips, the in-memory `EntryTarget`, and internal server code.
 
 **One word for this concept: `slug`.** Don't reintroduce "handle" or "ref" as synonyms — they used to appear interchangeably (the column was `slug`, the resolvers were `resolve*Ref` returning `*Ref` types, and prompts/tool descriptions said "handle") and that made the code hard to read. The value is a **slug** everywhere: DB columns, function names, tool-param descriptions, and prompt text. The one carve-out is a value that may be **either a slug or a raw cuid** (the resolver inputs, because replayed ids still resolve) — those are named `slugOrCuid`. (Unrelated homonyms are fine and untouched: the `handle()` execute fn on `ToolDef`, React `useRef`, the widget `optionRef` row-key, and the `<job-ref>` chat token — none of those are the entity identifier.)
 
@@ -10,7 +10,7 @@ The main Hank agent addresses companies / jobs / opportunities / contacts by **h
 - `Job.slug` — global `@unique`, minted `{companySlug}-{titleSlug}` with a **smart suffix** (location → department → numeric) on duplicate titles at one company. Immutable once set — a re-scrape that changes the title does NOT re-slug (the slug is a stable permalink).
 - `Opportunity.slug` / `Contact.slug` — per-user (`@@unique([userId, slug])`), from label / name.
 
-All three are nullable in the schema; the id-fallback resolvers keep any un-slugged legacy row working.
+All three are nullable in the schema; the id-fallback resolvers keep any un-slugged legacy row working. The URL follows the same rule — it writes `slug ?? id`, so a role from the un-backfilled majority of `Job.slug` (**A1** in [INCOMPLETE_MIGRATIONS.md](INCOMPLETE_MIGRATIONS.md)) is addressable by its cuid and gets a readable URL the moment that backfill lands.
 
 ## The modules — [platform/slug/](../src/server/platform/slug/) + [entities/resolveBySlug.ts](../src/server/entities/resolveBySlug.ts)
 
@@ -37,7 +37,7 @@ Optional params that default to the focused entity only resolve when present; th
 ## What stays a cuid (deliberately)
 
 - Widget payloads (`shortlist_proposal` ids, `next_job_picker` / `next_company_picker`, …) — the LLM never authors these; the widget handlers in [`src/server/widgets/`](../src/server/widgets/) round-trip them deterministically.
-- The `focus` UiEvent client contract, `ChatSession.focused*Id` slots, bundled-action internal signatures, and sub-agent I/O.
+- The `focus` UiEvent client contract, bundled-action internal signatures, and sub-agent I/O. The wire events stay cuid-keyed; what changed is that the view payloads they carry now also expose `slug`, so the client can write a URL from a pushed payload without a second fetch.
 - **Memory paths `jobs/{slug}.md` / `opportunities/{slug}.md`** — NOW slug-addressed (converted 2026-07-10; migration `20260710130000_memory_paths_to_slugs`). No ids are shown to the agent anywhere. The conversion was atomic across `validatePath`, the store's `resolveFK` (accepts slug-or-cuid so legacy rows still resolve), and every sub-agent writer/reader (decider / drafter / consolidation / opportunity loader build the slug path via `jobNotePath` / `opportunityNotePath` or the loaded row's `.slug`). `companies/{slug}.md` / `contacts/{name-slug}.md` were already slug-based.
 
 ## Where the agent sees slugs

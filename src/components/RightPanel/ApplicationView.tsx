@@ -27,24 +27,6 @@ const Root = styled.div`
   max-width: 780px;
 `;
 
-// "← Documents" back link, shown only when this page was opened from the
-// Documents artifacts list. Routes back to the same sub-page / scroll the user
-// left, refetching so edits made here show up on return.
-const BackLink = styled.button`
-  align-self: flex-start;
-  background: transparent;
-  padding: 2px 6px 2px 4px;
-  font-size: 11px;
-  font-family: ${({ theme }) => theme.font.mono};
-  color: ${({ theme }) => theme.colors.accent};
-  border-radius: ${({ theme }) => theme.radius.sm};
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.bgHover};
-  }
-`;
-
 const Header = styled.header`
   display: flex;
   flex-direction: column;
@@ -227,16 +209,11 @@ export function ApplicationView({
   const send = useChatStore((s) => s.send);
   const streaming = useChatStore((s) => s.streaming);
   const readOnly = !!useChatStore((s) => s.impersonateSessionId);
-  const returnFromDocuments = useChatStore((s) => s.documentsNav.returnFromJob);
-  const backToDocuments = useChatStore((s) => s.backToDocuments);
   const pending = application.pendingEditCount;
 
   return (
     <Root>
       <Header>
-        {returnFromDocuments && (
-          <BackLink onClick={() => backToDocuments()}>← Documents</BackLink>
-        )}
         <TitleRow>
           <H2>
             {application.jobTitle} — {application.companyName}
