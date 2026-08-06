@@ -19,3 +19,11 @@ export const COVER_LETTER_ID = "cover_letter";
 export function questionId(text: string): string {
   return `q_${fnv1a(normalizeForCompare(text))}`;
 }
+
+// Whether a target string an LLM handed back names the cover letter rather than
+// a question. It's told to answer with the literal `cover_letter` and sometimes
+// writes the words instead.
+export function isCoverLetterTarget(target: string): boolean {
+  const norm = normalizeForCompare(target);
+  return norm === COVER_LETTER_ID || norm === "cover letter";
+}

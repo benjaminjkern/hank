@@ -102,7 +102,10 @@ async function loadRevivals(
       occurredAt: { gte: since },
       jobInteraction: { userId, job: { companyId } },
     },
-    select: { notes: true, jobInteraction: { select: { job: { select: { title: true } } } } },
+    select: {
+      notes: true,
+      jobInteraction: { select: { job: { select: { title: true } } } },
+    },
   });
   return events.map(
     (e) => `- ${e.jobInteraction.job.title}: ${e.notes ?? "revived"}`,
@@ -137,9 +140,7 @@ export async function runCommitShortlist(
     await appendPipelineActivity(
       args.sessionId,
       [
-        overrides.length > 0
-          ? overrideNote(args.companyName, overrides)
-          : null,
+        overrides.length > 0 ? overrideNote(args.companyName, overrides) : null,
         revivals.length > 0
           ? [
               `The user also pulled ${revivals.length} role${revivals.length === 1 ? "" : "s"} back that the automatic filtering had closed at ${args.companyName}:`,

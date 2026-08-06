@@ -286,7 +286,7 @@ async function detectAndApplyClosures(args: {
           // Clear-on-transition: a role that just came down can't still be
           // carrying a shortlist stance from the round it was proposed in.
           agentVerdict: null,
-      userVerdict: null,
+          userVerdict: null,
           placementVerdict: null,
           agentReason: null,
           stanceAt: null,

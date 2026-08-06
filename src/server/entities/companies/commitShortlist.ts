@@ -65,7 +65,7 @@ export async function commitShortlist(args: {
   }> = [];
   const clearStance = {
     agentVerdict: null,
-      userVerdict: null,
+    userVerdict: null,
     placementVerdict: null,
     agentReason: null,
     stanceAt: null,

@@ -24,6 +24,7 @@ import {
   type ApplicationItemRef,
   type DraftedRow,
 } from "@/server/entities/jobs/applicationDrafts";
+import { isCoverLetterTarget } from "@/server/entities/jobs/applicationItemId";
 import { persistApplicationAnswer } from "@/server/entities/jobs/applicationQuestions";
 import { openTraceSpan } from "@/server/platform/trace/span";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
@@ -41,7 +42,7 @@ const MAX_REVISION_ROUNDS = 2;
 type CritiqueLoopEvent =
   { type: "progress"; label: string } | { type: "revised"; target: string };
 
-type CritiqueLoopResult = {
+export type CritiqueLoopResult = {
   // false when there was nothing to review (empty form) — the critic never ran.
   ran: boolean;
   critiqueRounds: number;
@@ -163,7 +164,7 @@ async function* critiqueAndRevise(
         if (isUserOwned(form.row, itemRef(item))) continue;
         const key = item.kind === "cover" ? "cover" : `sa:${item.index}`;
         const entry = byItem.get(key) ?? { item, notes: [] };
-        entry.notes.push(issue.note);
+        entry.notes.push(issue.writerNote);
         byItem.set(key, entry);
       }
     }
@@ -246,7 +247,7 @@ async function loadForm(userId: string, jobId: string): Promise<FormState> {
 // substring match either direction (the critic may paraphrase slightly).
 function resolveTarget(target: string, form: FormState): ResolvedItem | null {
   const norm = normalizeForCompare(target);
-  if (norm === "cover_letter" || norm === "cover letter") {
+  if (isCoverLetterTarget(target)) {
     if (!form.coverLetter?.trim()) return null;
     return {
       kind: "cover",

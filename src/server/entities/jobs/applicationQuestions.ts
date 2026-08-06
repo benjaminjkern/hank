@@ -33,6 +33,10 @@ import {
 } from "./applicationDrafts";
 import { COVER_LETTER_ID, questionId } from "./applicationItemId";
 import {
+  clearFindingsForItem,
+  readApplicationReview,
+} from "./applicationReview";
+import {
   readStoredUserQuestions,
   writeStoredUserQuestions,
 } from "./userAddedQuestions";
@@ -380,6 +384,7 @@ export async function persistApplicationAnswer(
       coverLetter: true,
       shortAnswers: true,
       shortAnswersReuse: true,
+      applicationReview: true,
       job: { select: { slug: true } },
     },
   });
@@ -393,11 +398,24 @@ export async function persistApplicationAnswer(
     shortAnswers?: Prisma.InputJsonValue;
     shortAnswersReuse?: Prisma.InputJsonValue;
     proposedDrafts?: Prisma.InputJsonValue;
+    applicationReview?: Prisma.InputJsonValue;
   } = {};
+
+  // Rewriting an item settles what the review had open against it, same as a
+  // user edit — the text it objected to is gone. A revision round clears here
+  // and the loop writes its fresh verdict afterwards, so the two don't race.
+  let review = readApplicationReview(jobInteraction.applicationReview);
+  const settleFindings = (itemId: string) => {
+    const cleared = clearFindingsForItem(review, itemId);
+    if (!cleared) return;
+    review = cleared;
+    data.applicationReview = cleared;
+  };
 
   if (input.coverLetter?.trim()) {
     data.coverLetter = input.coverLetter;
     data.coverLetterReuse = false;
+    settleFindings(COVER_LETTER_ID);
     applied.push("cover letter");
   }
 
@@ -442,6 +460,7 @@ export async function persistApplicationAnswer(
     }
     data.shortAnswers = existing;
     data.shortAnswersReuse = reuse;
+    settleFindings(questionId(canonical));
     applied.push("short answer");
   }
 

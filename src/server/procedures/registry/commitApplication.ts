@@ -24,21 +24,24 @@ import { prisma } from "@/server/db/prisma";
 import {
   applicationEditsFor,
   proposedDraftsPatch,
+  readShortAnswers,
   type ApplicationEdit,
 } from "@/server/entities/jobs/applicationDrafts";
 import {
   markJobApplied,
   type MarkJobAppliedResult,
 } from "@/server/entities/jobs/markJobApplied";
+import type { ShortAnswer } from "@/server/entities/jobs/types";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
 import { renderWordDiff } from "@/utils/diff";
 
-function overrideNote(
+function submitNote(
   jobTitle: string,
   companyName: string,
   edits: ApplicationEdit[],
+  answers: ShortAnswer[],
 ): string {
-  const lines = edits.map((e) => {
+  const changed = edits.map((e) => {
     const verb =
       e.change === "wrote"
         ? "wrote this themselves rather than take a draft"
@@ -47,12 +50,34 @@ function overrideNote(
           : "rewrote your draft";
     return `- ${e.label} — ${verb}:\n    ${renderWordDiff(e.diff)}`;
   });
+  // The diff shows what MOVED; promotion to a reusable answer needs the text
+  // that actually went out. A question this form asked in these words, answered
+  // in these words, is the unit another application can reuse — and a diff of it
+  // isn't.
+  const sent = answers
+    .filter((a) => a.answer.trim())
+    .map((a) => `### ${a.question}\n${a.answer.trim()}`);
+
   return [
-    `The user submitted their ${companyName} application for ${jobTitle}. Before sending it they changed ${edits.length === 1 ? "one thing" : `${edits.length} things`} you had written — everything else went out as drafted:`,
-    ...lines,
-    "",
-    "[-cut-] and {+added+} mark what moved. What they changed says something about how they want to come across and what they will and won't claim, whether or not they explained it in the conversation.",
-  ].join("\n");
+    changed.length > 0
+      ? `The user submitted their ${companyName} application for ${jobTitle}. Before sending it they changed ${changed.length === 1 ? "one thing" : `${changed.length} things`} you had written — everything else went out as drafted:`
+      : `The user submitted their ${companyName} application for ${jobTitle}, exactly as drafted.`,
+    ...changed,
+    changed.length > 0
+      ? "\n[-cut-] and {+added+} mark what moved. What they changed says something about how they want to come across and what they will and won't claim, whether or not they explained it in the conversation."
+      : "",
+    sent.length > 0
+      ? [
+          "",
+          "## What they sent, in full",
+          "The answers below are what the form received. Any of these that another employer would plausibly ask in roughly these words — the standard ones about interest, strengths, work authorisation, notice period, salary, why-this-company — is worth keeping as a reusable answer rather than re-derived from scratch next time. A question specific to THIS role or company is not.",
+          "",
+          ...sent,
+        ].join("\n")
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 export async function runCommitApplication(
@@ -77,13 +102,18 @@ export async function runCommitApplication(
     },
   });
   const edits = row ? applicationEditsFor(row) : [];
+  const answers = row ? readShortAnswers(row.shortAnswers) : [];
 
   const result = await markJobApplied({
     userId: args.userId,
     jobId: args.jobId,
   });
 
-  if (edits.length > 0 && row) {
+  // Runs on every submit that actually sent something, not only on an edited
+  // one: an application that went out exactly as drafted still just proved which
+  // answers work, and the questions it answered are the ones the next form will
+  // ask again.
+  if (row && (edits.length > 0 || answers.length > 0)) {
     // Settle the baseline first: submitting is the last time these count as
     // changes, and leaving them diverged would re-relay the whole set on the
     // user's next message.
@@ -97,10 +127,11 @@ export async function runCommitApplication(
     // quote-grounding rule needs something in the transcript to cite).
     await appendPipelineActivity(
       args.sessionId,
-      overrideNote(
+      submitNote(
         row.job.title,
         row.job.company?.name ?? row.job.companyName ?? "the company",
         edits,
+        answers,
       ),
       { runId: args.runId },
     );

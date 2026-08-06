@@ -680,6 +680,12 @@ const CountMeta = styled.span`
   white-space: nowrap;
 `;
 
+// The one thing this page decides, said on the collapsed row.
+const ReuseMeta = styled(CountMeta)<{ $on: boolean }>`
+  color: ${({ theme, $on }) =>
+    $on ? theme.colors.accent : theme.colors.textSubtle};
+`;
+
 const JobBody = styled.div`
   border-top: 1px solid ${({ theme }) => theme.colors.border};
   padding: ${({ theme }) => `${theme.space.md} ${theme.space.md} ${theme.space.lg}`};
@@ -743,11 +749,30 @@ function artifactCountMeta(a: DocumentArtifact): string {
   return parts.join(" · ") || "—";
 }
 
-// One job's drafted artifacts, collapsible. The text is read-only here — this
-// page is for browsing across jobs; writing happens on the application page
-// (Open application →), which has room for it. The interactive controls here are
-// the per-artifact "use when drafting" switch and a remove button (with an
-// are-you-sure guard when there's text to lose).
+// How much of this job's writing is in the reuse pool — the page's actual
+// question, answered on the collapsed row so it can be scanned down the list
+// instead of opened one at a time.
+function reuseMeta(a: DocumentArtifact): string | null {
+  let total = 0;
+  let on = 0;
+  if (a.coverLetter !== null && a.coverLetter.trim().length > 0) {
+    total++;
+    if (effectiveReuse(a.coverLetterReuse)) on++;
+  }
+  (a.shortAnswers ?? []).forEach((_, i) => {
+    total++;
+    if (effectiveReuse(a.shortAnswersReuse?.[i])) on++;
+  });
+  if (total === 0) return null;
+  if (on === 0) return "not reused";
+  return on === total ? "all reusable" : `${on}/${total} reusable`;
+}
+
+// One job's drafted artifacts, collapsible. This page is a REUSE LIBRARY, not a
+// second editor: its question is "which of these may Hank draw on next time",
+// and the reuse switch is the only control that answers it. Text is read-only —
+// a piece of writing belongs to the application it was written for, and that
+// page (Open application →) is where it's changed or removed.
 function JobArtifactBlock({
   artifact,
   readOnly,
@@ -795,34 +820,9 @@ function JobArtifactBlock({
     }
   }
 
-  async function removeCover() {
-    onOptimistic(artifact.jobId, { coverLetter: null });
-    try {
-      const fresh = await patchJobInteraction(artifact.jobId, {
-        coverLetter: null,
-      });
-      if (fresh) onCanonical(artifact.jobId, fresh);
-    } catch {
-      /* a reload reconciles */
-    }
-  }
-
-  async function removeAnswer(i: number) {
-    const remaining = (artifact.shortAnswers ?? []).filter((_, j) => j !== i);
-    const next = remaining.length > 0 ? remaining : null;
-    onOptimistic(artifact.jobId, { shortAnswers: next });
-    try {
-      const fresh = await patchJobInteraction(artifact.jobId, {
-        shortAnswers: next,
-      });
-      if (fresh) onCanonical(artifact.jobId, fresh);
-    } catch {
-      /* a reload reconciles */
-    }
-  }
-
   const hasCover =
     artifact.coverLetter !== null && artifact.coverLetter.trim().length > 0;
+  const reuseLabel = reuseMeta(artifact);
 
   return (
     <JobBlock>
@@ -834,6 +834,11 @@ function JobArtifactBlock({
         </JobHeadMain>
         <JobHeadRight>
           <CountMeta>{artifactCountMeta(artifact)}</CountMeta>
+          {reuseLabel && (
+            <ReuseMeta $on={reuseLabel !== "not reused"}>
+              {reuseLabel}
+            </ReuseMeta>
+          )}
           <StatusPill $status={artifact.status}>
             {statusLabel(artifact.status)}
           </StatusPill>
@@ -858,11 +863,6 @@ function JobArtifactBlock({
                       on={effectiveReuse(artifact.coverLetterReuse)}
                       onChange={(n) => void toggleCover(n)}
                     />
-                    <ConfirmRemoveButton
-                      hasText
-                      onRemove={() => void removeCover()}
-                      title="Remove cover letter"
-                    />
                   </SubControls>
                 )}
               </SubHead>
@@ -871,8 +871,6 @@ function JobArtifactBlock({
           )}
 
           {artifact.shortAnswers?.map((qa, i) => {
-            const hasText =
-              qa.question.trim().length > 0 || qa.answer.trim().length > 0;
             return (
               <ArtifactSub key={i}>
                 <SubHead>
@@ -884,11 +882,6 @@ function JobArtifactBlock({
                       <ReuseSwitch
                         on={effectiveReuse(artifact.shortAnswersReuse?.[i])}
                         onChange={(n) => void toggleAnswer(i, n)}
-                      />
-                      <ConfirmRemoveButton
-                        hasText={hasText}
-                        onRemove={() => void removeAnswer(i)}
-                        title="Remove this answer"
                       />
                     </SubControls>
                   )}
@@ -931,8 +924,9 @@ function ArtifactsBody({
   if (artifacts.length === 0) {
     return (
       <EmptyHint>
-        Cover letters and answers you draft will show up here — expand one to
-        read it or toggle whether Hank reuses it; open the job to edit its text.
+        Everything written for an application collects here. Switch a piece on
+        and Hank can draw on it when he drafts the next one; leave it off and it
+        stays with the job it was written for.
       </EmptyHint>
     );
   }
@@ -1195,7 +1189,7 @@ export function DocumentsView() {
     return (
       <SubPageShell
         subPage="artifacts"
-        hint="Drafts you've created. Expand one to read it or toggle whether Hank reuses it for new applications; open the job to edit the text."
+        hint="Everything written for an application, and which pieces Hank may draw on when he drafts the next one. The text itself belongs to the job it was written for — open that application to change it."
       >
         <ArtifactsBody
           artifacts={data.artifacts}
@@ -1253,7 +1247,7 @@ export function DocumentsView() {
     },
     {
       page: "artifacts",
-      description: "Drafts you've created, and which ones Hank reuses.",
+      description: "Past application writing, and which pieces Hank may reuse.",
       meta: data.artifacts.length > 0 ? `${data.artifacts.length}` : "None yet",
       filled: data.artifacts.length > 0,
     },

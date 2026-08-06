@@ -28,6 +28,7 @@ import {
   persistApplicationAnswer,
   loadMergedQuestions,
 } from "@/server/entities/jobs/applicationQuestions";
+import type { ApplicationReview } from "@/server/entities/jobs/applicationReview";
 import { needsQuestionsRefresh } from "@/server/entities/jobs/questionsRefresh";
 import {
   isCoverLetterQuestion,
@@ -46,6 +47,7 @@ import {
 } from "./decideApplicationForm";
 import { draftSingleApplicationItem } from "./draftSingleApplicationItem";
 import { ensureApplicationForm } from "./ensureApplicationForm";
+import { persistApplicationReview } from "./persistApplicationReview";
 
 type DraftApplicationArgs = RunContext & {
   sessionId: string;
@@ -73,6 +75,11 @@ type DraftApplicationOutcome = {
   companyDisplay: string;
   // Decider help-first notice (soft-hold override), surfaced once.
   notice: string | null;
+  // What the recruiter-lens review concluded, when one ran this pass. Null when
+  // nothing was drafted, so nothing was reviewed. The caller narrates it: a
+  // review that finished with findings still open has to be SAID, or the draft
+  // ships with a known problem and reads as finished.
+  review: ApplicationReview | null;
 };
 
 function status(text: string): TurnEvent {
@@ -106,6 +113,7 @@ export async function* runDraftApplication(
 ): AsyncGenerator<TurnEvent, DraftApplicationOutcome> {
   const { jobId } = args;
   let didWork = false;
+  let review: ApplicationReview | null = null;
 
   // Step 4: ensure the application form is fetched. ensureApplicationForm
   // persists into Job.applicationQuestions; needsQuestionsRefresh gates it.
@@ -266,13 +274,20 @@ export async function* runDraftApplication(
   // Step 5.25: recruiter-lens critique + up-to-2 revision rounds when anything
   // was drafted this pass. Best-effort; the loop swallows its own errors.
   if (draftedSomething) {
-    for await (const ev of critiqueAndReviseForm({ ...args, jobId })) {
-      if (ev.type === "progress") {
-        yield status(ev.label);
-      } else {
-        yield { type: "refresh_viewed_state" };
-      }
+    // Pumped by hand rather than `for await`, which discards a generator's
+    // return value — and the return value IS the verdict. Losing it is what let
+    // a draft with a known contradiction ship looking identical to a clean one.
+    const critique = critiqueAndReviseForm({ ...args, jobId });
+    let step = await critique.next();
+    while (!step.done) {
+      yield step.value.type === "progress"
+        ? status(step.value.label)
+        : { type: "refresh_viewed_state" };
+      // eslint-disable-next-line no-await-in-loop -- draining a generator: each step is produced by the previous one
+      step = await critique.next();
     }
+    review = await persistApplicationReview(args.userId, jobId, step.value);
+
     const refreshed = await prisma.jobInteraction.findUnique({
       where: { userId_jobId: { userId: args.userId, jobId } },
       select: { coverLetter: true, shortAnswers: true },
@@ -295,6 +310,7 @@ export async function* runDraftApplication(
     answersCount: answers.length,
     companyDisplay,
     notice: decision?.notice ?? null,
+    review,
   };
 }
 

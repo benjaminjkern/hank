@@ -284,6 +284,53 @@ const Empty = styled.div`
   line-height: 1.6;
 `;
 
+// The read-through verdict, and the one thing the page couldn't say before: a
+// review that ran and DIDN'T come back clean. Bordered on the leading edge only
+// — it's an annotation on the application, not a card competing with the items.
+const ReviewBanner = styled.div<{ $tone: "open" | "quiet" }>`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: ${({ theme }) => `${theme.space.sm} ${theme.space.md}`};
+  border-left: 2px solid
+    ${({ theme, $tone }) =>
+      $tone === "open" ? theme.colors.danger : theme.colors.success};
+  background: ${({ theme }) => theme.colors.bgMuted};
+  border-radius: ${({ theme }) => theme.radius.sm};
+  font-size: 12px;
+  line-height: 1.5;
+  color: ${({ theme }) => theme.colors.textMuted};
+`;
+
+const ReviewHeadline = styled.span`
+  font-weight: 600;
+  color: ${({ theme }) => theme.colors.text};
+`;
+
+// One unresolved finding, sitting against the text it's about. Two rewrites
+// couldn't settle it, because settling it means knowing something about the
+// user that isn't on the page.
+const Finding = styled.div`
+  display: flex;
+  gap: ${({ theme }) => theme.space.sm};
+  padding: ${({ theme }) => `${theme.space.sm} ${theme.space.md}`};
+  border-left: 2px solid ${({ theme }) => theme.colors.danger};
+  background: ${({ theme }) => theme.colors.bgMuted};
+  border-radius: ${({ theme }) => theme.radius.sm};
+  font-size: 12px;
+  line-height: 1.55;
+  color: ${({ theme }) => theme.colors.textMuted};
+`;
+
+const FindingMark = styled.span`
+  color: ${({ theme }) => theme.colors.danger};
+  flex-shrink: 0;
+`;
+
+function countThings(n: number): string {
+  return n === 1 ? "one thing" : `${n} things`;
+}
+
 const STATUS_TAG: Record<ApplicationItemStatus, string | null> = {
   written_by_you: "yours",
   drafted: "hank's draft",
@@ -308,6 +355,16 @@ export function ApplicationView({
   const streaming = useChatStore((s) => s.streaming);
   const readOnly = !!useChatStore((s) => s.impersonateSessionId);
   const pending = application.pendingEditCount;
+  const open = application.openFindingCount;
+  // Submit asks once when the review has something open, then defers. It's the
+  // last honest moment to catch a contradiction — after this the application is
+  // sent and the page is a record — but it's the user's call, not a gate.
+  const [confirmingSubmit, setConfirmingSubmit] = useState(false);
+  // Editing the flagged item clears its finding, so the ask can evaporate
+  // between the two taps — in which case there's nothing left to confirm and
+  // the button goes back to plain submit.
+  const asking = confirmingSubmit && open > 0;
+  const needsConfirm = open > 0 && !confirmingSubmit;
 
   // A stock field with an answer saved against it keeps its editor in the main
   // list — the verdict says nobody needs to DRAFT it, not that the text it
@@ -334,6 +391,19 @@ export function ApplicationView({
             look again.
           </Note>
         )}
+        {application.review && (
+          <ReviewSummary
+            review={application.review}
+            openCount={open}
+            submitted={application.submitted}
+          />
+        )}
+        {asking && !application.submitted && (
+          <Note>
+            {countThings(open)} below {open === 1 ? "is" : "are"} still flagged.
+            Sending is your call — tap again and I&apos;ll mark it submitted.
+          </Note>
+        )}
         {!readOnly && (
           <ActionRow>
             {!application.submitted && (
@@ -353,7 +423,11 @@ export function ApplicationView({
                 <PillButton
                   $primary
                   disabled={streaming}
-                  onClick={() =>
+                  onClick={() => {
+                    if (needsConfirm) {
+                      setConfirmingSubmit(true);
+                      return;
+                    }
                     void send(
                       buildWidgetSubmissionMessage(
                         {
@@ -366,10 +440,10 @@ export function ApplicationView({
                           companyName: application.companyName,
                         },
                       ),
-                    )
-                  }
+                    );
+                  }}
                 >
-                  I submitted ✓
+                  {asking ? "Yes, mark it submitted" : "I submitted ✓"}
                 </PillButton>
               </>
             )}
@@ -415,6 +489,67 @@ export function ApplicationView({
       {fillInYourself.length > 0 && <StockFields items={fillInYourself} />}
     </Root>
   );
+}
+
+// Whether the accuracy-and-consistency pass approved the application — which
+// the page had no way to say, so a draft with a known contradiction in it looked
+// exactly like one that had been read and cleared.
+//
+// The four states are genuinely different news, and none of them is "no review
+// has run" (that renders nothing at all — an absence isn't a claim).
+function ReviewSummary({
+  review,
+  openCount,
+  submitted,
+}: {
+  review: NonNullable<ApplicationViewPayload["review"]>;
+  openCount: number;
+  submitted: boolean;
+}) {
+  if (review.state === "open") {
+    return (
+      <ReviewBanner $tone="open">
+        <ReviewHeadline>
+          {submitted
+            ? `${capitalize(countThings(openCount))} went out flagged.`
+            : `${capitalize(countThings(openCount))} worth a look before you send this.`}
+        </ReviewHeadline>
+        <span>
+          Reading it back against your résumé turned these up. They&apos;re
+          marked against the answers below — most come down to something only
+          you can settle.
+        </span>
+        {review.orphaned.map((line) => (
+          <span key={line}>· {line}</span>
+        ))}
+      </ReviewBanner>
+    );
+  }
+  if (review.state === "failed") {
+    return (
+      <ReviewBanner $tone="quiet">
+        <span>
+          The accuracy pass didn&apos;t finish on this one, so nothing has read
+          it back against your résumé. Worth your own once-over.
+        </span>
+      </ReviewBanner>
+    );
+  }
+  return (
+    <ReviewBanner $tone="quiet">
+      <span>
+        {review.state === "clean"
+          ? "Read back against your résumé and the posting — nothing came up."
+          : review.state === "stale"
+            ? "It read clean when it was written, though you've edited it since — nothing has looked over your changes."
+            : "The read-back flagged a few things and you've since rewritten every one of them."}
+      </span>
+    </ReviewBanner>
+  );
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 // The form's stock fields — name, work authorization, LinkedIn URL. The decider
@@ -667,6 +802,15 @@ function ApplicationItemCard({
         </SubLabel>
       )}
       {item.note && <SubLabel>{item.note}</SubLabel>}
+
+      {/* Above the editor, not below it: the point is to be read before the
+          text is, and it clears the moment this item is rewritten. */}
+      {item.findings.map((finding) => (
+        <Finding key={finding}>
+          <FindingMark>!</FindingMark>
+          <span>{finding}</span>
+        </Finding>
+      ))}
 
       <Editor
         $tall={item.kind === "cover_letter"}

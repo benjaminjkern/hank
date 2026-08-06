@@ -106,6 +106,11 @@ export const viewApplicationQuestionsTool: ToolDef<{ job?: string }> = {
         lines.push(
           `- [${item.id}] ${label}${req}${src} — ${STATUS_LABEL[item.status]}${edited}`,
         );
+        // Unresolved read-back findings ride with the item they're about, so
+        // they can't be read as a general complaint about the application.
+        for (const finding of item.findings) {
+          lines.push(`    ⚠ unresolved, needs the user: ${finding}`);
+        }
       }
     }
 

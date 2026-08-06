@@ -92,6 +92,20 @@ export const draftApplicationTool: ToolDef<{
           .join(", ")}.`,
       );
     }
+    // The read-back verdict, in Hank's own channel. He has to relay an
+    // unresolved finding rather than report a finished draft — the whole point
+    // of the reviewer is lost if its conclusion stops here.
+    const open = result.review?.open ?? [];
+    if (open.length > 0) {
+      parts.push(
+        `Read back against the résumé, and ${open.length === 1 ? "one thing is" : `${open.length} things are`} still unresolved — each is marked against its answer on the page, and each needs the USER to settle it (you can't). Tell them plainly what came up, in one sentence, and leave the call to them:`,
+        ...open.map((f) => `- ${f.label}: ${f.note}`),
+      );
+    } else if (result.review?.outcome === "clean") {
+      parts.push(
+        "Read back against the résumé and the posting — nothing came up. You can tell them it's ready to look over.",
+      );
+    }
     if (result.notice) parts.push(result.notice);
     if (notes.length) parts.push(...notes);
 

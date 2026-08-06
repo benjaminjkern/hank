@@ -78,9 +78,14 @@ export type CritiqueIssue = {
   targets: string[];
   severity: CritiqueSeverity;
   kind: CritiqueKind;
-  // Actionable, specific critique handed to the drafting agent. Internal (never
-  // shown to the user) — the revised draft is what the user sees.
-  note: string;
+  // Actionable, specific critique handed to the drafting agent. Internal — the
+  // revised draft is what the user sees when a revision lands.
+  writerNote: string;
+  // The same finding said to the APPLICANT, for the case where no revision
+  // resolves it. A revision can only reword what's on the page; half these
+  // findings turn on a fact only the person knows ("is that venture still
+  // running?"), so the loop giving up has to leave something a human can settle.
+  userNote: string;
 };
 
 // The whole review. There is no verdict field: "clean" IS an empty issues list,
@@ -143,7 +148,7 @@ const KIND_VALUES = [
 const REPORT_CRITIQUE_SCHEMA: SubAgentOutputSchema = {
   name: "report_critique",
   description:
-    "Report your review of the whole application. `issues` gets one entry per distinct problem the analysis surfaced — an empty array IS the clean verdict, so there is nothing else to set. Each note is specific and actionable — it is handed to the writer to fix, so name exactly what's wrong and (for a factual issue) what the resume actually supports.",
+    "Report your review of the whole application. `issues` gets one entry per distinct problem the analysis surfaced — an empty array IS the clean verdict, so there is nothing else to set. Each issue is stated twice: `writerNote` for the agent that will redraft the item, `userNote` for the candidate, who may read it verbatim. Both are conclusions, never your reasoning.",
   inputSchema: {
     type: "object",
     properties: {
@@ -172,13 +177,18 @@ const REPORT_CRITIQUE_SCHEMA: SubAgentOutputSchema = {
               description:
                 "contradiction = two answers (or an answer and the cover letter) disagree on the same fact (e.g. different durations/numbers for the same thing). unsupported_claim = a claim the resume doesn't back. cross_application = disagrees with what the candidate told this same company on another application. jd_mismatch = misreads / doesn't address what the posting asks. redundancy = two artifacts cover the same ground / lead with the same story or metric, reading repetitively when read together. quality = generic, vague, doesn't answer the question, wrong-company paste. other = a real problem none of the above name — use it rather than forcing a bad fit, but prefer a specific kind whenever one applies.",
             },
-            note: {
+            writerNote: {
               type: "string",
               description:
-                "Specific, actionable critique for the writer. For a factual issue, name the claim and what the resume actually supports ('The letter says you led a 30-person org; the resume shows a 6-person team — drop or correct'). For quality, say what's missing ('Doesn't actually answer why THIS company — no reference to their product').",
+                "Specific, actionable critique for the WRITER — another agent that will redraft this item. For a factual issue, name the claim and what the resume actually supports ('The letter says you led a 30-person org; the resume shows a 6-person team — drop or correct'). For quality, say what's missing ('Doesn't actually answer why THIS company — no reference to their product'). State the finding only: no first-person deliberation, no 'let me check', no reversing yourself mid-sentence. If your analysis ended up deciding this is NOT a problem, don't emit the issue at all.",
+            },
+            userNote: {
+              type: "string",
+              description:
+                "The SAME finding addressed to the CANDIDATE — shown to them verbatim if no revision resolves it, so it must read as a finished sentence from a careful reader, not as your thinking. One or two sentences, second person, naming what you saw and what they'd need to confirm or change: 'Your letter says you're based in New York; the resume gives Los Angeles.' or 'The letter describes Savvy in the past tense, but the resume lists it as current — which is right?'. Plain language: no field names, no severity/kind words, no 'the critic', no scratchpad.",
             },
           },
-          required: ["targets", "severity", "kind", "note"],
+          required: ["targets", "severity", "kind", "writerNote", "userNote"],
         },
       },
     },
@@ -191,7 +201,8 @@ type ReportCritiqueInput = {
     targets?: unknown;
     severity?: string;
     kind?: string;
-    note?: string;
+    writerNote?: string;
+    userNote?: string;
   }>;
 };
 
@@ -347,7 +358,8 @@ You know nothing about this person beyond the page, so judge whether the applica
 # How to report
 
 - One \`issues\` entry per distinct problem. Set \`targets\` to the exact item(s): the literal \`"cover_letter"\` or the EXACT question text (copy it verbatim). A cross-artifact contradiction or an overlap lists BOTH.
-- \`note\` is for the WRITER, not the user — be direct and specific. Name the exact claim/sentence and the fix. Don't rewrite it yourself; just say what's wrong.
+- **Every issue is written twice, for two different readers.** \`writerNote\` is for the WRITER — the agent that will redraft the item: direct, specific, name the exact claim/sentence and the fix. \`userNote\` is the same finding for the CANDIDATE, and they may read it word for word: a finished sentence in plain second person, naming what you saw and what they'd need to confirm. Many of your best findings can only be settled by the person — whether a venture is still running, where they actually live, whether they really did tune that system — and a redraft cannot answer those. That is what \`userNote\` is for.
+- **Both notes state a conclusion; neither shows your work.** Your deliberation belongs in \`analysis\` and stays there. Never emit a note that argues with itself, checks something mid-sentence, or reverses course ("Actually, the resume does say 'engineering team of 5' — so this is fine. Let me re-check."). If that is where your reasoning landed, the issue is not real: drop it and don't list it.
 - If the whole application is accurate, self-consistent, non-repetitive, and answers each question well, return an empty \`issues\` array — that IS the clean verdict. Don't manufacture polish notes to look thorough — a clean application is a valid, common result.`;
 
 export const applicationCriticSubAgent: SubAgentDef<
@@ -361,7 +373,7 @@ export const applicationCriticSubAgent: SubAgentDef<
   reasoning: {
     mode: "scratchpad",
     guidance:
-      "Do the WHOLE review here, then distill it into `issues`. Work in this exact order:\n(1) List every CONCRETE claim in the cover letter — duration/years, titles, team sizes, scale/metrics, systems owned, tools, companies.\n(2) Do the same for EACH short answer.\n(3) CROSS-CHECK the artifacts against EACH OTHER. For any fact that appears in more than one place — ESPECIALLY a duration or number ('a year and a half' vs 'two years' at the same company, a headcount, a metric) — do the two statements AGREE? The same fact stated two different ways is a CONTRADICTION (list every artifact it appears in as targets). This cross-artifact pass is the one most often missed — do it explicitly, number by number.\n(4) CROSS-CHECK every claim against the resume — is it supported? An unsupported claim is blocking.\n(5) OVERLAP: does an artifact re-narrate a story/metric another already told in a way that WASTES it — the clearest case being a 'Why [company]?' answer that OPENS with the candidate's own project + headline number (the same one in the cover letter) instead of talking about the company? That's `redundancy`. But do NOT flag overlap the question itself invited: a 'describe a system you built / are proud of' answer naming the same flagship project the cover letter mentioned is the honest answer, not redundancy. The test is 'does the repeat cost the second artifact what its question actually asked for?' — not 'do both mention the same project anywhere'.\n(6) Per-item quality: does each answer actually answer ITS question, or is it generic filler?\nEnd with one line: 'Conclusion: clean' or 'Conclusion: N issues'. Every problem you name here becomes an `issues` entry — don't let one drop, and don't add one you didn't name here.",
+      "Do the WHOLE review here, then distill it into `issues`. Work in this exact order:\n(1) List every CONCRETE claim in the cover letter — duration/years, titles, team sizes, scale/metrics, systems owned, tools, companies.\n(2) Do the same for EACH short answer.\n(3) CROSS-CHECK the artifacts against EACH OTHER. For any fact that appears in more than one place — ESPECIALLY a duration or number ('a year and a half' vs 'two years' at the same company, a headcount, a metric) — do the two statements AGREE? The same fact stated two different ways is a CONTRADICTION (list every artifact it appears in as targets). This cross-artifact pass is the one most often missed — do it explicitly, number by number.\n(4) CROSS-CHECK every claim against the resume — is it supported? An unsupported claim is blocking.\n(5) OVERLAP: does an artifact re-narrate a story/metric another already told in a way that WASTES it — the clearest case being a 'Why [company]?' answer that OPENS with the candidate's own project + headline number (the same one in the cover letter) instead of talking about the company? That's `redundancy`. But do NOT flag overlap the question itself invited: a 'describe a system you built / are proud of' answer naming the same flagship project the cover letter mentioned is the honest answer, not redundancy. The test is 'does the repeat cost the second artifact what its question actually asked for?' — not 'do both mention the same project anywhere'.\n(6) Per-item quality: does each answer actually answer ITS question, or is it generic filler?\nEnd with one line: 'Conclusion: clean' or 'Conclusion: N issues'. Every problem you name here becomes an `issues` entry — don't let one drop, and don't add one you didn't name here. A candidate you talked yourself OUT of here is not an issue: it does not get an entry, and its wording never leaks into one. All of the checking, doubting, and reversing happens in this field and stops at its edge — `writerNote` and `userNote` each state a settled conclusion.",
   },
   system: SYSTEM_PROMPT,
   userContent: renderUserContent,
@@ -376,13 +388,20 @@ export const applicationCriticSubAgent: SubAgentDef<
             .filter((t): t is string => typeof t === "string" && !!t.trim())
             .map((t) => t.trim())
         : [];
-      const note = typeof raw?.note === "string" ? raw.note.trim() : "";
-      if (!targets.length || !note) continue;
+      const writerNote =
+        typeof raw?.writerNote === "string" ? raw.writerNote.trim() : "";
+      const userNote =
+        typeof raw?.userNote === "string" ? raw.userNote.trim() : "";
+      if (!targets.length || !writerNote) continue;
       issues.push({
         targets,
         severity: coerceSeverity(raw.severity),
         kind: coerceKind(raw.kind),
-        note,
+        writerNote,
+        // A missing userNote can't be invented here, and showing the writer's
+        // instruction to the applicant reads as a stray directive — so an issue
+        // without one is revised silently and never surfaced.
+        userNote,
       });
     }
 
