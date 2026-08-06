@@ -53,6 +53,7 @@ export async function* runDiscoveryArm(
       reasoning: c.oneLineReason,
       url: c.url,
     })),
+    ...(r.provenance ? { provenance: r.provenance } : {}),
   });
   return { wrappedUp: false };
 }

@@ -1,11 +1,13 @@
-// Assembles what runFindCompanies searches from: the user's profile,
-// résumé, and their whole watchlist — which is both a dedup constraint and
-// signal (companies they're pursuing pull suggestions toward that shape; ones
-// they closed, with the reason, push away from it).
+// Assembles what runFindCompanies searches from: the user's profile, résumé,
+// their whole watchlist — both a dedup constraint and signal (companies they're
+// pursuing pull suggestions toward that shape; ones they closed, with the
+// reason, push away from it) — and what this search has proposed before,
+// so a name the user already turned down doesn't come back unprompted.
 
 import { CompanyStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { readResumeBackground } from "@/server/entities/resume/store";
+import { listSuggestionHistory } from "@/server/entities/companies/companySuggestions";
 import { readMemory } from "@/server/memory/store";
 import type {
   FindCompaniesInput,
@@ -17,9 +19,10 @@ export async function loadFindCompaniesInput(args: {
   direction?: string;
   count?: number;
 }): Promise<FindCompaniesInput> {
-  const [profile, resume, rows] = await Promise.all([
+  const [profile, resume, history, rows] = await Promise.all([
     readMemory(args.userId, "profile.md"),
     readResumeBackground(args.userId),
+    listSuggestionHistory(args.userId),
     prisma.companyInteraction.findMany({
       where: { userId: args.userId },
       select: {
@@ -47,6 +50,7 @@ export async function loadFindCompaniesInput(args: {
     profile,
     resume,
     watchlist,
+    history,
     ...(args.direction ? { direction: args.direction } : {}),
     ...(args.count != null ? { count: args.count } : {}),
   };

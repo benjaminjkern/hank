@@ -24,17 +24,28 @@ export const companyChecklistDef = defineWidget<CompanyChecklistPayload>({
       // candidateUrl) back through the marker, not just the bare name.
       const picked: Array<{ name: string; context?: string; url?: string }> =
         [];
+      const keptIdx = new Set<number>();
       for (const s of action.selection ?? []) {
         const n = Number(s);
         if (Number.isInteger(n) && n >= 1 && n <= p.suggestions.length) {
+          keptIdx.add(n - 1);
           const sug = p.suggestions[n - 1];
           picked.push({ name: sug.name, context: sug.reasoning, url: sug.url });
         }
       }
+      // Everything not selected is a decline. The harness has no way to express
+      // a per-candidate reason, so these carry the name only — same as a user
+      // who unchecks without saying why.
+      const declined = p.suggestions
+        .filter((_, i) => !keptIdx.has(i))
+        .map((s) => ({ name: s.name }));
       const label = picked.length
         ? `[Added: ${picked.map((c) => c.name).join(", ")}]`
         : "[Skipped all suggestions]";
-      return widgetMarker({ kind: "company_checklist", picked }, label);
+      return widgetMarker(
+        { kind: "company_checklist", picked, declined },
+        label,
+      );
     },
   },
 });

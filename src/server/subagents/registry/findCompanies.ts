@@ -16,6 +16,11 @@
 // The watchlist is BOTH a dedup list AND positive/negative signal: companies the
 // user is actively pursuing pull suggestions toward their shape; companies they
 // closed (with the close reason) push suggestions away from that shape.
+//
+// Past suggestions are the other half of that feedback: what this search has
+// already proposed and the user turned down, with their reason. It arrives as
+// ADVICE rather than a filter — the direction this run can reopen ground a past
+// decline closed, which is how a user talks their way past one.
 
 import { CompanyStatus } from "@/generated/prisma/client";
 import type { AnyToolDef } from "@/server/agent/tools/lib/types";
@@ -25,6 +30,8 @@ import type {
   SubAgentDef,
   SubAgentOutputSchema,
 } from "@/server/subagents/lib/types";
+
+import type { SuggestionHistoryEntry } from "@/server/entities/companies/companySuggestions";
 
 import type Anthropic from "@anthropic-ai/sdk";
 
@@ -60,6 +67,9 @@ export type FindCompaniesInput = {
   // "remote-first climate companies", "actually look for devtools instead").
   // Optional — with no direction the search works from the thesis alone.
   direction?: string;
+  // What this search proposed before and what the user did with it. Declines
+  // carry the user's own reason when they gave one.
+  history?: SuggestionHistoryEntry[];
   count?: number;
 };
 
@@ -77,6 +87,10 @@ export type FindCompaniesCandidate = {
 
 export type FindCompaniesOutput = {
   candidates: FindCompaniesCandidate[];
+  // One user-facing line on how the batch was found, shown above the checklist.
+  // Distinct from `analysis`, which is the private accounting: this is the half
+  // the user needs to tell a bad search from a bad thesis.
+  provenance: string | null;
   // The scratchpad, carried through rather than dropped. Prod reads only
   // `candidates`; this is here because the account it holds — searched vs.
   // worked-from-knowledge, and which claim traces to which result — is the only
@@ -100,7 +114,7 @@ const COMMIT_CANDIDATES_SCHEMA: SubAgentOutputSchema = {
             name: {
               type: "string",
               description:
-                'Canonical brand name as the user would recognize it ("Cognition Labs", not "cognition-ai").',
+                'Canonical brand name as the user would recognize it ("Cognition Labs", not "cognition-ai"). The COMPANY only — never a division, team, or product in parentheses ("Spotify", not "Spotify (Advertising)"; "The Trade Desk", not "The Trade Desk (Client Partnerships)"). Which team is hiring belongs in oneLineReason, not the name: the name becomes this company\'s permanent identity, and a qualified one splits it into two companies that are really one.',
             },
             oneLineReason: {
               type: "string",
@@ -116,13 +130,19 @@ const COMMIT_CANDIDATES_SCHEMA: SubAgentOutputSchema = {
           required: ["name", "oneLineReason"],
         },
       },
+      provenance: {
+        type: "string",
+        description:
+          'ONE plain sentence for the USER on how you found this batch — searched the web, worked from what you already know, or both, and roughly how it split. They read this above the list, so no internal terms, no tool names, no candidate names. "Searched for recent Series-B payments infra; three of these are companies I already knew fit your thesis."',
+      },
     },
-    required: ["candidates"],
+    required: ["candidates", "provenance"],
   },
 };
 
 type CommitCandidatesInput = {
   candidates?: Array<{ name?: string; oneLineReason?: string; url?: string }>;
+  provenance?: string;
   // Injected by the runner from `reasoning` — see FindCompaniesOutput.analysis.
   analysis?: string;
 };
@@ -186,12 +206,32 @@ function renderUserContent(input: FindCompaniesInput): string {
       ? "(empty watchlist — no dedup constraints yet)"
       : "",
     "",
+    renderHistory(input.history ?? []),
     `# Target candidate count: ${input.count ?? 10} (sweet spot 5-15)`,
     "",
     "Decide whether you need the web: a well-understood thesis you can answer from knowledge doesn't need a search; a fresh, narrow, or time-sensitive direction (recent funding, 'who's hiring now', an unfamiliar niche) does. When you have a solid list, call commit_candidates.",
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+// What you've proposed before and what came back. Declines are the correction
+// channel — rendered with the user's own words when they gave a reason, and
+// flagged when they came from the round that just happened.
+function renderHistory(history: SuggestionHistoryEntry[]): string {
+  const declined = history.filter((h) => h.verdict === "DECLINED");
+  if (declined.length === 0) return "";
+  const line = (h: SuggestionHistoryEntry) => {
+    const times = h.timesDeclined > 1 ? ` (turned down ${h.timesDeclined}x)` : "";
+    const latest = h.inLatestRound ? " [LAST ROUND]" : "";
+    return `- ${h.name}${times}${latest}${h.why ? ` — "${h.why}"` : ""}`;
+  };
+  return [
+    "# You suggested these before and the user turned them down",
+    "Read these as the user correcting you, not as a blocklist — see the rule in your instructions.",
+    declined.map(line).join("\n"),
+    "",
+  ].join("\n");
 }
 
 const SYSTEM_PROMPT = `You are the company-finder sub-agent for a chat-first job application tool. Given a user's search thesis + resume + their existing watchlist (and often a free-text direction from the chat), you surface companies they probably haven't tracked yet that look like a plausible fit.
@@ -217,6 +257,16 @@ The context front-loads the user's current watchlist in three buckets:
 - **Set aside** — each carries WHY. A *fit* reason (wrong stage, off-thesis, comp too low) is a real signal: steer AWAY from close matches. A *technical* reason ("couldn't read their board") is NOT a fit judgment — ignore it for shaping.
 Never re-suggest anything already on the list (any bucket).
 
+# Past declines are the user correcting you — weigh them, don't obey them blindly
+
+You may be shown companies you proposed before that the user turned down, each with their reason when they gave one. This is the only channel they have for telling you a search was wrong, so it is worth more than any single name:
+
+- **Read the reason for the PATTERN, not just the name.** Three declines reading "too big" is the thesis narrowing — stop surfacing companies that size, not just those three. That generalization is the point; suppressing the exact names and repeating the mistake with new ones is the failure.
+- **Repeated and recent declines are strong. A lone old one is weak.** Someone's thesis moves; a name turned down once, long ago, is barely evidence.
+- **A decline with no reason still counts.** They unchecked it for something. Treat it as mild negative signal on that company's shape and move on — don't invent a motive for it.
+- **NEVER re-propose anything marked [LAST ROUND].** They just told you no; asking again in the very next breath is the one thing that reads as not listening.
+- **The direction OVERRIDES all of this.** If this run's direction reopens ground an old decline closed ("actually I'd look at bigger companies now", "let's revisit enterprise"), the direction wins — surface those companies again, and say in \`analysis\` that you're doing it deliberately. A past no is not a permanent ban; the user is allowed to change their mind, and refusing to follow them is its own failure.
+
 # Direction-shape — when the user asks for a role/job-shape, return COMPANIES that fit
 
 The direction is free-form and the user often phrases it as a role ("engineering manager roles at Series A/B AI startups", "remote backend roles"). You still return companies — translate the role-shape into "what kinds of companies hire that role":
@@ -239,6 +289,7 @@ Acknowledge the translation in \`analysis\`.
 Call commit_candidates with:
 - candidates: [{name, oneLineReason, url?}] — name as the user would recognize it; oneLineReason explains plausible fit in plain English.
 - **url (optional, per candidate):** if a search result showed you the company's own careers/ATS board URL and you're confident it belongs to THIS company, include it — it disambiguates name collisions (two real "Runway") and skips a re-hunt. OMIT rather than guess; never fabricate a slug.
+- **provenance:** one plain sentence for the USER on how you found this batch (searched vs. already knew, roughly the split). They see it above the list — plain English, no tool names, no candidate names.
 - In \`analysis\`: searched vs. worked-from-knowledge, any direction you translated, why you cut off.
 
 # Discipline
@@ -303,6 +354,10 @@ export const findCompaniesSubAgent: SubAgentDef<
           ) === i,
       );
 
-    return { candidates, analysis: out.analysis?.trim() || null };
+    return {
+      candidates,
+      provenance: out.provenance?.trim() || null,
+      analysis: out.analysis?.trim() || null,
+    };
   },
 };
