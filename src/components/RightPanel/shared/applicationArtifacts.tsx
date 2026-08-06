@@ -75,14 +75,15 @@ const DangerInlineButton = styled.button`
   }
 `;
 
-// Reuse toggle. The label states the control's *purpose* ("Include in profile")
-// and never changes; the on/off track + accent vs muted color show its current
-// state. Keep it that way — a label that changes with the state ("Used" / "Not
-// used") reads as a factual status rather than a switch.
+// Reuse toggle. The label states the control's *purpose* and never changes; the
+// on/off track + accent vs muted color show its current state. Keep it that way
+// — a label that changes with the state ("Used" / "Not used") reads as a
+// factual status rather than a switch. One label on every surface that shows
+// the switch (the application page and the Documents artifacts list), so the
+// two can't describe the same flag differently.
 // The switch alone decides whether this answer feeds future drafting
 // (independent of whether it's been used), so it renders on every artifact.
-// "Profile" = the reusable pool of answers Hank draws on when drafting new ones.
-const SWITCH_LABEL = "Include in profile";
+const SWITCH_LABEL = "Reuse when drafting";
 
 const SwitchButton = styled.button<{ $on: boolean }>`
   display: inline-flex;
@@ -146,8 +147,8 @@ export function ReuseSwitch({
       onClick={() => onChange(!on)}
       title={
         on
-          ? "In your profile — Hank reuses this when drafting new cover letters / answers. Click to remove (the text stays)."
-          : "Not in your profile — Hank won't reuse this when drafting. Click to include it."
+          ? "Hank draws on this when drafting new cover letters and answers. Click to stop (the text stays)."
+          : "Hank won't reuse this when drafting. Click to include it."
       }
       aria-pressed={on}
     >

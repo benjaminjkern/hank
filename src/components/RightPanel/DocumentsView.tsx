@@ -284,8 +284,18 @@ const InlineButton = styled.button`
 
 const RowButtons = styled.div`
   display: flex;
+  flex-wrap: wrap;
   gap: ${({ theme }) => theme.space.sm};
   margin-top: ${({ theme }) => theme.space.md};
+`;
+
+// One stored resume: the download chip, plus the remove control tucked against
+// it so a list of files reads as files rather than as a row of buttons.
+const ResumeFileRow = styled.div`
+  display: inline-flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.space.xs};
+  min-width: 0;
 `;
 
 const LinkButton = styled.a`
@@ -480,6 +490,23 @@ function ResumeBody({
   const [uploadTone, setUploadTone] = useState<SaveTone>("idle");
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+  async function onRemoveFile(id: string) {
+    setUploadError(null);
+    try {
+      const res = await fetch(
+        `/api/documents/resume/file?id=${encodeURIComponent(id)}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        setUploadError("Couldn't remove that file.");
+        return;
+      }
+      onReload();
+    } catch {
+      setUploadError("Couldn't remove that file.");
+    }
+  }
+
   async function onPick(file: File) {
     setUploadTone("saving");
     setUploadError(null);
@@ -521,9 +548,10 @@ function ResumeBody({
 
       <ReplaceRow>
         <CardHint style={{ marginBottom: 0 }}>
-          Your background — what Hank reads to target roles and draft
-          applications. Upload a resume and everything on it is folded in;
-          upload another and it adds to this rather than replacing it.
+          One combined record of your background — this is what Hank reads to
+          target roles and draft applications, not the files themselves. Every
+          resume you upload gets folded into it: nothing is overwritten, and a
+          job listed on two of them still appears once.
         </CardHint>
         {!readOnly && (
           <InlineButton
@@ -559,18 +587,32 @@ function ResumeBody({
           <SummaryLabel>
             Uploaded {resumes.length === 1 ? "file" : "files"}
           </SummaryLabel>
+          <CardHint>
+            Kept so you can download the original. Removing one doesn&apos;t
+            touch your background above — what it said is already folded in.
+          </CardHint>
           <RowButtons>
             {resumes.map((r) => (
-              <LinkButton
-                key={r.id}
-                href={withImpersonate(
-                  `/api/documents/resume/file?id=${encodeURIComponent(r.id)}`,
-                  impersonate,
+              <ResumeFileRow key={r.id}>
+                <LinkButton
+                  href={withImpersonate(
+                    `/api/documents/resume/file?id=${encodeURIComponent(r.id)}`,
+                    impersonate,
+                  )}
+                  download={r.fileName}
+                >
+                  {r.fileName}
+                </LinkButton>
+                {!readOnly && (
+                  <ConfirmRemoveButton
+                    // Always confirm: this row is the only copy of the file.
+                    hasText
+                    label="Remove"
+                    title={`Remove ${r.fileName}. Your background text stays — but this is the only copy of the file.`}
+                    onRemove={() => void onRemoveFile(r.id)}
+                  />
                 )}
-                download={r.fileName}
-              >
-                {r.fileName}
-              </LinkButton>
+              </ResumeFileRow>
             ))}
           </RowButtons>
         </NotesDivider>
@@ -1048,6 +1090,7 @@ export function DocumentsView() {
   const openApplicationFromDocuments = useChatStore(
     (s) => s.openApplicationFromDocuments,
   );
+  const documentsEpoch = useChatStore((s) => s.documentsEpoch);
 
   const [data, setData] = useState<DocumentsPayload | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -1060,6 +1103,11 @@ export function DocumentsView() {
       .catch(() => setLoadError(true));
   }
 
+  // Re-runs on `documentsEpoch`, which the store bumps whenever a tool changed
+  // viewed state — this page is the one panel mode with nothing in the store
+  // for `refreshViewedEntities` to refetch on its behalf, so without the epoch
+  // an agent-side change (a resume attached, an answer drafted) stayed
+  // invisible until the user navigated away and back.
   useEffect(() => {
     let cancelled = false;
     fetch(withImpersonate("/api/documents", impersonate))
@@ -1073,7 +1121,7 @@ export function DocumentsView() {
     return () => {
       cancelled = true;
     };
-  }, [impersonate]);
+  }, [impersonate, documentsEpoch]);
 
   if (loadError)
     return (

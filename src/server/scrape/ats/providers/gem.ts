@@ -1,4 +1,4 @@
-import { htmlToText } from "@/utils/html";
+import { decodeEntities, htmlToText } from "@/utils/html";
 import { titleCaseSlug } from "@/utils/text";
 
 import { fetchText, rawAttrs, type AtsProviderModule } from "../shared";
@@ -275,7 +275,7 @@ async function fetchGemQuestions(
   const rawQuestions = res.data?.oatsJobPostFieldsAndQuestions?.questions ?? [];
   const questions: ApplicationQuestion[] = [];
   for (const q of rawQuestions) {
-    const text = (q.text ?? "").trim();
+    const text = decodeEntities(q.text ?? "").trim();
     if (!text) continue;
     const item: ApplicationQuestion = { question: text };
     if (q.isRequired) item.required = true;

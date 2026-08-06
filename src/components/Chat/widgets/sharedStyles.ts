@@ -63,23 +63,100 @@ export const SuggestionList = styled.div`
   gap: 6px;
 `;
 
+// A selectable card, not a line of text with a tickbox: it's a `label`, so the
+// whole row toggles, and it carries a border so a selected row reads as chosen
+// at a glance rather than only at the 15px control. Background stays
+// transparent — the WidgetShell card underneath is already `bgPanel`, so a
+// panel-colored row would vanish into it and only the border would show.
 export const SuggestionRow = styled.label`
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 6px 8px;
-  border-radius: 6px;
+  padding: 8px 10px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: 8px;
+  background: transparent;
   cursor: pointer;
   font-size: 13px;
   color: ${({ theme }) => theme.colors.text};
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease;
+
   &:hover {
     background: ${({ theme }) => theme.colors.bgHover};
+    border-color: ${({ theme }) => theme.colors.borderStrong};
+  }
+  &:has(input:checked) {
+    border-color: ${({ theme }) => theme.colors.accent};
+    background: ${({ theme }) => theme.colors.bgMuted};
+  }
+  &:has(input:focus-visible) {
+    outline: 2px solid ${({ theme }) => theme.colors.accent};
+    outline-offset: 2px;
   }
 `;
 
+// The one themed tick control in the chat layer. Native `appearance` can't be
+// themed past `accent-color`, which leaves the box itself the OS grey — so the
+// control is drawn here and the input keeps its semantics.
+//
+// It serves BOTH shapes: the checklist passes `type="checkbox"`, the
+// disambiguation picker passes `type="radio"` and needs a circle with a dot.
+// Style the type selectors, not a prop — the shape follows the input's actual
+// behavior and can't be set to disagree with it.
 export const SuggestionCheckbox = styled.input`
-  margin-top: 3px;
+  appearance: none;
+  flex-shrink: 0;
+  margin: 2px 0 0;
+  width: 15px;
+  height: 15px;
+  border: 1px solid ${({ theme }) => theme.colors.borderStrong};
+  border-radius: 4px;
+  background: ${({ theme }) => theme.colors.bgMuted};
   cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+
+  &::after {
+    content: "";
+    opacity: 0;
+    transition: opacity 0.12s ease;
+  }
+
+  &[type="checkbox"]::after {
+    width: 8px;
+    height: 4px;
+    border-left: 2px solid ${({ theme }) => theme.colors.onAccent};
+    border-bottom: 2px solid ${({ theme }) => theme.colors.onAccent};
+    transform: rotate(-45deg) translate(1px, -1px);
+  }
+
+  &[type="radio"] {
+    border-radius: 50%;
+  }
+  &[type="radio"]::after {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: ${({ theme }) => theme.colors.onAccent};
+  }
+
+  &:checked {
+    background: ${({ theme }) => theme.colors.accent};
+    border-color: ${({ theme }) => theme.colors.accent};
+  }
+  &:checked::after {
+    opacity: 1;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
 `;
 
 export const SuggestionBody = styled.div`

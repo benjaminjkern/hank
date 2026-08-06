@@ -77,7 +77,7 @@ export type FocusedJobView = {
     // "Used" stamps (ISO) — non-null once the user copied/edited the artifact.
     // null = agent draft the user hasn't touched. Drives whether the reuse
     // switch is offered (an unused draft doesn't feed drafting regardless).
-    // "Include in profile" reuse toggles (tri-state). null ⇒ derive from
+    // "Reuse when drafting" toggles (tri-state). null ⇒ derive from
     // used-state; true/false ⇒ explicit opt-in/out. shortAnswersReuse is the
     // parallel array (null index ⇒ derive that answer from its used-state).
     coverLetterReuse: boolean | null;

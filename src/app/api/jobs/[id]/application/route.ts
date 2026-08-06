@@ -1,10 +1,14 @@
-// The application page: read it, and write one item's text.
+// The application page: read it, add a question the form asks for, and write
+// one item's text.
 //
 // One item per request, addressed by the same id the agent's tools use
 // (`cover_letter` or a `q_…`), so the panel and `draft_application_question`
 // name the same thing. Writes persist immediately — the page is DB truth, and a
 // refresh or a second device sees it — but never wake Hank: the edit rides the
 // user's next message via the panel-edit relay.
+//
+// Every handler that writes returns the fresh view, so the panel never has to
+// guess what the write did to the rest of the form.
 //
 // Editing sets the item's "ok to reuse when drafting" flag, since the user
 // actively working the text is exactly what makes it theirs. Only the touched
@@ -27,7 +31,10 @@ import {
   COVER_LETTER_ID,
   questionId,
 } from "@/server/entities/jobs/applicationItemId";
-import { resolveQuestionId } from "@/server/entities/jobs/applicationQuestions";
+import {
+  addUserQuestion,
+  resolveQuestionId,
+} from "@/server/entities/jobs/applicationQuestions";
 import { loadApplicationView } from "@/server/views/application";
 import { normalizeForCompare } from "@/utils/text";
 
@@ -42,6 +49,13 @@ const BodySchema = z.object({
   reuse: z.boolean().optional(),
 });
 
+const AddQuestionSchema = z.object({
+  // The question exactly as the form asks it — it's the matching key for every
+  // answer saved against it.
+  question: z.string().trim().min(1).max(2000),
+  questionType: z.string().max(64).optional(),
+});
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -49,6 +63,41 @@ export async function GET(
   const { viewedUserId } = await resolveViewedUser(req);
   const { id: jobId } = await params;
   const view = await loadApplicationView(viewedUserId, jobId);
+  if (!view) return Response.json({ error: "not found" }, { status: 404 });
+  return Response.json(view);
+}
+
+// Add a question the scrape missed. The question lands on the JOB (global,
+// shared with every user of the posting) carrying who added it and when, which
+// is what lets the panel badge it as described-by-hand rather than read off the
+// form. `addUserQuestion` also clears this user's cached decision so the new
+// question is included the next time anything drafts.
+export async function POST(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const blocked = rejectImpersonatedWrite(req);
+  if (blocked) return blocked;
+  const user = await getCurrentUser();
+  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const { id: jobId } = await params;
+
+  const parsed = AddQuestionSchema.safeParse(
+    await req.json().catch(() => null),
+  );
+  if (!parsed.success) {
+    return Response.json({ error: "bad body" }, { status: 400 });
+  }
+
+  const added = await addUserQuestion(
+    user.id,
+    jobId,
+    parsed.data.question.trim(),
+    parsed.data.questionType,
+  );
+  if (!added.ok) return Response.json({ error: "not found" }, { status: 404 });
+
+  const view = await loadApplicationView(user.id, jobId);
   if (!view) return Response.json({ error: "not found" }, { status: 404 });
   return Response.json(view);
 }

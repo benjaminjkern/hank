@@ -1,5 +1,5 @@
 import { isRecord } from "@/utils/guards";
-import { htmlToText } from "@/utils/html";
+import { decodeEntities, htmlToText } from "@/utils/html";
 import { titleCaseSlug } from "@/utils/text";
 
 import { scrapeFetchSignal } from "../../scrapeSignal";
@@ -323,7 +323,7 @@ async function fetchAshbyQuestions(
         } catch {
           continue;
         }
-        const title = (field.title ?? "").trim();
+        const title = decodeEntities(field.title ?? "").trim();
         // Skip Ashby's built-in fields (name, email, resume, phone, location,
         // etc). EXCEPTION: an open-ended "additional information / additional
         // attachments / anything else you'd like us to know" field — even when

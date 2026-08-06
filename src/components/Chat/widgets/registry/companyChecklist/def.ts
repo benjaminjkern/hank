@@ -39,9 +39,12 @@ export const companyChecklistDef = defineWidget<CompanyChecklistPayload>({
       const declined = p.suggestions
         .filter((_, i) => !keptIdx.has(i))
         .map((s) => ({ name: s.name }));
+      // Same wording the real widget submits — the label is what a fallback
+      // response chip renders, so a harness run has to produce the string
+      // production produces.
       const label = picked.length
-        ? `[Added: ${picked.map((c) => c.name).join(", ")}]`
-        : "[Skipped all suggestions]";
+        ? `[Picked: ${picked.map((c) => c.name).join(", ")}]`
+        : "[None of these]";
       return widgetMarker(
         { kind: "company_checklist", picked, declined },
         label,

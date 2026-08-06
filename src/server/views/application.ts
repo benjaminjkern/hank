@@ -21,7 +21,7 @@ import {
   questionId,
 } from "@/server/entities/jobs/applicationItemId";
 import { loadMergedQuestions } from "@/server/entities/jobs/applicationQuestions";
-import { isCoverLetterQuestion } from "@/server/scrape/types";
+import { isCoverLetterQuestion, isStockFieldType } from "@/server/scrape/types";
 import type {
   ApplicationDecision,
   DraftVerdict,
@@ -54,6 +54,12 @@ export type ApplicationItem = {
   edited: boolean;
   // Hank's one-line reason for leaving this alone, shown under an empty item.
   note: string | null;
+  // What the decider ruled for this item. "skip" is the panel's cue to file it
+  // under the fill-it-in-yourself tail instead of giving it an editor — a
+  // person types their own LinkedIn URL faster than they read a draft of it.
+  // Null when nothing has ruled on it: no draft pass has run AND the widget
+  // type isn't a stock field.
+  verdict: DraftVerdict | null;
 };
 
 export type ApplicationView = {
@@ -171,7 +177,11 @@ export async function loadApplicationView(
         source: q.source === "user" ? "user" : "scraped",
         text: answer?.text ?? null,
         reuse: answer?.reuse ?? null,
-        verdict: verdict?.verdict ?? null,
+        // `draftDecision` is null until a draft pass runs for this user, so
+        // fall back to the same widget-type test `partitionApplicationForm`
+        // applies before the decider ever sees the form — otherwise a form
+        // nobody has drafted yet shows a dropdown and an essay identically.
+        verdict: verdict?.verdict ?? (isStockFieldType(q.type) ? "skip" : null),
         note: verdict?.reason ?? null,
         owned: isUserOwned(row, { kind: "question", question: q.question }),
         edited: isEdited(row, { kind: "question", question: q.question }),
@@ -293,5 +303,6 @@ function buildItem(input: {
     edited: input.edited,
     // A reason only earns space when there's nothing written to read instead.
     note: hasText ? null : input.note?.trim() || null,
+    verdict: input.verdict,
   };
 }

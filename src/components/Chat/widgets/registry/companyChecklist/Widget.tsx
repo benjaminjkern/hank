@@ -11,7 +11,6 @@ import {
 
 import {
   ButtonRow,
-  Meta,
   SecondaryButton,
   SuggestionBody,
   SuggestionCheckbox,
@@ -95,9 +94,12 @@ const SteerInput = styled.input`
   }
 `;
 
+// How this batch was found, written per-run by the search. It's the only line
+// above the list, so it gets the readable muted tone rather than the dimmest
+// one — it's the thing worth reading, not chrome.
 const Provenance = styled.div`
-  font-size: 11px;
-  color: ${({ theme }) => theme.colors.textSubtle};
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.textMuted};
   margin-bottom: 6px;
   line-height: 1.45;
 `;
@@ -206,10 +208,6 @@ export function CompanyChecklistWidget({ payload }: Props) {
       }
     >
       {payload.provenance && <Provenance>{payload.provenance}</Provenance>}
-      <Meta>
-        Uncheck any you don&apos;t want — say why if you like, and I&apos;ll
-        stop surfacing that kind.
-      </Meta>
       <SuggestionList>
         {payload.suggestions.map((s) => {
           const isDeclined = !picked.has(s.name);

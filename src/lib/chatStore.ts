@@ -319,6 +319,10 @@ type State = {
   panelMode: PanelMode;
   // Sub-page + restore state for the Documents view. See DocumentsNav.
   documentsNav: DocumentsNav;
+  // Bumped by refreshViewedEntities. Documents has no viewed-entity slot to
+  // refetch — it owns its payload — so this counter is what tells it to reload
+  // when the agent changed something it shows.
+  documentsEpoch: number;
   dashboard: DashboardView | null;
   rightCollapsed: boolean;
   // Which panel is active in narrow-viewport (single-panel) mode. Ignored
@@ -474,6 +478,7 @@ const initial: State = {
     scrollTop: 0,
     returnFromJob: false,
   },
+  documentsEpoch: 0,
   dashboard: null,
   rightCollapsed: false,
   activePanel: "chat",
@@ -690,6 +695,11 @@ export const useChatStore = create<State & Actions>((set, get) => ({
   // another (or to the same one) — refetchSession only refreshes viewed
   // entities when they match focus, leaving stale data otherwise.
   async refreshViewedEntities() {
+    // Documents is the one panel mode with no viewed-entity slot — it fetches
+    // its own payload and holds it in component state. Bumping the epoch is
+    // how it learns something changed underneath it (a resume Hank attached,
+    // an answer he drafted); DocumentsView re-fetches on the change.
+    set((s) => ({ documentsEpoch: s.documentsEpoch + 1 }));
     const { viewedCompany, viewedJob, viewedOpportunity } = get();
     const tasks: Promise<void>[] = [];
     const impersonate = get().impersonateSessionId;

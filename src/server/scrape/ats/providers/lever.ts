@@ -175,7 +175,7 @@ async function fetchLeverQuestions(
       // applicant sees. Skip them — they're not part of the applicant form.
       if (card.text && /\(internal only\)/i.test(card.text)) continue;
       for (const f of card.fields ?? []) {
-        const text = (f.text ?? "").trim();
+        const text = decodeEntities(f.text ?? "").trim();
         if (!text) continue;
         const q: ApplicationQuestion = { question: text };
         if (f.required) q.required = true;

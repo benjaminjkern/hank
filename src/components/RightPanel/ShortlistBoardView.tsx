@@ -1,14 +1,14 @@
 "use client";
 
-// The shortlist board — every role STILL being considered at one company,
-// grouped, with the deciding pass's one-line reason per row. Closed, delisted
-// and applied-to roles are not here: they're decided, the user watched them go,
-// and the company page's never-pursued list is where they live. Every row still open to a decision
-// carries the same three marks (Pick / Maybe / Pass), pre-selected to what Hank
-// proposed, so agreeing costs no clicks; clicking the current mark clears it to
-// undecided. A row the user re-marks STAYS in its group, flagged pending, until
-// their next chat message relays it — rows never move out from under the
-// cursor. Nothing is final until Hank commits the board in chat.
+// The shortlist board — every role STILL being considered at one company, with
+// the deciding pass's one-line reason per row. Closed, delisted and applied-to
+// roles are not here: they're decided, the user watched them go, and the
+// company page's never-pursued list is where they live. Every row still open to
+// a decision carries the same three marks (Pick / Maybe / Pass), pre-selected
+// to what Hank proposed, so agreeing costs no clicks; clicking the current mark
+// clears it to undecided. A row the user re-marks KEEPS its position, flagged
+// pending, until their next chat message relays it — rows never move out from
+// under the cursor. Nothing is final until Hank commits the board in chat.
 
 import { useState } from "react";
 import styled from "styled-components";
@@ -104,6 +104,10 @@ const TierCount = styled.span`
   font-family: ${({ theme }) => theme.font.mono};
 `;
 
+// The whole card opens the role — a title-only target was a small thing to hit
+// in a list this dense. It stays a div rather than a button because the stance
+// controls live inside it and a button may not nest one; the click/key handlers
+// and role/tabIndex are what make it behave like one anyway.
 const RowCard = styled.div<{ $pending?: boolean }>`
   display: flex;
   flex-direction: column;
@@ -115,6 +119,15 @@ const RowCard = styled.div<{ $pending?: boolean }>`
   border-radius: ${({ theme }) => theme.radius.md};
   background: ${({ theme }) => theme.colors.bgPanel};
   min-width: 0;
+  cursor: pointer;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.bgHover};
+  }
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.colors.accent};
+    outline-offset: 2px;
+  }
 `;
 
 const RowTop = styled.div`
@@ -125,17 +138,14 @@ const RowTop = styled.div`
   min-width: 0;
 `;
 
-const RowTitle = styled.button`
+const RowTitle = styled.span`
   font-size: 13px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text};
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
   min-width: 0;
   overflow-wrap: anywhere;
 
-  &:hover {
+  ${RowCard}:hover & {
     text-decoration: underline;
   }
 `;
@@ -192,41 +202,26 @@ const ScanTag = styled.span`
   color: ${({ theme }) => theme.colors.textSubtle};
 `;
 
-// Tier chrome: label, one-line hint, and whether the section starts open. The
-// decision groups lead; the two tails (unread, on hold) start collapsed since
-// neither is part of the round being settled.
-const TIER_META: Record<
-  ShortlistBoardTier,
-  { label: string; hint?: string; defaultOpen: boolean }
-> = {
-  picks: { label: "Picks", hint: "Apply to these", defaultOpen: true },
-  borderline: {
-    label: "Borderline",
-    hint: "In play — your call",
-    defaultOpen: true,
-  },
-  pass: {
-    label: "Recommended pass",
-    hint: "Closed when the shortlist is locked in",
-    defaultOpen: true,
-  },
-  undecided: { label: "Undecided", defaultOpen: true },
-  notReadYet: {
-    label: "Not read yet",
-    hint: "Mark one and I'll read it",
-    defaultOpen: false,
-  },
-  onHold: {
-    label: "On hold",
-    hint: "Parked for a reason of their own",
-    defaultOpen: false,
-  },
-  filteredThisRound: {
-    label: "Filtered out this round",
-    hint: "Ruled out before the shortlist — check if something's wrong",
-    defaultOpen: false,
-  },
+// The screen has two groups, not one per tier. `consider` is everything the
+// shortlist pass actually ranked: those rows arrive with their mark
+// pre-selected, so a heading per verdict only restated what the marks already
+// say. `aside` is the tail nobody ranked — auto-filtered, unread, or parked —
+// which is worth auditing but not worth the vertical space by default.
+type BoardGroup = "consider" | "aside";
+
+const GROUP_OF_TIER: Record<ShortlistBoardTier, BoardGroup> = {
+  picks: "consider",
+  borderline: "consider",
+  pass: "consider",
+  undecided: "consider",
+  notReadYet: "aside",
+  onHold: "aside",
+  filteredThisRound: "aside",
 };
+
+const ASIDE_LABEL = "Probably not worth a look";
+const ASIDE_HINT =
+  "Ruled out before the shortlist, not read yet, or parked on hold";
 
 // 16px, stroke-only, inheriting the button's color so the $active accent
 // applies for free — same convention as ThemeToggle's icons. `aria-hidden`
@@ -311,97 +306,121 @@ function stanceOf(
   return null;
 }
 
-function TierRows({
-  board,
+type PlacedRow = { tier: ShortlistBoardTier; row: ShortlistBoardRow };
+
+function BoardRow({
+  companyId,
   tier,
-  rows,
+  row,
 }: {
-  board: ShortlistBoardData;
+  companyId: string;
   tier: ShortlistBoardTier;
-  rows: ShortlistBoardRow[];
+  row: ShortlistBoardRow;
 }) {
-  const meta = TIER_META[tier];
-  const [open, setOpen] = useState(meta.defaultOpen);
   const viewJob = useChatStore((s) => s.viewJob);
   const editShortlistBoard = useChatStore((s) => s.editShortlistBoard);
   const readOnly = useChatStore((s) => s.impersonateSessionId !== null);
-  const [busyJobId, setBusyJobId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const stance = stanceOf(row, tier);
 
   // Clicking the mark a row already carries clears it — that's the un-select,
   // and it lands the row in Undecided rather than forcing a choice.
-  async function mark(
-    row: ShortlistBoardRow,
-    stance: StanceValue,
-    current: StanceValue | null,
-  ) {
-    if (busyJobId) return;
-    setBusyJobId(row.jobId);
+  async function mark(next: StanceValue) {
+    if (busy) return;
+    setBusy(true);
     try {
       await editShortlistBoard(
-        board.companyId,
+        companyId,
         row.jobId,
-        stance === current ? "undecided" : stance,
+        next === stance ? "undecided" : next,
       );
     } finally {
-      setBusyJobId(null);
+      setBusy(false);
     }
   }
 
   return (
+    <RowCard
+      $pending={row.pending}
+      role="button"
+      tabIndex={0}
+      onClick={() => void viewJob(row.jobId)}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        void viewJob(row.jobId);
+      }}
+    >
+      <RowTop>
+        <RowTitle>{row.title}</RowTitle>
+      </RowTop>
+      {rowMeta(row) && <RowMeta>{rowMeta(row)}</RowMeta>}
+      {row.reason && <RowReason>{row.reason}</RowReason>}
+      {row.matchBucket && row.stanceable && (
+        <ScanTag>
+          First read: {row.matchBucket.toLowerCase()}
+          {row.matchReason ? ` — ${row.matchReason}` : ""}
+        </ScanTag>
+      )}
+      {!readOnly && row.stanceable && (
+        <StanceRow>
+          {STANCES.map((s) => (
+            <StanceButton
+              key={s.value}
+              $active={stance === s.value}
+              disabled={busy}
+              // The icon carries no text, so the button needs its own
+              // accessible name — and the tooltip has to say what the
+              // mark does now that the label isn't on screen.
+              aria-label={s.label}
+              aria-pressed={stance === s.value}
+              title={
+                stance === s.value
+                  ? `${s.label} — click again to leave it undecided`
+                  : s.label
+              }
+              // The card navigates; marking must not also open the role.
+              onClick={(e) => {
+                e.stopPropagation();
+                void mark(s.value);
+              }}
+            >
+              <s.Icon />
+            </StanceButton>
+          ))}
+          {busy && <ScanTag>saving…</ScanTag>}
+        </StanceRow>
+      )}
+    </RowCard>
+  );
+}
+
+function AsideGroup({
+  companyId,
+  placed,
+}: {
+  companyId: string;
+  placed: PlacedRow[];
+}) {
+  const [open, setOpen] = useState(false);
+  return (
     <TierSection>
       <TierHeader onClick={() => setOpen((o) => !o)}>
         <TierCaret $open={open}>▶</TierCaret>
-        <TierTitle>{meta.label}</TierTitle>
-        <TierCount>{rows.length}</TierCount>
-        {meta.hint && open && <ScanTag>— {meta.hint}</ScanTag>}
+        <TierTitle>{ASIDE_LABEL}</TierTitle>
+        <TierCount>{placed.length}</TierCount>
+        {open && <ScanTag>— {ASIDE_HINT}</ScanTag>}
       </TierHeader>
       {open &&
-        rows.map((row) => {
-          const stance = stanceOf(row, tier);
-          const busy = busyJobId === row.jobId;
-          return (
-            <RowCard key={row.jobId} $pending={row.pending}>
-              <RowTop>
-                <RowTitle onClick={() => void viewJob(row.jobId)}>
-                  {row.title}
-                </RowTitle>
-              </RowTop>
-              {rowMeta(row) && <RowMeta>{rowMeta(row)}</RowMeta>}
-              {row.reason && <RowReason>{row.reason}</RowReason>}
-              {row.matchBucket && row.stanceable && (
-                <ScanTag>
-                  First read: {row.matchBucket.toLowerCase()}
-                  {row.matchReason ? ` — ${row.matchReason}` : ""}
-                </ScanTag>
-              )}
-              {!readOnly && row.stanceable && (
-                <StanceRow>
-                  {STANCES.map((s) => (
-                    <StanceButton
-                      key={s.value}
-                      $active={stance === s.value}
-                      disabled={busy}
-                      // The icon carries no text, so the button needs its own
-                      // accessible name — and the tooltip has to say what the
-                      // mark does now that the label isn't on screen.
-                      aria-label={s.label}
-                      aria-pressed={stance === s.value}
-                      title={
-                        stance === s.value
-                          ? `${s.label} — click again to leave it undecided`
-                          : s.label
-                      }
-                      onClick={() => void mark(row, s.value, stance)}
-                    >
-                      <s.Icon />
-                    </StanceButton>
-                  ))}
-                  {busy && <ScanTag>saving…</ScanTag>}
-                </StanceRow>
-              )}
-            </RowCard>
-          );
-        })}
+        placed.map(({ tier, row }) => (
+          <BoardRow
+            key={row.jobId}
+            companyId={companyId}
+            tier={tier}
+            row={row}
+          />
+        ))}
     </TierSection>
   );
 }
@@ -411,6 +430,15 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
   const readOnly = useChatStore((s) => s.impersonateSessionId !== null);
   const streaming = useChatStore((s) => s.streaming);
   const pending = board.pendingEdits;
+
+  // The server's tier order IS the render order within each group, so
+  // flattening keeps picks ahead of borderline ahead of pass.
+  const consider: PlacedRow[] = [];
+  const aside: PlacedRow[] = [];
+  for (const { tier, rows } of board.tiers) {
+    const bucket = GROUP_OF_TIER[tier] === "consider" ? consider : aside;
+    for (const row of rows) bucket.push({ tier, row });
+  }
 
   return (
     <Root>
@@ -430,15 +458,26 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
           </SendChangesButton>
         )}
         <H2>{board.companyName} — shortlist</H2>
-        <OpenNote>
-          {board.open
-            ? "Everything is already marked the way Hank sees it — change what you disagree with. Rows you change stay put until your next message, which is when Hank hears about them; hit send on an empty box if that's all you wanted to say. Nothing is final until you two lock it in."
-            : "This shortlist is locked in — nothing left to decide here. To change your mind on a role, just tell Hank in chat."}
-        </OpenNote>
+        {!board.open && (
+          <OpenNote>
+            This shortlist is locked in — nothing left to decide here. To change
+            your mind on a role, just tell Hank in chat.
+          </OpenNote>
+        )}
       </Header>
-      {board.tiers.map(({ tier, rows }) => (
-        <TierRows key={tier} board={board} tier={tier} rows={rows} />
-      ))}
+      <TierSection>
+        {consider.map(({ tier, row }) => (
+          <BoardRow
+            key={row.jobId}
+            companyId={board.companyId}
+            tier={tier}
+            row={row}
+          />
+        ))}
+      </TierSection>
+      {aside.length > 0 && (
+        <AsideGroup companyId={board.companyId} placed={aside} />
+      )}
     </Root>
   );
 }
