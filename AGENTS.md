@@ -145,6 +145,8 @@ Assume the reference deployment's operator may already have `pnpm dev` running o
 
 **Verify the host before a write or migration:** `grep ^DATABASE_URL .env`, or read the `Datasource "db": … at <host>` line `pnpm db:migrate` prints before it applies. Don't trust this paragraph over the live `.env` — if the maintainer later repoints it at a localhost dev DB the calculus flips back, so re-check rather than assume.
 
+**`tsx` does NOT load `.env` — every script's first line is `import "dotenv/config"`.** The scripts in `scripts/` reach the right database because each one imports it, not because the runner does anything. Omit it in a new script and `process.env.DATABASE_URL` is `undefined`, the pg adapter silently falls back to a localhost default, and the first query fails with **`P2021` — "the table `public.Job` does not exist in the current database."** That error names a table and a schema, so it reads as an unapplied migration or a drifted DB, and this repo usually has pending migrations for it to look like. It isn't: it's a script talking to a database that has no tables at all. Check the import before you check the schema — `psql "$DATABASE_URL" -c "\dt"` settles it in one command.
+
 The sub-agent harnesses stay safe regardless of which DB is live: the audit scripts under [scripts/regression/sub-agents/](scripts/regression/sub-agents/) and the replay script [scripts/shortlist-jobs/replay.ts](scripts/shortlist-jobs/replay.ts) call a real LLM but write nothing — not by a flag, but because a sub-agent writes nothing at all and the harnesses never call the caller-side persist step. See [docs/sub-agents.md → Testing](docs/sub-agents.md) for the pattern.
 
 # Framework & build

@@ -16,7 +16,7 @@ import {
 } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 
-import { mintJobSlug } from "./jobSlug";
+import { mintJobSlugs } from "./jobSlug";
 import { roleAttrColumns, type RoleAttrs } from "./roleAttrs";
 
 // One job to create, with the agent's slugs already resolved to ids. `isPitched`
@@ -123,27 +123,24 @@ export async function createJobs(args: {
     }));
   });
 
-  // Mint slugs AFTER the transaction commits — the mint retries on
-  // unique-collision, which would abort an enclosing transaction. Independent
-  // per job, so they mint concurrently. Aligned with `items` by index.
-  //
-  // Deliberately one write per row rather than a single bulk update: the mint
-  // resolves collisions by ATTEMPTING the write and catching the unique
-  // violation, because pre-checking with a read races two concurrent minters
-  // onto the same slug. Batching would mean pre-checking. Bounded and concurrent
-  // (a create batch is a handful of rows), so it stays.
-  const slugs = await Promise.all(
-    created.map((c, i) =>
-      mintJobSlug(c.jobId, {
+  // Mint slugs AFTER the transaction commits — a collision falls through to the
+  // next candidate by attempting the write, which would abort an enclosing
+  // transaction. Two statements for the batch; mintJobSlugs owns the race
+  // (the unique index still arbitrates, and a lost race drops back to minting
+  // one row at a time).
+  const slugs = await mintJobSlugs(
+    created.map((c, i) => ({
+      jobId: c.jobId,
+      parts: {
         companySlug: items[i].companySlug,
         companyName: items[i].companyName,
         title: items[i].title,
         location: items[i].location ?? null,
         department: items[i].department ?? null,
-      }),
-    ),
+      },
+    })),
   );
-  created.forEach((c, i) => (c.slug = slugs[i]));
+  created.forEach((c) => (c.slug = slugs.get(c.jobId) ?? null));
 
   return created;
 }

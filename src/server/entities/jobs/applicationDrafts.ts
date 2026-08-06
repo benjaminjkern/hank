@@ -11,6 +11,7 @@
 // thing to diverge from) and whenever an edit is relayed (he's now seen it).
 
 import { JobInteractionStatus, Prisma } from "@/generated/prisma/client";
+import { bulkUpdate } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
 import { diffWords, renderWordDiff, type WordDiff } from "@/utils/diff";
 import { nowDate } from "@/utils/now";
@@ -303,9 +304,8 @@ export async function listUnrelayedApplicationEdits(
 const EMPTY_DIFF: WordDiff = diffWords("", "");
 
 // Re-baseline the rows just relayed: Hank has now seen this version, so the next
-// divergence is measured from it. One statement per row is unavoidable (each
-// row's baseline is its own text) but bounded — the relay only ever carries the
-// handful of applications open at once.
+// divergence is measured from it. Every row's baseline is its own text, so the
+// values differ per row — the case bulkUpdate exists for, in one statement.
 export async function settleRelayedApplicationEdits(
   userId: string,
   relays: ApplicationEditRelay[],
@@ -315,24 +315,20 @@ export async function settleRelayedApplicationEdits(
     where: { userId, jobId: { in: relays.map((r) => r.jobId) } },
     select: { id: true, coverLetter: true, shortAnswers: true },
   });
-  await prisma.$transaction(
-    rows.map((row) =>
-      prisma.jobInteraction.update({
-        where: { id: row.id },
-        data: { proposedDrafts: proposedDraftsPatch(row) },
-        select: { id: true },
-      }),
-    ),
+  await bulkUpdate(
+    "JobInteraction",
+    "id",
+    rows.map((row) => ({
+      key: row.id,
+      patch: { proposedDrafts: proposedDraftsPatch(row) as Prisma.JsonValue },
+    })),
   );
   // Added questions settle on their own marker rather than the draft baseline —
   // they live on the Job, and there's no text for a baseline to hold.
-  const at = nowDate().toISOString();
-  await Promise.all(
-    relays
-      .filter((r) => r.addedQuestions.length > 0)
-      .map((r) =>
-        markUserQuestionsRelayed(userId, r.jobId, r.addedQuestions, at),
-      ),
+  await markUserQuestionsRelayed(
+    userId,
+    relays.map((r) => ({ jobId: r.jobId, questions: r.addedQuestions })),
+    nowDate().toISOString(),
   );
 }
 

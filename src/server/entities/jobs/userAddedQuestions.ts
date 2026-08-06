@@ -10,6 +10,7 @@
 // this module doesn't know about.
 
 import { Prisma } from "@/generated/prisma/client";
+import { bulkUpdate } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
 import { normalizeForCompare } from "@/utils/text";
 
@@ -49,23 +50,50 @@ export async function writeStoredUserQuestions(
 // Mark this user's hand-added questions as carried to Hank, so they report once
 // rather than on every message. Scoped to the adder: the column is global to the
 // job, and another account's question isn't news to this user.
+//
+// Takes the whole relay rather than one job: a relay settles every open
+// application at once, and per-job it was a read and a write each. One read,
+// one write, flat in the number of jobs.
 export async function markUserQuestionsRelayed(
   userId: string,
-  jobId: string,
-  questions: string[],
+  relayed: ReadonlyArray<{ jobId: string; questions: string[] }>,
   at: string,
 ): Promise<void> {
-  if (questions.length === 0) return;
-  const job = await prisma.job.findUnique({
-    where: { id: jobId },
-    select: { userAddedQuestions: true },
+  const carrying = relayed.filter((r) => r.questions.length > 0);
+  if (carrying.length === 0) return;
+
+  const jobs = await prisma.job.findMany({
+    where: { id: { in: carrying.map((r) => r.jobId) } },
+    select: { id: true, userAddedQuestions: true },
   });
-  if (!job) return;
-  const norms = new Set(questions.map((q) => normalizeForCompare(q)));
-  const next = readStoredUserQuestions(job.userAddedQuestions).map((q) =>
-    q.addedByUserId === userId && norms.has(normalizeForCompare(q.question))
-      ? { ...q, relayedAt: at }
-      : q,
-  );
-  await writeStoredUserQuestions(jobId, next);
+  const storedByJob = new Map(jobs.map((j) => [j.id, j.userAddedQuestions]));
+
+  // Rows whose stored questions nothing matched are dropped rather than
+  // rewritten to themselves, so the statement carries only real changes.
+  const patches = carrying.flatMap((r) => {
+    const raw = storedByJob.get(r.jobId);
+    if (raw === undefined) return []; // job deleted between relay and settle
+    const norms = new Set(r.questions.map((q) => normalizeForCompare(q)));
+    let changed = false;
+    const next = readStoredUserQuestions(raw).map((q) => {
+      const mine =
+        q.addedByUserId === userId &&
+        norms.has(normalizeForCompare(q.question));
+      if (!mine) return q;
+      changed = true;
+      return { ...q, relayedAt: at };
+    });
+    return changed
+      ? [
+          {
+            key: r.jobId,
+            patch: {
+              userAddedQuestions: next as unknown as Prisma.JsonValue,
+            },
+          },
+        ]
+      : [];
+  });
+
+  await bulkUpdate("Job", "id", patches);
 }

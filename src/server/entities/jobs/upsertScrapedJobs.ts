@@ -14,11 +14,12 @@
 // - Logs a SURFACED Event row for each NEW JobInteraction so the audit
 //   trail captures when the job first hit the user's pool.
 //
-// Concurrency: per-job upserts run in parallel with a small fan-out. The
-// The first-pull path was already doing this; the re-scrape path was serial.
-// Unifying to parallel is uncontroversial — the Job upsert is unique on
-// sourceUrl so there are no row-level conflicts, and the per-job
-// JobInteraction upsert is keyed by (userId, jobId) which is also unique.
+// Cost: a FIXED number of statements, never one per job. The board is
+// partitioned with one read and written with one statement per side; the slug
+// mint and the per-user interaction seed have the same shape. That discipline
+// matters here more than anywhere else in the repo — this is the widest fan-out
+// the app has, and a first pull of a 200-role board used to be ~1000 round
+// trips (a per-job upsert, slug write, interaction check, insert and event).
 
 import {
   EventSource,
@@ -27,14 +28,13 @@ import {
   JobInteractionStatus,
   Prisma,
 } from "@/generated/prisma/client";
+import { bulkUpdate } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
 import { logCompanyEvent } from "@/server/entities/companies/logCompanyEvent";
 import type { ScrapeDiagnostics, ScrapedJob } from "@/server/scrape/types";
 
-import { mintJobSlug } from "./jobSlug";
+import { mintJobSlugs, type JobSlugParts } from "./jobSlug";
 import { roleAttrColumns } from "./roleAttrs";
-
-const UPSERT_CONCURRENCY = 4;
 
 // Closure tuning. CLOSURE_MIN_BOARD: below this many currently-open scraped jobs
 // we don't apply the "suspicious mass-closure" guard (small boards swing a lot).
@@ -87,70 +87,18 @@ export async function upsertScrapedJobs(args: {
     where: { id: args.companyId },
     select: { slug: true, name: true },
   });
-  const newFlags = await mapWithConcurrency(
-    args.jobs,
-    UPSERT_CONCURRENCY,
-    async (job) => {
-      const upJob = await prisma.job.upsert({
-        where: { sourceUrl: job.sourceUrl },
-        update: {
-          title: job.title,
-          rawContent: job.rawContent,
-          ...roleAttrColumns(job),
-          attributes: job.attributes
-            ? (job.attributes as Prisma.InputJsonValue)
-            : Prisma.DbNull,
-          lastSeenAt: scrapeStartedAt,
-        },
-        create: {
-          companyId: args.companyId,
-          title: job.title,
-          sourceUrl: job.sourceUrl,
-          rawContent: job.rawContent,
-          ...roleAttrColumns(job),
-          attributes: job.attributes
-            ? (job.attributes as Prisma.InputJsonValue)
-            : Prisma.DbNull,
-          lastSeenAt: scrapeStartedAt,
-        },
-      });
-      // Mint a slug on first sight (new row) or lazily backfill a legacy
-      // null-slug row this scrape touched. Immutable once set — a title change
-      // on re-scrape does NOT re-slug (the slug is a stable permalink).
-      if (upJob.slug == null) {
-        await mintJobSlug(upJob.id, {
-          companySlug: company?.slug ?? null,
-          companyName: company?.name ?? null,
-          title: job.title,
-          location: job.location ?? null,
-          department: job.department ?? null,
-        });
-      }
-      const existing = await prisma.jobInteraction.findUnique({
-        where: { userId_jobId: { userId: args.userId, jobId: upJob.id } },
-        select: { id: true },
-      });
-      if (existing) return false;
-      const created = await prisma.jobInteraction.create({
-        data: {
-          userId: args.userId,
-          jobId: upJob.id,
-          status: JobInteractionStatus.NEW,
-        },
-        select: { id: true },
-      });
-      await prisma.jobEvent.create({
-        data: {
-          jobInteractionId: created.id,
-          type: JobEventType.SURFACED,
-          occurredAt: new Date(),
-          source: EventSource.CHAT_EXTRACTED,
-        },
-      });
-      return true;
-    },
-  );
-  const newJobInteractions = newFlags.filter(Boolean).length;
+  // A board that lists one posting twice would collide on Job.sourceUrl's
+  // unique index inside a multi-row insert. Last occurrence wins.
+  const jobs = [...new Map(args.jobs.map((j) => [j.sourceUrl, j])).values()];
+
+  const newJobInteractions = await persistScrapedJobs({
+    userId: args.userId,
+    companyId: args.companyId,
+    jobs,
+    scrapeStartedAt,
+    companySlug: company?.slug ?? null,
+    companyName: company?.name ?? null,
+  });
 
   // One collapsed company-feed row for the surfacing (not one per SURFACED job).
   // The per-job SURFACED JobEvents still land above (first-pulled-up marker).
@@ -286,7 +234,7 @@ async function detectAndApplyClosures(args: {
           // Clear-on-transition: a role that just came down can't still be
           // carrying a shortlist stance from the round it was proposed in.
           agentVerdict: null,
-      userVerdict: null,
+          userVerdict: null,
           placementVerdict: null,
           agentReason: null,
           stanceAt: null,
@@ -320,24 +268,165 @@ async function detectAndApplyClosures(args: {
   return { delisted: goneIds.length };
 }
 
-async function mapWithConcurrency<T, R>(
-  items: readonly T[],
-  limit: number,
-  fn: (item: T, index: number) => Promise<R>,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  const workers = Array.from(
-    { length: Math.min(limit, items.length) },
-    async () => {
-      while (true) {
-        const i = next++;
-        if (i >= items.length) return;
-        // eslint-disable-next-line no-await-in-loop -- this await IS the concurrency limit: N workers draining a shared cursor is how the pool stays bounded
-        results[i] = await fn(items[i], i);
-      }
-    },
+// The upsert half: Job rows, their slugs, and the caller's JobInteractions,
+// in a fixed number of statements. Returns how many JobInteractions were newly
+// created (the "N new roles" the caller reports).
+//
+// Read once → decide in JS → write in a fixed number of statements, three
+// times over. There is no `upsertMany`, so the partition is explicit: one read
+// says which sourceUrls already exist, and each side gets its own single
+// statement — `createManyAndReturn` for the new rows, `bulkUpdate` for the
+// existing ones (their column VALUES differ per row, which is the one thing
+// Prisma cannot express in a single statement).
+async function persistScrapedJobs(args: {
+  userId: string;
+  companyId: string;
+  jobs: ScrapedJob[];
+  scrapeStartedAt: Date;
+  companySlug: string | null;
+  companyName: string | null;
+}): Promise<number> {
+  if (args.jobs.length === 0) return 0;
+
+  const slugParts = (job: ScrapedJob): JobSlugParts => ({
+    companySlug: args.companySlug,
+    companyName: args.companyName,
+    title: job.title,
+    location: job.location ?? null,
+    department: job.department ?? null,
+  });
+
+  // ── Job rows ──────────────────────────────────────────────────────────
+  // No companyId filter, mirroring the unique index the old upsert matched on:
+  // a sourceUrl already owned by another company keeps that company.
+  const existing = await prisma.job.findMany({
+    where: { sourceUrl: { in: args.jobs.map((j) => j.sourceUrl) } },
+    select: { id: true, sourceUrl: true, slug: true },
+  });
+  const idBySourceUrl = new Map(
+    existing.flatMap((r) => (r.sourceUrl == null ? [] : [[r.sourceUrl, r.id]])),
   );
-  await Promise.all(workers);
-  return results;
+
+  const toUpdate = args.jobs.flatMap((job) => {
+    const id = idBySourceUrl.get(job.sourceUrl);
+    return id == null ? [] : [{ id, job }];
+  });
+  const toCreate = args.jobs.filter((j) => !idBySourceUrl.has(j.sourceUrl));
+
+  if (toUpdate.length > 0) {
+    await bulkUpdate(
+      "Job",
+      "id",
+      toUpdate.map(({ id, job }) => ({
+        key: id,
+        patch: {
+          title: job.title,
+          rawContent: job.rawContent,
+          ...roleAttrColumns(job),
+          // Plain null, not Prisma.DbNull — this rides through raw SQL, where a
+          // JSON null in the payload IS the SQL NULL the sentinel stands for.
+          attributes: (job.attributes ?? null) as Prisma.JsonValue,
+          lastSeenAt: args.scrapeStartedAt,
+        },
+      })),
+    );
+  }
+
+  const created =
+    toCreate.length === 0
+      ? []
+      : await prisma.job.createManyAndReturn({
+          data: toCreate.map((job) => ({
+            companyId: args.companyId,
+            title: job.title,
+            sourceUrl: job.sourceUrl,
+            rawContent: job.rawContent,
+            ...roleAttrColumns(job),
+            attributes: job.attributes
+              ? (job.attributes as Prisma.InputJsonValue)
+              : Prisma.DbNull,
+            lastSeenAt: args.scrapeStartedAt,
+          })),
+          select: { id: true, sourceUrl: true },
+          // Another user scraping this company concurrently may have inserted
+          // the same posting between our read and this write.
+          skipDuplicates: true,
+        });
+  for (const row of created) {
+    if (row.sourceUrl != null) idBySourceUrl.set(row.sourceUrl, row.id);
+  }
+
+  // Only when that race actually bit: re-read the postings the insert skipped,
+  // because their ids never came back and the interaction seed below needs them.
+  if (created.length < toCreate.length) {
+    const raced = await prisma.job.findMany({
+      where: {
+        sourceUrl: {
+          in: toCreate
+            .map((j) => j.sourceUrl)
+            .filter((url) => !idBySourceUrl.has(url)),
+        },
+      },
+      select: { id: true, sourceUrl: true },
+    });
+    for (const row of raced) {
+      if (row.sourceUrl != null) idBySourceUrl.set(row.sourceUrl, row.id);
+    }
+  }
+
+  // ── Slugs ─────────────────────────────────────────────────────────────
+  // Every new row (created with slug=null), plus a lazy backfill of any legacy
+  // null-slug row this scrape touched. Immutable once set — a title change on
+  // re-scrape does NOT re-slug (the slug is a stable permalink).
+  const needsSlug = new Set(
+    existing.flatMap((r) => (r.slug == null ? [r.id] : [])),
+  );
+  for (const row of created) needsSlug.add(row.id);
+  await mintJobSlugs(
+    args.jobs.flatMap((job) => {
+      const jobId = idBySourceUrl.get(job.sourceUrl);
+      if (jobId == null || !needsSlug.has(jobId)) return [];
+      return [{ jobId, parts: slugParts(job) }];
+    }),
+  );
+
+  // ── This user's JobInteractions ───────────────────────────────────────
+  // Rows that already have one (in any status) are left alone — a re-scrape
+  // never resets status.
+  const jobIds = [...idBySourceUrl.values()];
+  const seeded = await prisma.jobInteraction.findMany({
+    where: { userId: args.userId, jobId: { in: jobIds } },
+    select: { jobId: true },
+  });
+  const alreadySeeded = new Set(seeded.map((r) => r.jobId));
+  const missing = jobIds.filter((id) => !alreadySeeded.has(id));
+  if (missing.length === 0) return 0;
+
+  // Interaction + its SURFACED marker commit together, so a row can't strand
+  // without the event that says when it hit the user's pool.
+  const surfacedAt = new Date();
+  return await prisma.$transaction(async (tx) => {
+    const rows = await tx.jobInteraction.createManyAndReturn({
+      data: missing.map((jobId) => ({
+        userId: args.userId,
+        jobId,
+        status: JobInteractionStatus.NEW,
+      })),
+      select: { id: true },
+      // Same race as above, on (userId, jobId): a concurrent run of THIS user's
+      // own scrape. Skipped rows already have their event.
+      skipDuplicates: true,
+    });
+    if (rows.length > 0) {
+      await tx.jobEvent.createMany({
+        data: rows.map((r) => ({
+          jobInteractionId: r.id,
+          type: JobEventType.SURFACED,
+          occurredAt: surfacedAt,
+          source: EventSource.CHAT_EXTRACTED,
+        })),
+      });
+    }
+    return rows.length;
+  });
 }
