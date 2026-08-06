@@ -23,6 +23,7 @@ One-line pointers, grouped by theme; open the doc for detail.
 - **[docs/runtime.md](docs/runtime.md)** — How `runUserMessage` → `runChat` → `runChatTurn` → `runHankTurn` → `runAgentTurn` execute a message, when the deterministic layer takes over, + the widget event protocol. Read before changing turn routing, a prompt, or a sub-agent.
 - **[docs/flows.md](docs/flows.md)** — End-to-end behavior of each flow: scan, shortlist, walkthrough, application drafting, opportunity intake, `runWhatsNext`, dashboard scope.
 - **[docs/lifecycle.md](docs/lifecycle.md)** — Statuses & lifecycle: per-status meaning (tone / who-acts-next) + dashboard buckets, then transitions, gates, and event vocabularies.
+- **[docs/discovery-feedback.md](docs/discovery-feedback.md)** — The company-search feedback loop: `CompanySuggestion` as the record of what was proposed and pruned, suppression-as-advice (so `direction` overrides a past decline), the optional decline chips, and submit as the learning moment.
 - **[docs/application-page.md](docs/application-page.md)** — The application page: the same shared-document paradigm applied to drafting. `proposedDrafts` as the baseline a user edit diverges from, the one write seam, the critic's hands-off rule, and submit as the learning moment.
 
 **Conventions & data model**

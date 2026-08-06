@@ -20,6 +20,11 @@ export type CompanyChecklistSuggestion = {
 // commit to the watchlist via the top-level company_checklist dispatcher.
 export type CompanyChecklistPayload = {
   suggestions: CompanyChecklistSuggestion[];
+  // One line on how this batch was found — searched the web vs. worked from
+  // what the model already knows about the user's thesis. Distilled from the
+  // search's own scratchpad, so a bad run is diagnosable ("it didn't search")
+  // instead of a black box. Absent on batches from before it was captured.
+  provenance?: string;
 };
 
 // company_disambiguation — emitted by the watchlist-add runner when the URL
@@ -186,6 +191,15 @@ export type NextCompanyPickerPayload = {
 // optional — a knowledge-only suggestion carries just context.
 export type PickedCompany = { name: string; context?: string; url?: string };
 
+// A candidate the user unchecked, plus the optional "why not" the checklist
+// offers. Both fields absent is the ordinary case — a bare uncheck is still
+// recorded, and still steers the next search away from that company's shape.
+export type DeclinedCompany = {
+  name: string;
+  reason?: string;
+  note?: string;
+};
+
 // One resolved branch of a flagged name collision: the user picked
 // which real company the ambiguous name maps to. Companies the user skipped are
 // simply absent from `resolved`.
@@ -197,7 +211,11 @@ export type DisambiguationResolution = {
 };
 
 export type WidgetSubmission =
-  | { kind: "company_checklist"; picked: PickedCompany[] }
+  | {
+      kind: "company_checklist";
+      picked: PickedCompany[];
+      declined: DeclinedCompany[];
+    }
   | { kind: "company_disambiguation"; resolved: DisambiguationResolution[] }
   | { kind: "confirm_revive_company"; companyId: string; answer: "yes" | "no" }
   | { kind: "confirm_application_submit"; jobId: string }

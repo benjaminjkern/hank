@@ -20,10 +20,8 @@ import type {
   TurnEvent,
 } from "@/server/agent/contracts";
 import { appendUserMessage, narrateStatus } from "@/server/agent/session";
-import {
-  runChecklistAdd,
-  runDisambiguationResolution,
-} from "@/server/procedures/registry/enrichCompanies";
+import { runCommitSuggestions } from "@/server/procedures/registry/commitSuggestions";
+import { runDisambiguationResolution } from "@/server/procedures/registry/enrichCompanies";
 import { showTargetFor, buildShowEvents } from "@/server/views/showEvents";
 import { dispatchNextCompanyPicker } from "@/server/widgets/dispatchNextCompanyPicker";
 import {
@@ -62,26 +60,22 @@ export async function* dispatchTopLevelSubmission(
 ): AsyncGenerator<TurnEvent, TopLevelSubmissionOutcome> {
   const { userId, sessionId, userMessage, attachmentIds, runId } = args;
 
-  // The find_companies checklist submission: create stubs → enrich the fresh
-  // ones (URL hunt + scrape + prescan), narrating ✓ per company. Terminal — the
-  // turn ends with the ✓ lines (or a disambiguation picker if a name collided)
-  // and the user just keeps chatting; there's no add-more widget.
+  // The find_companies checklist submission: record every verdict, enrich the
+  // kept ones (URL hunt + scrape + prescan) narrating ✓ per company, and learn
+  // from what was turned down. Terminal — the turn ends with the ✓ lines (or a
+  // disambiguation picker if a name collided) and the user just keeps chatting;
+  // there's no add-more widget.
   const checklistSubmission = parseCompanyChecklistSubmission(userMessage);
   if (checklistSubmission) {
     await appendUserMessage(sessionId, userMessage, attachmentIds, {
       runId,
       leadingBlocks: await buildPanelEditBlocks(userId),
     });
-    if (checklistSubmission.picked.length > 0) {
-      yield* runChecklistAdd(checklistSubmission.picked, args);
-    } else {
-      // "None of these" — nothing to add. Say so briefly and wait.
-      yield* narrateStatus(
-        sessionId,
-        "No worries — nothing added. Tell me what else you're after whenever you like.",
-        runId,
-      );
-    }
+    yield* runCommitSuggestions({
+      ...args,
+      picked: checklistSubmission.picked,
+      declined: checklistSubmission.declined,
+    });
     return { kind: "terminal" };
   }
 

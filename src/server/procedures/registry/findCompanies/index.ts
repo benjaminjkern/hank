@@ -16,10 +16,15 @@ import {
   type FindCompaniesCandidate,
 } from "@/server/subagents/registry/findCompanies";
 
+import { recordSuggestions } from "@/server/entities/companies/companySuggestions";
+
 import { loadFindCompaniesInput } from "./loadFindCompaniesInput";
 
 export type FindCompaniesResult = {
   candidates: FindCompaniesCandidate[];
+  // One user-facing line on how the batch was found — rendered above the
+  // checklist so a bad run is diagnosable rather than a black box.
+  provenance?: string;
   // Why the list is empty, so the caller can phrase the two cases differently:
   // "no_basis" / "failed" = we couldn't search; "none_found" = we did and the
   // watchlist already covers the ground.
@@ -51,5 +56,22 @@ export async function runFindCompanies(
   if (r.output.candidates.length === 0) {
     return { candidates: [], reason: "none_found" };
   }
-  return { candidates: r.output.candidates };
+
+  // Record the batch as PROPOSED (no verdict yet). Written here rather than at
+  // submit so a batch the user types past is still on file — and so the decline
+  // that follows has a row to land on.
+  await recordSuggestions({
+    userId: ctx.userId,
+    runId: ctx.runId,
+    sessionId: ctx.sessionId,
+    suggestions: r.output.candidates.map((c) => ({
+      name: c.name,
+      reason: c.oneLineReason,
+      url: c.url,
+    })),
+  });
+  return {
+    candidates: r.output.candidates,
+    ...(r.output.provenance ? { provenance: r.output.provenance } : {}),
+  };
 }

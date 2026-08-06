@@ -13,7 +13,9 @@
 // Marker extraction + JSON.parse is shared via extractWidgetMarker; each parser
 // only owns its per-kind field validation.
 
+import type { CompanySuggestionDeclineReason } from "@/generated/prisma/client";
 import { extractWidgetMarker } from "@/lib/widgetMarker";
+import { COMPANY_SUGGESTION_DECLINE_REASONS } from "@/server/entities/companies/companySuggestionInputs";
 
 // ---------------------------------------------------------------------------
 // Walkthrough pipeline widgets: confirm_revive_company,
@@ -92,6 +94,15 @@ export function parseWidgetSubmission(
 // company on a name collision. Both optional.
 export type PickedCompany = { name: string; context?: string; url?: string };
 
+// A candidate the user unchecked, with the optional "why not" the checklist
+// offered. Both fields absent is the ordinary case — a bare uncheck still
+// records and still steers the next search.
+export type DeclinedCompany = {
+  name: string;
+  reason?: CompanySuggestionDeclineReason;
+  note?: string;
+};
+
 // One resolved branch of a flagged name collision: the user picked
 // which real company the ambiguous name maps to, identified by the verified
 // board URL the hunter offered.
@@ -108,10 +119,44 @@ export type DisambiguationResolution = {
 // message isn't a company_checklist marker.
 export function parseCompanyChecklistSubmission(
   userMessage: string,
-): { picked: PickedCompany[] } | null {
+): { picked: PickedCompany[]; declined: DeclinedCompany[] } | null {
   const obj = extractWidgetMarker(userMessage);
   if (!obj || obj.kind !== "company_checklist") return null;
-  return { picked: asPickedCompanies(obj.picked) };
+  // `declined` is absent on markers persisted before the checklist captured it;
+  // an empty list there means "nothing recorded", not "nothing declined".
+  return {
+    picked: asPickedCompanies(obj.picked),
+    declined: asDeclinedCompanies(obj.declined),
+  };
+}
+
+function asDeclinedCompanies(v: unknown): DeclinedCompany[] {
+  if (!Array.isArray(v)) return [];
+  const out: DeclinedCompany[] = [];
+  for (const item of v) {
+    if (typeof item === "string") {
+      if (item.trim()) out.push({ name: item.trim() });
+      continue;
+    }
+    if (!item || typeof item !== "object") continue;
+    const o = item as Record<string, unknown>;
+    if (typeof o.name !== "string" || !o.name.trim()) continue;
+    const reason =
+      typeof o.reason === "string" &&
+      (COMPANY_SUGGESTION_DECLINE_REASONS as readonly string[]).includes(
+        o.reason,
+      )
+        ? (o.reason as CompanySuggestionDeclineReason)
+        : undefined;
+    out.push({
+      name: o.name.trim(),
+      ...(reason ? { reason } : {}),
+      ...(typeof o.note === "string" && o.note.trim()
+        ? { note: o.note.trim() }
+        : {}),
+    });
+  }
+  return out;
 }
 
 // company_disambiguation submission — the user resolved one or more flagged name

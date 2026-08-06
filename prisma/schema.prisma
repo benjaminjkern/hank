@@ -50,6 +50,7 @@ model User {
   pushSubscriptions PushSubscription[]
   clientEvents  ClientEvent[]
   companyEvents CompanyEvent[]
+  companySuggestions CompanySuggestion[]
 }
 
 // -- Auth.js (NextAuth v5) tables ----------------------------------------
@@ -235,6 +236,62 @@ enum CompanyBlockReason {
   AMBIGUOUS_NAME // multiple companies match; couldn't pin down the board
   NO_OWN_BOARD // sub-brand that only hires under a parent (track the parent)
   AUTH_WALLED // board behind login / SPA / auth we can't read
+  OTHER
+}
+
+// One candidate the find_companies search proposed, and what the user did with
+// it. Deliberately NOT a Company: a declined candidate never becomes one, and
+// creating a stub for every rejected name would fill the watchlist, dashboard,
+// and what's-next with things the user said no to sight-unseen.
+//
+// It's the discovery half of what stance columns are to the shortlist board —
+// the record that makes a correction durable and feedable instead of a lost
+// click. loadFindCompaniesInput reads it back so the next search knows what was
+// already turned down and why. See docs/discovery-feedback.md.
+model CompanySuggestion {
+  id     String @id @default(cuid())
+  userId String
+  // The name exactly as the search proposed it.
+  name   String
+  // slugify(name), so a re-suggestion under a variant spelling ("Evertune AI"
+  // vs "Evertune") still matches an earlier verdict — and matches Company.slug,
+  // which is minted the same way.
+  nameKey String
+  // The search's own one-line case for this candidate.
+  reason  String
+  url     String?
+  // Null until the user answers the checklist. An unanswered batch is neither
+  // added nor declined — it's still on screen.
+  verdict CompanySuggestionVerdict?
+  // Optional structured + freeform "why not", captured on the checklist. Both
+  // absent is fine: a bare decline still records and still steers.
+  declineReason CompanySuggestionDeclineReason?
+  declineNote   String?
+  // The run that produced this batch, so "the previous run" is answerable.
+  runId     String?
+  sessionId String?
+  createdAt DateTime  @default(now())
+  decidedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, nameKey])
+  @@index([userId, createdAt])
+}
+
+enum CompanySuggestionVerdict {
+  ADDED
+  DECLINED
+}
+
+// Structured "why not" for a declined suggestion. Optional by design — forcing
+// a reason on every decline costs more than the signal is worth.
+enum CompanySuggestionDeclineReason {
+  TOO_LARGE
+  TOO_EARLY
+  WRONG_DOMAIN
+  ALREADY_KNOWN // heard of them, not interested / already talking to them
+  NOT_INTERESTED
   OTHER
 }
 
