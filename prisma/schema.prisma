@@ -263,10 +263,6 @@ model CompanySuggestion {
   // Null until the user answers the checklist. An unanswered batch is neither
   // added nor declined — it's still on screen.
   verdict CompanySuggestionVerdict?
-  // Optional structured + freeform "why not", captured on the checklist. Both
-  // absent is fine: a bare decline still records and still steers.
-  declineReason CompanySuggestionDeclineReason?
-  declineNote   String?
   // The run that produced this batch, so "the previous run" is answerable.
   runId     String?
   sessionId String?
@@ -282,17 +278,6 @@ model CompanySuggestion {
 enum CompanySuggestionVerdict {
   ADDED
   DECLINED
-}
-
-// Structured "why not" for a declined suggestion. Optional by design — forcing
-// a reason on every decline costs more than the signal is worth.
-enum CompanySuggestionDeclineReason {
-  TOO_LARGE
-  TOO_EARLY
-  WRONG_DOMAIN
-  ALREADY_KNOWN // heard of them, not interested / already talking to them
-  NOT_INTERESTED
-  OTHER
 }
 
 // -- Jobs (global) --------------------------------------------------------

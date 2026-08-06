@@ -17,6 +17,10 @@ export type WidgetKind =
   // add to the watchlist. Picks commit via the top-level company_checklist
   // dispatcher (runUserMessage), so it works from any flow.
   | "company_checklist"
+  // Emitted once a checklist add has finished: names what landed and asks
+  // whether to keep hunting. "yes" re-enters the search, "no" falls through to
+  // the what's-next picker.
+  | "add_more_companies"
   // Emitted during a checklist add when the URL hunter couldn't tell which of
   // several real companies a name meant. The user picks which company
   // each ambiguous name refers to; the pick commits the chosen board.

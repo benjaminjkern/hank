@@ -17,6 +17,7 @@
 
 import type { WidgetKind } from "@/lib/widgetKinds";
 
+import { addMoreCompaniesDef } from "./addMoreCompanies/def";
 import { companyChecklistDef } from "./companyChecklist/def";
 import { companyDisambiguationDef } from "./companyDisambiguation/def";
 import { confirmApplicationSubmitDef } from "./confirmApplicationSubmit/def";
@@ -32,6 +33,7 @@ import type { ErasedWidgetDef } from "./defineWidget";
 const WIDGET_DEFS = {
   shortlist_proposal: shortlistProposalDef,
   company_checklist: companyChecklistDef,
+  add_more_companies: addMoreCompaniesDef,
   company_disambiguation: companyDisambiguationDef,
   confirm_revive_company: confirmReviveCompanyDef,
   confirm_application_submit: confirmApplicationSubmitDef,

@@ -5,6 +5,7 @@
 // "clicks" land, without calling Anthropic or touching the DB.
 
 import {
+  parseAddMoreCompaniesSubmission,
   parseNextCompanyPickerSubmission,
   parseCompanyChecklistSubmission,
   parseWidgetSubmission,
@@ -36,10 +37,27 @@ const CASES: Case[] = [
     },
     action: { selection: [1] },
     parse: parseCompanyChecklistSubmission,
+    // Everything not picked is a decline, carrying the name and nothing else.
     assert: (p) =>
-      p && p.picked.length === 1 && p.picked[0].name === "Vercel"
+      p &&
+      p.picked.length === 1 &&
+      p.picked[0].name === "Vercel" &&
+      p.declined.length === 1 &&
+      p.declined[0].name === "Cloudflare"
         ? null
         : `bad checklist: ${JSON.stringify(p)}`,
+  },
+  {
+    name: "add_more_companies",
+    kind: "add_more_companies",
+    payload: {
+      kind: "add_more_companies",
+      addedThisBatch: ["Vercel"],
+    },
+    action: { optionRef: "yes" },
+    parse: parseAddMoreCompaniesSubmission,
+    assert: (p) =>
+      p && p.answer === "yes" ? null : `bad add_more: ${JSON.stringify(p)}`,
   },
   {
     name: "confirm_revive_company",

@@ -16,8 +16,8 @@
 // One file per piece, all in this folder: the four arms (companyArm / jobArm /
 // discoveryArm / opportunityArm), the two on-entry board steps the company arm
 // chooses between (companyEnrichStep / boardScrape), the dispatcher, the
-// widget-submission handler, and four leaves (pendingWidgets /
-// summarizeCloseRationales / narration / yieldStateChange).
+// widget-submission handler, and three leaves (summarizeCloseRationales /
+// narration / yieldStateChange).
 
 import type { TurnEvent } from "@/server/agent/contracts";
 import { parseWidgetSubmission } from "@/server/widgets/parse";

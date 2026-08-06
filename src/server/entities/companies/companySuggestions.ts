@@ -5,21 +5,24 @@
 // rendered, settled when the user answers, and read back into the NEXT search's
 // input — which is the whole loop.
 //
-// Suppression is ADVICE, not a filter. `listSuggestionHistory` hands the search
-// what was declined and why; the prompt weighs it against this run's direction,
-// so the user can talk their way past a past decline ("actually I'd look at
-// bigger companies now") without any un-decline mechanism existing. The one
-// deterministic rule rides on each entry's `inLatestRound` — re-proposing
-// something declined in the round that just happened is never right.
+// A row's verdict answers a different question depending on which state it's in,
+// and both halves feed the next search:
+//   - DECLINED / ADDED — the user answered. History: read as advice, not a
+//     filter, so a later direction can reopen ground a past decline closed
+//     without any un-decline mechanism existing.
+//   - null — the user never answered (they typed past the card). STILL ON THE
+//     TABLE: fed back so the search can re-emit the ones the new direction
+//     supports. This is why walking away from a checklist costs nothing.
+//
+// A decline is a bare bit — the name, and that's all. The reason a batch was
+// wrong is a sentence in chat, which reaches the search as its `direction` and
+// reaches memory through the ordinary consolidation pass; per-name reason codes
+// were a lossy re-encoding of it.
 
-import {
-  CompanySuggestionVerdict,
-  type CompanySuggestionDeclineReason,
-} from "@/generated/prisma/client";
+import { CompanySuggestionVerdict } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { slugify } from "@/server/platform/slug/slugify";
-
-import { SUGGESTION_DECLINE_LABELS } from "./companySuggestionInputs";
+import { nowMs } from "@/utils/now";
 
 export type SuggestionToRecord = {
   name: string;
@@ -34,14 +37,21 @@ export type SuggestionHistoryEntry = {
   name: string;
   nameKey: string;
   verdict: CompanySuggestionVerdict;
-  // Composed from the structured reason + note, or absent when they just
-  // unchecked it.
-  why?: string;
   timesDeclined: number;
   lastDecidedAt: Date;
   // Declined in the most recent answered round — the one case the search is
   // told never to re-propose unless this run's direction names it.
   inLatestRound: boolean;
+};
+
+// A candidate the user was shown and never answered. Carries the search's own
+// case for it so a carried-forward name arrives with the same context it had
+// the first time.
+export type OpenSuggestion = {
+  name: string;
+  reason: string;
+  url?: string;
+  proposedAt: Date;
 };
 
 // The search likes to qualify a name with the division it means — "The Trade
@@ -66,6 +76,13 @@ export function suggestionKey(name: string): string {
 
 // Record a freshly-searched batch. Verdict stays null until the user answers —
 // an unanswered batch is on screen, neither added nor declined.
+//
+// A name carried forward from a batch the user typed past is REPLACED rather
+// than duplicated — the stale open row is dropped and re-inserted with this
+// run's reason and date. Nothing references a suggestion row by id, so
+// delete-then-insert keeps it to two statements flat in N, and moving the
+// proposal date forward is what holds a still-believed-in candidate inside the
+// freshness window while one the search stops emitting ages out.
 export async function recordSuggestions(args: {
   userId: string;
   runId?: string;
@@ -73,24 +90,35 @@ export async function recordSuggestions(args: {
   suggestions: SuggestionToRecord[];
 }): Promise<void> {
   if (args.suggestions.length === 0) return;
-  await prisma.companySuggestion.createMany({
-    data: args.suggestions.map((s) => ({
-      userId: args.userId,
-      name: s.name,
-      nameKey: suggestionKey(s.name),
-      reason: s.reason,
-      url: s.url ?? null,
-      runId: args.runId ?? null,
-      sessionId: args.sessionId ?? null,
-    })),
+  const byKey = new Map(
+    args.suggestions.map((s) => [suggestionKey(s.name), s] as const),
+  );
+
+  await prisma.$transaction(async (tx) => {
+    await tx.companySuggestion.deleteMany({
+      where: {
+        userId: args.userId,
+        verdict: null,
+        nameKey: { in: [...byKey.keys()] },
+      },
+    });
+    await tx.companySuggestion.createMany({
+      data: [...byKey.entries()].map(([nameKey, s]) => ({
+        userId: args.userId,
+        name: s.name,
+        nameKey,
+        reason: s.reason,
+        url: s.url ?? null,
+        runId: args.runId ?? null,
+        sessionId: args.sessionId ?? null,
+      })),
+    });
   });
 }
 
 export type SuggestionDecision = {
   name: string;
   verdict: CompanySuggestionVerdict;
-  declineReason?: CompanySuggestionDeclineReason;
-  declineNote?: string;
 };
 
 // Write the user's answers onto the most recent undecided row per name.
@@ -129,8 +157,8 @@ export async function settleSuggestions(args: {
   }
 
   // Grouped so the write is a fixed number of statements: one updateMany per
-  // distinct (verdict, reason, note) shape, which in practice is a handful.
-  const groups = new Map<string, { ids: string[]; d: SuggestionDecision }>();
+  // distinct verdict, which is at most two.
+  const groups = new Map<string, string[]>();
   const missing: SuggestionDecision[] = [];
   for (const [key, d] of byKey) {
     const id = targetByKey.get(key);
@@ -138,22 +166,14 @@ export async function settleSuggestions(args: {
       missing.push(d);
       continue;
     }
-    const shape = `${d.verdict}|${d.declineReason ?? ""}|${d.declineNote ?? ""}`;
-    const g = groups.get(shape) ?? { ids: [], d };
-    g.ids.push(id);
-    groups.set(shape, g);
+    groups.set(d.verdict, [...(groups.get(d.verdict) ?? []), id]);
   }
 
   await prisma.$transaction([
-    ...[...groups.values()].map(({ ids, d }) =>
+    ...[...groups.entries()].map(([verdict, ids]) =>
       prisma.companySuggestion.updateMany({
         where: { id: { in: ids } },
-        data: {
-          verdict: d.verdict,
-          declineReason: d.declineReason ?? null,
-          declineNote: d.declineNote ?? null,
-          decidedAt,
-        },
+        data: { verdict: verdict as CompanySuggestionVerdict, decidedAt },
       }),
     ),
     ...(missing.length > 0
@@ -165,8 +185,6 @@ export async function settleSuggestions(args: {
               nameKey: suggestionKey(d.name),
               reason: "(decided outside a search batch)",
               verdict: d.verdict,
-              declineReason: d.declineReason ?? null,
-              declineNote: d.declineNote ?? null,
               runId: args.runId ?? null,
               sessionId: args.sessionId ?? null,
               decidedAt,
@@ -194,8 +212,6 @@ export async function listSuggestionHistory(
       name: true,
       nameKey: true,
       verdict: true,
-      declineReason: true,
-      declineNote: true,
       decidedAt: true,
       runId: true,
     },
@@ -221,7 +237,6 @@ export async function listSuggestionHistory(
       name: r.name,
       nameKey: r.nameKey,
       verdict: r.verdict!,
-      ...(declined && declineWhy(r) ? { why: declineWhy(r)! } : {}),
       timesDeclined: declined ? 1 : 0,
       lastDecidedAt: r.decidedAt ?? new Date(0),
       inLatestRound:
@@ -231,14 +246,43 @@ export async function listSuggestionHistory(
   return [...byKey.values()];
 }
 
-function declineWhy(row: {
-  declineReason: CompanySuggestionDeclineReason | null;
-  declineNote: string | null;
-}): string | null {
-  const label = row.declineReason
-    ? SUGGESTION_DECLINE_LABELS[row.declineReason]
-    : null;
-  const note = row.declineNote?.trim();
-  if (label && note) return `${label} — ${note}`;
-  return note ?? label ?? null;
+// How long a name the user never answered stays on the table. Long enough to
+// carry a discovery session across a few days; short enough that a list they
+// walked away from last month doesn't come back with a search they've forgotten
+// about. The date moves forward every time the search re-emits the name.
+const OPEN_POOL_DAYS = 7;
+const OPEN_POOL_LIMIT = 40;
+
+// Candidates the user was shown and never answered, newest first. Fed back into
+// the next search so a checklist that got typed past isn't lost work.
+export async function listOpenSuggestions(
+  userId: string,
+): Promise<OpenSuggestion[]> {
+  const since = new Date(nowMs() - OPEN_POOL_DAYS * 24 * 60 * 60 * 1000);
+  const rows = await prisma.companySuggestion.findMany({
+    where: { userId, verdict: null, createdAt: { gte: since } },
+    orderBy: { createdAt: "desc" },
+    take: OPEN_POOL_LIMIT,
+    select: {
+      name: true,
+      nameKey: true,
+      reason: true,
+      url: true,
+      createdAt: true,
+    },
+  });
+
+  // Newest row wins per name. recordSuggestions keeps this to one row per open
+  // name, so a duplicate here means a row predating that — still worth folding.
+  const byKey = new Map<string, OpenSuggestion>();
+  for (const r of rows) {
+    if (byKey.has(r.nameKey)) continue;
+    byKey.set(r.nameKey, {
+      name: r.name,
+      reason: r.reason,
+      ...(r.url ? { url: r.url } : {}),
+      proposedAt: r.createdAt,
+    });
+  }
+  return [...byKey.values()];
 }

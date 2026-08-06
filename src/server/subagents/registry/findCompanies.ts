@@ -17,10 +17,12 @@
 // user is actively pursuing pull suggestions toward their shape; companies they
 // closed (with the close reason) push suggestions away from that shape.
 //
-// Past suggestions are the other half of that feedback: what this search has
-// already proposed and the user turned down, with their reason. It arrives as
-// ADVICE rather than a filter — the direction this run can reopen ground a past
-// decline closed, which is how a user talks their way past one.
+// Past suggestions are the other half of that feedback, split by whether the
+// user answered. DECLINED names arrive as ADVICE rather than a filter — this
+// run's direction can reopen ground a past decline closed, which is how a user
+// talks their way past one. UNANSWERED names are still on the table: this
+// sub-agent re-emits the ones the new direction supports, which is what stops a
+// checklist the user typed past from being lost work.
 
 import { CompanyStatus } from "@/generated/prisma/client";
 import type { AnyToolDef } from "@/server/agent/tools/lib/types";
@@ -31,7 +33,10 @@ import type {
   SubAgentOutputSchema,
 } from "@/server/subagents/lib/types";
 
-import type { SuggestionHistoryEntry } from "@/server/entities/companies/companySuggestions";
+import type {
+  OpenSuggestion,
+  SuggestionHistoryEntry,
+} from "@/server/entities/companies/companySuggestions";
 
 import type Anthropic from "@anthropic-ai/sdk";
 
@@ -67,9 +72,11 @@ export type FindCompaniesInput = {
   // "remote-first climate companies", "actually look for devtools instead").
   // Optional — with no direction the search works from the thesis alone.
   direction?: string;
-  // What this search proposed before and what the user did with it. Declines
-  // carry the user's own reason when they gave one.
+  // Names this search proposed before that the user explicitly turned down.
   history?: SuggestionHistoryEntry[];
+  // Names it proposed that the user never answered — still on the table, and
+  // re-emittable when this run's direction still supports them.
+  stillOpen?: OpenSuggestion[];
   count?: number;
 };
 
@@ -207,6 +214,7 @@ function renderUserContent(input: FindCompaniesInput): string {
       : "",
     "",
     renderHistory(input.history ?? []),
+    renderStillOpen(input.stillOpen ?? []),
     `# Target candidate count: ${input.count ?? 10} (sweet spot 5-15)`,
     "",
     "Decide whether you need the web: a well-understood thesis you can answer from knowledge doesn't need a search; a fresh, narrow, or time-sensitive direction (recent funding, 'who's hiring now', an unfamiliar niche) does. When you have a solid list, call commit_candidates.",
@@ -215,9 +223,9 @@ function renderUserContent(input: FindCompaniesInput): string {
     .join("\n");
 }
 
-// What you've proposed before and what came back. Declines are the correction
-// channel — rendered with the user's own words when they gave a reason, and
-// flagged when they came from the round that just happened.
+// What you've proposed before that the user actively rejected. Repetition and
+// recency are the whole signal — a decline carries no stated reason, because
+// the reason (when there is one) is in the direction above.
 function renderHistory(history: SuggestionHistoryEntry[]): string {
   const declined = history.filter((h) => h.verdict === "DECLINED");
   if (declined.length === 0) return "";
@@ -225,12 +233,25 @@ function renderHistory(history: SuggestionHistoryEntry[]): string {
     const times =
       h.timesDeclined > 1 ? ` (turned down ${h.timesDeclined}x)` : "";
     const latest = h.inLatestRound ? " [LAST ROUND]" : "";
-    return `- ${h.name}${times}${latest}${h.why ? ` — "${h.why}"` : ""}`;
+    return `- ${h.name}${times}${latest}`;
   };
   return [
     "# You suggested these before and the user turned them down",
     "Read these as the user correcting you, not as a blocklist — see the rule in your instructions.",
     declined.map(line).join("\n"),
+    "",
+  ].join("\n");
+}
+
+// Candidates the user was shown and walked away from without answering. Not
+// rejections — they're re-offerable, and re-offering the ones that still fit is
+// how a checklist someone typed past stops being lost work.
+function renderStillOpen(stillOpen: OpenSuggestion[]): string {
+  if (stillOpen.length === 0) return "";
+  return [
+    "# Still on the table — you proposed these and the user never answered",
+    "They are NOT rejections. Re-emit the ones this run's direction still supports, reusing the name exactly as written here; drop the ones it doesn't, which is also not a rejection. They count toward the target below.",
+    stillOpen.map((s) => `- ${s.name} — ${s.reason}`).join("\n"),
     "",
   ].join("\n");
 }
@@ -260,13 +281,20 @@ Never re-suggest anything already on the list (any bucket).
 
 # Past declines are the user correcting you — weigh them, don't obey them blindly
 
-You may be shown companies you proposed before that the user turned down, each with their reason when they gave one. This is the only channel they have for telling you a search was wrong, so it is worth more than any single name:
+You may be shown companies you proposed before that the user turned down. A decline is a bare bit — the name, and nothing else. That is deliberate: when they have something to say about WHY a batch was wrong, they say it in chat, and it reaches you as this run's direction. So read the two together.
 
-- **Read the reason for the PATTERN, not just the name.** Three declines reading "too big" is the thesis narrowing — stop surfacing companies that size, not just those three. That generalization is the point; suppressing the exact names and repeating the mistake with new ones is the failure.
+- **A decline names ONE company; the direction describes the SHAPE.** Don't reconstruct a motive from the names — if the direction says nothing about size, three declines are not evidence about size. Generalize from what they SAID, and treat the declined names themselves as specific negatives.
 - **Repeated and recent declines are strong. A lone old one is weak.** Someone's thesis moves; a name turned down once, long ago, is barely evidence.
-- **A decline with no reason still counts.** They unchecked it for something. Treat it as mild negative signal on that company's shape and move on — don't invent a motive for it.
 - **NEVER re-propose anything marked [LAST ROUND].** They just told you no; asking again in the very next breath is the one thing that reads as not listening.
 - **The direction OVERRIDES all of this.** If this run's direction reopens ground an old decline closed ("actually I'd look at bigger companies now", "let's revisit enterprise"), the direction wins — surface those companies again, and say in \`analysis\` that you're doing it deliberately. A past no is not a permanent ban; the user is allowed to change their mind, and refusing to follow them is its own failure.
+
+# Unanswered candidates are still on the table — carry the ones that still fit
+
+Separately from declines, you may be shown candidates the user was never asked about again: they walked away from the checklist without answering. Treat them as YOUR OWN standing proposals, not as anything the user did.
+
+- **Re-emit the ones this run's direction still supports**, reusing the name exactly as given so they resolve to the same company. They count toward the target — a carried-forward name is a real slot, not a bonus.
+- **Drop the ones it doesn't**, silently. Dropping is not a rejection and costs nothing; they can come back later.
+- Say in \`analysis\` how many you carried and how many you dropped, and why.
 
 # Direction-shape — when the user asks for a role/job-shape, return COMPANIES that fit
 
@@ -315,7 +343,7 @@ export const findCompaniesSubAgent: SubAgentDef<
   reasoning: {
     mode: "scratchpad",
     guidance:
-      "Before you name a single candidate: what does the direction actually translate to (stage band, domain, geo, any hard filter you must honor)? Did you search the web or work from knowledge, and why was that the right call here? Then go candidate by candidate — for each, WHERE it came from (a specific search result you read in this run, or your own knowledge), whether it's already on the watchlist, and any factual claim you're about to make in its reason and whether you actually read that claim or are reconstructing it. Drop the ones you can't ground; a claim you can't cite is a fabrication, not a candidate. Finish by saying where you cut the list off and why — a short on-target list is the right answer to a narrow direction, never a reason to pad.",
+      "Before you name a single candidate: what does the direction actually translate to (stage band, domain, geo, any hard filter you must honor)? Did you search the web or work from knowledge, and why was that the right call here? If anything is still on the table, go through those FIRST and say which you're carrying and which the direction rules out. Then go candidate by candidate — for each, WHERE it came from (a specific search result you read in this run, your own knowledge, or the still-on-the-table list), whether it's already on the watchlist, and any factual claim you're about to make in its reason and whether you actually read that claim or are reconstructing it. Drop the ones you can't ground; a claim you can't cite is a fabrication, not a candidate. Finish by saying where you cut the list off and why — a short on-target list is the right answer to a narrow direction, never a reason to pad.",
   },
   maxTurns: MAX_TURNS,
   system: SYSTEM_PROMPT,

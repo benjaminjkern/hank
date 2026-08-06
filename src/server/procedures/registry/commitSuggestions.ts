@@ -3,31 +3,27 @@
 //
 // Adding is the obvious half and it already had a home (`runChecklistAdd`).
 // What makes this a procedure is the other half: the search proposes, the user
-// prunes, and until now the pruning was thrown away — the declined names never
-// reached the DB, so the same company could be proposed again next run, and the
-// reason it was wrong reached nothing at all.
+// prunes, and the pruning is signal — the declined names are what stop the same
+// company coming back next run.
 //
-// A decline is the ONLY channel the user has for telling the search it was
-// wrong, so it's treated the way the shortlist board treats an override: recorded
-// against the row, relayed into the transcript, and consolidated into memory by
-// the ordinary pass — which can see the conversation around it and knows the
-// difference between a stated reason and a silent one.
-//
-// What lands in memory is the PATTERN, not the roster. "Turned down three
-// companies over ~5000 people" is a thesis refinement worth keeping; "declined
-// Databricks" is already a row in CompanySuggestion and belongs nowhere else.
+// A decline is a BIT: this name, wrong. The reason lives in the conversation
+// around it, where one sentence covers the whole batch, so the relay below puts
+// the declines in the transcript and lets the ordinary consolidation pass read
+// them together with whatever the user actually said. What lands in memory is
+// the PATTERN, not the roster — "turned down three companies over ~5000 people"
+// is a thesis refinement worth keeping; "declined Databricks" is already a row
+// in CompanySuggestion and belongs nowhere else.
 
 import { CompanySuggestionVerdict } from "@/generated/prisma/client";
-import { appendPipelineActivity } from "@/server/agent/session/appendMessages";
 import type { RunContext, TurnEvent } from "@/server/agent/contracts";
-import { narrateStatus } from "@/server/agent/session";
-import { SUGGESTION_DECLINE_LABELS } from "@/server/entities/companies/companySuggestionInputs";
+import { appendPipelineActivity } from "@/server/agent/session/appendMessages";
 import { settleSuggestions } from "@/server/entities/companies/companySuggestions";
+import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
 import {
+  promptAddMoreCompanies,
   runChecklistAdd,
   type ChecklistAddResult,
-} from "@/server/procedures/registry/enrichCompanies/runChecklistAdd";
-import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
+} from "@/server/procedures/registry/enrichCompanies";
 import type { DeclinedCompany, PickedCompany } from "@/server/widgets/parse";
 
 type CommitSuggestionsArgs = RunContext & {
@@ -36,29 +32,27 @@ type CommitSuggestionsArgs = RunContext & {
   declined: DeclinedCompany[];
 };
 
-function declineNote(
+function renderDeclineRelay(
   picked: PickedCompany[],
   declined: DeclinedCompany[],
 ): string {
-  const lines = declined.map((d) => {
-    const label = d.reason ? SUGGESTION_DECLINE_LABELS[d.reason] : null;
-    const why = [label, d.note?.trim()].filter(Boolean).join(" — ");
-    return `- ${d.name}${why ? `: ${why}` : " (no reason given)"}`;
-  });
   const kept = picked.length
     ? `kept ${picked.length} (${picked.map((p) => p.name).join(", ")})`
     : "kept none of them";
   return [
     `The user went through the companies you suggested and turned down ${declined.length} of them — ${kept}:`,
-    ...lines,
+    ...declined.map((d) => `- ${d.name}`),
     "",
-    "What they rejected says something about the shape they're actually after. A reason given once is a preference; the same reason across several is the thesis narrowing. A bare decline is still signal about that company's shape — but they didn't say why, so don't decide why for them.",
+    "They unchecked these without being asked why, so whatever reason exists is in what they've SAID, not here. If they told you what was off about the batch, that's the signal — one stated preference generalizes further than the list of names does. If they said nothing, treat it as mild negative signal on the shape of these companies and don't decide a motive for them.",
   ].join("\n");
 }
 
+// Returns nothing: this ends on a question the user owes an answer to either
+// way — the add-more prompt, or the disambiguation picker it defers to — so the
+// caller has no branch left to take.
 export async function* runCommitSuggestions(
   args: CommitSuggestionsArgs,
-): AsyncGenerator<TurnEvent, ChecklistAddResult> {
+): AsyncGenerator<TurnEvent, void> {
   const { picked, declined } = args;
 
   // Verdicts first, so they're on file even if the enrich below fails or the
@@ -75,23 +69,15 @@ export async function* runCommitSuggestions(
       ...declined.map((d) => ({
         name: d.name,
         verdict: CompanySuggestionVerdict.DECLINED,
-        ...(d.reason ? { declineReason: d.reason } : {}),
-        ...(d.note ? { declineNote: d.note } : {}),
       })),
     ],
   });
 
-  let added: ChecklistAddResult = { awaitingDisambiguation: false };
+  // The skip-all case narrates nothing: the add-more prompt below already opens
+  // with "Nothing added this round", so a line saying it too just repeats.
+  let added: ChecklistAddResult = { awaitingDisambiguation: false, added: [] };
   if (picked.length > 0) {
     added = yield* runChecklistAdd(picked, args);
-  } else {
-    // No trailing "tell me what else you're after" — the caller brings up the
-    // what's-next picker straight after, which asks that better than prose.
-    yield* narrateStatus(
-      args.sessionId,
-      "No worries — nothing added.",
-      args.runId,
-    );
   }
 
   // Only a decline is worth a consolidation pass. Keeping everything the search
@@ -103,11 +89,17 @@ export async function* runCommitSuggestions(
     // quote-grounding rule needs something in the transcript to cite).
     await appendPipelineActivity(
       args.sessionId,
-      declineNote(picked, declined),
-      { runId: args.runId },
+      renderDeclineRelay(picked, declined),
+      {
+        runId: args.runId,
+      },
     );
     await runConsolidateSessionMemory(args);
   }
 
-  return added;
+  // Ask the local question rather than leaving the user on a batch of ✓ lines —
+  // unless a disambiguation picker is already waiting on them.
+  if (!added.awaitingDisambiguation) {
+    yield* promptAddMoreCompanies(added.added, args);
+  }
 }

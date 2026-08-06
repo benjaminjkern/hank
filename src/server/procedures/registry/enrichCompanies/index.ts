@@ -18,7 +18,9 @@ export {
 export {
   runChecklistAdd,
   runDisambiguationResolution,
+  type ChecklistAddResult,
 } from "./runChecklistAdd";
+export { promptAddMoreCompanies } from "./promptAddMoreCompanies";
 export type {
   CompanyToEnrich,
   CompanyEnrichResult,
