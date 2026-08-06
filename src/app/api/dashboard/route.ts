@@ -426,8 +426,8 @@ export async function GET(req: Request) {
           : null,
         appliedAt: appliedAtByJobInteraction.get(ji.id) ?? null,
         // CLOSED/REJECTED roles are filtered off the dashboard above, so the
-        // only terminal status that reaches a lead row is DELISTED, whose
-        // date lives on Job.closedAt (no event).
+        // only terminal status that reaches a lead row is DELISTED, which dates
+        // off Job.closedAt — the global takedown date, and the authority.
         closedAt:
           ji.status === JobInteractionStatus.DELISTED
             ? (ji.job.closedAt?.toISOString() ?? null)

@@ -29,6 +29,16 @@ const GEM_RE = /^https?:\/\/jobs\.gem\.com\/([^/?#]+)/i;
 // the source of truth — grep `static.gem.com/scripts/*.v2.min.js` for
 // `oatsExternalJobPostings`/`oatsJobPostFieldsAndQuestions`/
 // `PublicQuestionFragment` and update accordingly.
+//
+// NO PAGINATION IS AVAILABLE, and this is a known blind spot rather than an
+// omission: `oatsExternalJobPostings(boardId:)` takes no paging arguments,
+// introspection is disabled, and Gem masks every GraphQL error — so an
+// invented argument name can't even be tested. The response carries no
+// pageInfo/totalCount either, which means that if Gem ever caps this list
+// server-side we get page one with NO way to detect it and therefore no
+// `truncatedAt`. Closure detection would then read the missing tail as taken
+// down. Re-probe the JS bundle for a paged query before trusting a big Gem
+// board.
 
 const GEM_GRAPHQL_URL = "https://jobs.gem.com/api/public/graphql";
 

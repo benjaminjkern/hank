@@ -19,7 +19,7 @@ const RIPPLING_RE = /^https?:\/\/ats\.rippling\.com\/([^/?#]+)\/jobs/i;
 // Questions: custom application questions live in the apply-form config behind
 // the SPA; the detail exposes only an eeocQuestionnaireEnabled flag and no public
 // questions endpoint, so questions are unsupported.
-const RIPPLING_MAX_DETAIL_JOBS = 100;
+const RIPPLING_MAX_DETAIL_JOBS = 300;
 const RIPPLING_DETAIL_CONCURRENCY = 5;
 
 type RipplingLocationObj = {

@@ -2,6 +2,7 @@
 // chat store render, plus the loader that builds it.
 
 import { prisma } from "@/server/db/prisma";
+import { CONTACT_SELECT, type ContactView } from "@/server/views/contactView";
 
 export type OpportunityStatusName =
   "OPEN" | "SCREENING" | "AWAITING" | "CLOSED";
@@ -40,19 +41,6 @@ export type OpportunityEventView = {
   notes: string | null;
 };
 
-export type OpportunityContactView = {
-  id: string;
-  name: string;
-  role: string | null;
-  agency: string | null;
-  email: string | null;
-  phone: string | null;
-  linkedinUrl: string | null;
-  channel: string | null;
-  notes: string | null;
-  companyId: string | null;
-};
-
 export type FocusedOpportunityView = {
   id: string;
   label: string;
@@ -69,8 +57,8 @@ export type FocusedOpportunityView = {
     companyId: string | null;
     companyName: string | null;
   } | null;
-  primaryContact: OpportunityContactView | null;
-  contacts: OpportunityContactView[];
+  primaryContact: ContactView | null;
+  contacts: ContactView[];
   // The pitched/discussed roles within this lead — real JobInteractions linked
   // via JobInteraction.opportunityId. Always present (may be empty for freshly-
   // created leads with no roles attached yet).
@@ -116,9 +104,9 @@ export async function getFocusedOpportunityView(
           },
         },
       },
-      primaryContact: { select: contactSelect },
+      primaryContact: { select: CONTACT_SELECT },
       opportunityContacts: {
-        select: { contact: { select: contactSelect } },
+        select: { contact: { select: CONTACT_SELECT } },
       },
       jobInteractions: {
         orderBy: [{ status: "asc" }, { createdAt: "asc" }],
@@ -168,11 +156,9 @@ export async function getFocusedOpportunityView(
     select: { content: true },
   });
 
-  const primaryContact = opp.primaryContact
-    ? toContactView(opp.primaryContact)
-    : null;
+  const primaryContact = opp.primaryContact;
   // De-dupe: primaryContact may also appear in opportunityContacts.
-  const contacts: OpportunityContactView[] = [];
+  const contacts: ContactView[] = [];
   const seen = new Set<string>();
   if (primaryContact) {
     contacts.push(primaryContact);
@@ -180,7 +166,7 @@ export async function getFocusedOpportunityView(
   }
   for (const oc of opp.opportunityContacts) {
     if (seen.has(oc.contact.id)) continue;
-    contacts.push(toContactView(oc.contact));
+    contacts.push(oc.contact);
     seen.add(oc.contact.id);
   }
 
@@ -207,7 +193,8 @@ export async function getFocusedOpportunityView(
               .find((e) => e.type === "APPLIED")
               ?.occurredAt.toISOString() ?? null)
           : null,
-      // When the role ended. DELISTED's date lives on Job.closedAt (no event);
+      // When the role ended. DELISTED dates off Job.closedAt — the global
+      // takedown date, and the authority (its JobEvent isn't fetched here);
       // CLOSED/REJECTED (withdrawals log WITHDRAWN) use the latest terminal event.
       closedAt:
         ji.status === "DELISTED"
@@ -254,46 +241,5 @@ export async function getFocusedOpportunityView(
     memoryNote: note?.content ?? null,
     createdAt: opp.createdAt.toISOString(),
     updatedAt: opp.updatedAt.toISOString(),
-  };
-}
-
-const contactSelect = {
-  id: true,
-  name: true,
-  role: true,
-  agency: true,
-  companyId: true,
-  email: true,
-  phone: true,
-  linkedinUrl: true,
-  channel: true,
-  notes: true,
-} as const;
-
-type ContactRow = {
-  id: string;
-  name: string;
-  role: string | null;
-  agency: string | null;
-  companyId: string | null;
-  email: string | null;
-  phone: string | null;
-  linkedinUrl: string | null;
-  channel: string | null;
-  notes: string | null;
-};
-
-function toContactView(c: ContactRow): OpportunityContactView {
-  return {
-    id: c.id,
-    name: c.name,
-    role: c.role,
-    agency: c.agency,
-    companyId: c.companyId,
-    email: c.email,
-    phone: c.phone,
-    linkedinUrl: c.linkedinUrl,
-    channel: c.channel,
-    notes: c.notes,
   };
 }

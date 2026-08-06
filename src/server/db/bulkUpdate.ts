@@ -51,14 +51,14 @@ import type {
 
 import { prisma } from "./prisma";
 
-// Keys are PHYSICAL table names (what SQL sees), which is why JobEvent appears
-// as `Event` — see the `@@map` in schema.prisma.
+// Keys are PHYSICAL table names (what SQL sees). Since schema.prisma carries no
+// @@map, those are identical to the Prisma model names.
 export interface Database {
   Company: Company;
   CompanyEvent: CompanyEvent;
   CompanyInteraction: CompanyInteraction;
-  Event: JobEvent;
   Job: Job;
+  JobEvent: JobEvent;
   JobInteraction: JobInteraction;
   Opportunity: Opportunity;
   OpportunityEvent: OpportunityEvent;

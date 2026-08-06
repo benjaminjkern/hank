@@ -22,7 +22,7 @@ const ORACLE_RE =
 // Questions: the apply flow is hCaptcha- + login-gated; no public questions
 // endpoint, so questions are unsupported.
 const ORACLE_PAGE_LIMIT = 50;
-const ORACLE_MAX_DETAIL_JOBS = 100;
+const ORACLE_MAX_DETAIL_JOBS = 300;
 const ORACLE_DETAIL_CONCURRENCY = 4;
 
 const oracleRest = (tenant: string, region: string) =>

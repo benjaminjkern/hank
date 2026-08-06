@@ -23,7 +23,7 @@ const AMAZON_RE = /^https?:\/\/(?:www\.)?amazon\.jobs(\/|$)/i;
 // fetchAmazonQuestions returns `unsupported`.
 const AMAZON_SEARCH_BASE = "https://www.amazon.jobs/en/search.json";
 const AMAZON_PAGE_LIMIT = 100;
-const AMAZON_MAX_JOBS = 100;
+const AMAZON_MAX_JOBS = 300;
 
 type AmazonJob = {
   id_icims?: string;

@@ -110,14 +110,27 @@ function describeOutcome(name: string, outcome: ScrapeOutcome): string {
     case "scrape_failed":
       return `scrape of ${name} failed: ${outcome.error}. Company unchanged — it keeps the roles already on file.`;
     case "no_delta":
-      return `scrape ${name}: no new postings since last scrape (board had ${outcome.totalJobs} job${outcome.totalJobs === 1 ? "" : "s"}). Status unchanged (${outcome.priorStatus}).`;
+      return `scrape ${name}: no new postings since last scrape (board had ${outcome.totalJobs} job${outcome.totalJobs === 1 ? "" : "s"}${describeTruncation(outcome.truncatedAt)}). Status unchanged (${outcome.priorStatus}).`;
     case "scraped":
       return [
-        `scrape ${name}: ${outcome.newJobInteractions} new posting${outcome.newJobInteractions === 1 ? "" : "s"} (total ${outcome.totalJobs} on board)`,
+        `scrape ${name}: ${outcome.newJobInteractions} new posting${outcome.newJobInteractions === 1 ? "" : "s"} (total ${outcome.totalJobs} on board${describeTruncation(outcome.truncatedAt)})`,
+        ...(outcome.delistedJobs > 0
+          ? [
+              `${outcome.delistedJobs} posting${outcome.delistedJobs === 1 ? "" : "s"} came down off the board and ${outcome.delistedJobs === 1 ? "was" : "were"} marked no-longer-listed`,
+            ]
+          : []),
         describePreScan(outcome.preScan),
         `lastScrapedJobsAt=${outcome.scrapeStartedAt.toISOString()}`,
       ].join("\n");
   }
+}
+
+// A capped board is a partial view, and saying "42 roles" about it is wrong.
+// Also worth Hank knowing that nothing gets marked no-longer-listed on such a
+// pass, so "their board shrank" is not a conclusion available to him here.
+function describeTruncation(truncatedAt: number | undefined): string {
+  if (truncatedAt == null) return "";
+  return ` — PARTIAL: this is the first ${truncatedAt} of a larger board, so it is not the full list, and nothing was marked no-longer-listed this pass`;
 }
 
 function describePreScan(preScan: PreScanOutcome): string {

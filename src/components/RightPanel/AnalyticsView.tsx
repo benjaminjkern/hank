@@ -526,6 +526,7 @@ type CatKey =
   | "forward"
   | "rejected_early"
   | "rejected_interview"
+  | "delisted_no_response"
   | "withdrawn";
 
 const CATEGORIES: { key: CatKey; label: string; buckets: FunnelBucket[] }[] = [
@@ -547,6 +548,14 @@ const CATEGORIES: { key: CatKey; label: string; buckets: FunnelBucket[] }[] = [
     key: "rejected_interview",
     label: "Rejected after interviewing",
     buckets: ["rejected_interview"],
+  },
+  // Sits with the rejections, not with the awaiting tiers: the posting came
+  // down and no reply ever came, which is a non-answer rather than a live
+  // application. Distinct from the two above because nobody actually said no.
+  {
+    key: "delisted_no_response",
+    label: "Posting came down, no reply",
+    buckets: ["delisted_no_response"],
   },
   { key: "withdrawn", label: "Withdrawn", buckets: ["withdrawn"] },
 ];
@@ -589,12 +598,16 @@ function catColor(theme: DefaultTheme, key: CatKey): string {
       return theme.colors.agingRed;
     case "forward":
       return theme.colors.accent;
-    // Both darkened so a definitive rejection reads distinct from a stale 2mo+
-    // red; the post-interview one is darker still, having gone further.
+    // Darkened so a definitive rejection reads distinct from a stale 2mo+ red;
+    // the post-interview one is darker still, having gone further. The
+    // posting-came-down case is LIGHTER than both — same family (no offer came
+    // of it) but nobody actually rejected you.
     case "rejected_early":
       return `color-mix(in srgb, ${theme.colors.closed}, #000 12%)`;
     case "rejected_interview":
       return `color-mix(in srgb, ${theme.colors.closed}, #000 36%)`;
+    case "delisted_no_response":
+      return `color-mix(in srgb, ${theme.colors.closed}, #fff 22%)`;
     case "withdrawn":
       return theme.colors.blocked;
   }

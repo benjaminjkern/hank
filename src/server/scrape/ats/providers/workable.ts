@@ -27,6 +27,12 @@ const WORKABLE_JOB_RE = /^https?:\/\/apply\.workable\.com\/j\/([^/?#]+)/i;
 // Each job's public URL is apply.workable.com/j/{shortcode} (note: no account
 // slug in it — that's why WORKABLE_JOB_RE is separate from the board regex).
 //
+// This endpoint ignores `limit`/`offset` and returns the whole board, so there
+// is nothing to paginate and no cap here. A paginated endpoint does exist
+// (POST /api/v3/accounts/{slug}/jobs, which reports a `total`), but its rows
+// carry NO description — switching would turn one GET into an N+1 detail
+// fan-out, which is strictly worse. Don't "fix" the missing pagination.
+//
 // Application questions: the candidate apply form (apply.workable.com/j/{code}/
 // apply) is a JS-rendered SPA, but the SPA fetches its form definition from a
 // public JSON endpoint — GET apply.workable.com/api/v1/jobs/{shortcode}/form —

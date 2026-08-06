@@ -35,6 +35,7 @@ export type FunnelBucket =
   | "offer" // moved forward
   | "rejected_early" // company said no, before any interview happened
   | "rejected_interview" // company said no, after an interview process
+  | "delisted_no_response" // posting came down while the application sat unanswered
   | "withdrawn"; // you pulled out / closed it
 
 export type Application = {
@@ -92,12 +93,35 @@ function advancementCategory(type: JobEventType): AdvancementCategory | null {
   }
 }
 
+// Statuses meaning "applied, and the company hasn't come back" — the only ones
+// a taken-down posting reinterprets. Anything further along (RESPONDED /
+// interviewing / OFFERED / REJECTED) has a real outcome that outranks the
+// posting's fate, and CLOSED means the user withdrew.
+const AWAITING_REPLY_STATUSES = new Set<JobInteractionStatus>([
+  JobInteractionStatus.APPLIED,
+  JobInteractionStatus.DEFERRED,
+]);
+
 function bucketFor(
   status: JobInteractionStatus,
   appliedAtIso: string | undefined,
   now: number,
   hadInterview: boolean,
+  postingClosed: boolean,
 ): FunnelBucket {
+  // Applied, and then the posting came down with the company never replying —
+  // a non-answer, not a live application. Two ways to land here: a rescrape
+  // stamped Job.closedAt (which leaves the row in APPLIED, since closure
+  // detection only flips the non-applied statuses), or someone set DELISTED by
+  // hand. Checked first, because otherwise the former ages through the "no
+  // response yet" tiers forever as if it were still in play and the latter
+  // falls to `withdrawn`, reading as though the user pulled out.
+  if (
+    status === JobInteractionStatus.DELISTED ||
+    (postingClosed && AWAITING_REPLY_STATUSES.has(status))
+  ) {
+    return "delisted_no_response";
+  }
   switch (status) {
     // Applied and waiting (DEFERRED = applied then paused — still no reply).
     case JobInteractionStatus.APPLIED:
@@ -218,6 +242,9 @@ export async function loadAnalytics(userId: string): Promise<AnalyticsData> {
               title: true,
               companyId: true,
               companyName: true,
+              // The global "posting taken down" date — what separates an
+              // application still in play from one whose posting vanished.
+              closedAt: true,
               company: { select: { name: true } },
             },
           },
@@ -239,6 +266,7 @@ export async function loadAnalytics(userId: string): Promise<AnalyticsData> {
         appliedAtById.get(i.id),
         now,
         hadInterviewById.has(i.id),
+        i.job.closedAt != null,
       ),
     }))
     // Most-recently-applied first, so the client's capped list shows the

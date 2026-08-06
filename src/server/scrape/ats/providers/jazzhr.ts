@@ -23,7 +23,7 @@ const JAZZHR_JOB_RE =
 //   detail:    GET {slug}.applytojob.com/apply/jobs/details/{code} → schema.org JobPosting (ld+json)
 //   questions: GET {slug}.applytojob.com/apply/get/questions/{code} → token-free Indeed-Apply JSON
 //              (screenerQuestions.questions[]; the resumator-* ids are built-in PII, skipped)
-const JAZZHR_MAX_DETAIL_JOBS = 100;
+const JAZZHR_MAX_DETAIL_JOBS = 300;
 const JAZZHR_DETAIL_CONCURRENCY = 5;
 const JAZZHR_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -161,13 +161,17 @@ async function fetchAllJazzHR(slug: string): Promise<ScrapeResult> {
     headers: { Accept: "text/html", "User-Agent": JAZZHR_UA },
   });
   if (!res.ok) return { ok: false, error: `jazzhr list ${res.error}` };
-  const codes = Array.from(
+  // The list page is complete in one response (no pagination markers exist on
+  // it), so `allCodes.length` is the true board size — which makes both the cap
+  // and a failed detail fetch visible below.
+  const allCodes = Array.from(
     new Set(
       Array.from(
         res.text.matchAll(/\/apply\/jobs\/details\/([a-zA-Z0-9]+)/g),
       ).map((mm) => mm[1]),
     ),
-  ).slice(0, JAZZHR_MAX_DETAIL_JOBS);
+  );
+  const codes = allCodes.slice(0, JAZZHR_MAX_DETAIL_JOBS);
   const jobs: ScrapedJob[] = [];
   let orgName: string | undefined;
   for (let i = 0; i < codes.length; i += JAZZHR_DETAIL_CONCURRENCY) {
@@ -192,6 +196,7 @@ async function fetchAllJazzHR(slug: string): Promise<ScrapeResult> {
         fetchedUrl: listUrl,
         pageLength: res.text.length,
         pageSnippet: res.text.slice(0, 400),
+        ...(allCodes.length > jobs.length ? { truncatedAt: jobs.length } : {}),
       },
     },
   };

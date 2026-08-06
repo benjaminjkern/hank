@@ -28,6 +28,9 @@ const TEAMTAILOR_RE = /^https?:\/\/([a-z0-9-]+)\.teamtailor\.com\//i;
 
 const TEAMTAILOR_PAGE_SIZE_HINT = 30;
 const TEAMTAILOR_MAX_PAGES = 20;
+// Job cap, so the whole scrape layer answers "how much of a board do we pull?"
+// with one number rather than a page count that happens to imply ~600 here.
+const TEAMTAILOR_MAX_JOBS = 300;
 
 const TEAMTAILOR_JOB_RE =
   /^https?:\/\/[a-z0-9-]+\.teamtailor\.com\/jobs\/(\d+)/i;
@@ -112,7 +115,11 @@ async function fetchAllTeamtailor(slug: string): Promise<ScrapeResult> {
   let firstSnippet = "";
   let nextUrl: string | undefined = base;
   let page = 1;
-  while (nextUrl && page <= TEAMTAILOR_MAX_PAGES) {
+  while (
+    nextUrl &&
+    page <= TEAMTAILOR_MAX_PAGES &&
+    items.length < TEAMTAILOR_MAX_JOBS
+  ) {
     const res = await fetchText(nextUrl, {
       headers: {
         Accept: "application/feed+json, application/json",
@@ -164,6 +171,12 @@ async function fetchAllTeamtailor(slug: string): Promise<ScrapeResult> {
         fetchedUrl: base,
         pageLength: totalBytes,
         pageSnippet: firstSnippet,
+        // The feed reports no total, so a cap hit (or a page ceiling with a
+        // next_url still pending) is the only truncation we can detect —
+        // an item that failed to parse is invisible here.
+        ...(nextUrl && items.length >= TEAMTAILOR_MAX_JOBS
+          ? { truncatedAt: jobs.length }
+          : {}),
       },
     },
   };

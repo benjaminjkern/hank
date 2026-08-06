@@ -17,7 +17,7 @@ const APPLE_RE = /^https?:\/\/jobs\.apple\.com\//i;
 // Questions: the apply flow requires an Apple ID sign-in — no public form
 // endpoint, so questions are unsupported.
 const APPLE_PAGE_SIZE = 20;
-const APPLE_MAX_JOBS = 100;
+const APPLE_MAX_JOBS = 300;
 const APPLE_DETAIL_CONCURRENCY = 5;
 
 // Extract `window.__staticRouterHydrationData = JSON.parse("<js-string>")` from a

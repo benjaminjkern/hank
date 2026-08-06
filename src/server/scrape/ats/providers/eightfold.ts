@@ -20,7 +20,7 @@ const EIGHTFOLD_RE = /^https?:\/\/([a-z0-9-]+)\.eightfold\.ai(\/|$)/i;
 // company's underlying ATS (SuccessFactors/Workday/etc., per apply_redirect_url),
 // and no Eightfold-native questions endpoint exists, so questions are unsupported.
 const EIGHTFOLD_PAGE_LIMIT = 50;
-const EIGHTFOLD_MAX_DETAIL_JOBS = 100;
+const EIGHTFOLD_MAX_DETAIL_JOBS = 300;
 const EIGHTFOLD_DETAIL_CONCURRENCY = 5;
 
 type EightfoldPosition = {

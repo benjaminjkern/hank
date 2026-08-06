@@ -27,7 +27,7 @@ const SMARTRECRUITERS_API_RE =
 // (401 without an API key), so fetchSmartRecruitersQuestions returns
 // `unsupported`.
 const SMARTRECRUITERS_PAGE_LIMIT = 100;
-const SMARTRECRUITERS_MAX_DETAIL_JOBS = 100;
+const SMARTRECRUITERS_MAX_DETAIL_JOBS = 300;
 const SMARTRECRUITERS_DETAIL_CONCURRENCY = 5;
 
 type SrLabel = { id?: string; label?: string };

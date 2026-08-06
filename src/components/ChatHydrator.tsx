@@ -20,11 +20,16 @@ export function ChatHydrator({
     (s) => s.setImpersonateSessionId,
   );
   useEffect(() => {
+    // Identity first: it RESETS the store when it changes, which would wipe a
+    // blocker seeded before it. Called unconditionally, including the `null`
+    // the app root passes — this is what tells the store which identity the
+    // mounting page wants, and both directions are client-side navigations
+    // that leave the previous identity's data in place. No-op when unchanged.
+    setImpersonateSessionId(impersonateSessionId ?? null);
     // Seed before hydrate so the modal renders on the first paint when no
     // key is on file — waiting for /api/session would let the chat surface
     // flash in unblocked for a tick.
     if (initialApiKeyBlocker) setApiKeyBlocker(initialApiKeyBlocker);
-    if (impersonateSessionId) setImpersonateSessionId(impersonateSessionId);
     void hydrate();
   }, [
     hydrate,

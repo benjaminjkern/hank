@@ -44,9 +44,15 @@ export type ScrapeDiagnostics = {
   pageLength: number;
   pageSnippet: string;
   scriptTagCount?: number;
-  // Workday: paged list endpoint caps detail-fetch at WORKDAY_MAX_DETAIL_JOBS
-  // to avoid burning minutes on huge boards. When set, the agent knows the
-  // returned list is a partial snapshot — re-scan later to roll forward.
+  // Set when `jobs` is NOT a complete snapshot of the board — either the
+  // provider's cap bit, or a detail fetch dropped a row. Value = how many jobs
+  // came back. The two causes are deliberately conflated: a dropped row is
+  // absent from the list exactly like a capped one, and both are indenting the
+  // same lie ("the board holds only these").
+  //
+  // Load-bearing beyond display: closure detection SKIPS a scrape carrying
+  // this, because the postings it never fetched would otherwise read as taken
+  // down and get delisted for every user (see detectAndApplyClosures).
   truncatedAt?: number;
 };
 

@@ -17,7 +17,7 @@ export async function flipDueInterviewsToDebrief(): Promise<void> {
       WHERE status = 'INTERVIEW_SCHEDULED'
         AND id IN (
           SELECT e."jobInteractionId"
-          FROM "Event" e
+          FROM "JobEvent" e
           WHERE e.type = 'INTERVIEW_SCHEDULED'
           GROUP BY e."jobInteractionId"
           HAVING MAX(e."occurredAt") <= NOW()

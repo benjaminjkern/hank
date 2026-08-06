@@ -40,7 +40,7 @@ const ICIMS_API_RE = /^https?:\/\/[^/?#]+\/api\/jobs(?:[?#/]|$)/i;
 // (companies on iCIMS WITHOUT the Jibe career-site front end) are NOT covered
 // here — they'd need a headless render. Those remain a deferred capability.
 const ICIMS_PAGE_LIMIT = 100;
-const ICIMS_MAX_JOBS = 100;
+const ICIMS_MAX_JOBS = 300;
 
 type IcimsJobData = {
   slug?: string;
