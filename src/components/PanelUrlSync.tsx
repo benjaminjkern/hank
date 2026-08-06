@@ -23,6 +23,17 @@ export function PanelUrlSync() {
     // the reset (dashboard) state over the admin URL.
     if (useChatStore.getState().impersonateSessionId) return;
 
+    // On mount the URL is the authority: a Back press can restore a tree whose
+    // seed named a different view, and the store survives client-side
+    // navigation, so neither is trustworthy on its own. Whenever the two
+    // disagree, pull what the address names rather than writing what the store
+    // happens to hold.
+    const state = useChatStore.getState();
+    const seeded = panelUrl(state);
+    if (seeded !== null && seeded !== window.location.pathname) {
+      void state.viewPanelPath(window.location.pathname);
+    }
+
     const unsubscribe = useChatStore.subscribe((state) => {
       const next = panelUrl(state);
       // No address for this state (an entity mode whose payload hasn't landed

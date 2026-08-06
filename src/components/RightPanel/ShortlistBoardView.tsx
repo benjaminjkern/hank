@@ -104,10 +104,10 @@ const TierCount = styled.span`
   font-family: ${({ theme }) => theme.font.mono};
 `;
 
-// The whole card opens the role — a title-only target was a small thing to hit
-// in a list this dense. It stays a div rather than a button because the stance
-// controls live inside it and a button may not nest one; the click/key handlers
-// and role/tabIndex are what make it behave like one anyway.
+// The card highlights on hover but is NOT itself a click target — navigation is
+// the explicit "View role" button in the footer. Marking a row and opening it
+// are different intents, and burying one inside the other's hit area put three
+// buttons inside a fourth.
 const RowCard = styled.div<{ $pending?: boolean }>`
   display: flex;
   flex-direction: column;
@@ -119,14 +119,9 @@ const RowCard = styled.div<{ $pending?: boolean }>`
   border-radius: ${({ theme }) => theme.radius.md};
   background: ${({ theme }) => theme.colors.bgPanel};
   min-width: 0;
-  cursor: pointer;
 
   &:hover {
     background: ${({ theme }) => theme.colors.bgHover};
-  }
-  &:focus-visible {
-    outline: 2px solid ${({ theme }) => theme.colors.accent};
-    outline-offset: 2px;
   }
 `;
 
@@ -144,10 +139,6 @@ const RowTitle = styled.span`
   color: ${({ theme }) => theme.colors.text};
   min-width: 0;
   overflow-wrap: anywhere;
-
-  ${RowCard}:hover & {
-    text-decoration: underline;
-  }
 `;
 
 const RowMeta = styled.div`
@@ -194,6 +185,25 @@ const StanceButton = styled.button<{ $active?: boolean }>`
   &:disabled {
     cursor: default;
     opacity: 0.5;
+  }
+`;
+
+// Sits at the end of the stance row: same height as the marks, text rather than
+// an icon, so "open this" reads as a different kind of action from "mark this".
+const ViewRoleButton = styled.button`
+  margin-left: auto;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  color: ${({ theme }) => theme.colors.textMuted};
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.accent};
+    color: ${({ theme }) => theme.colors.accent};
   }
 `;
 
@@ -341,17 +351,7 @@ function BoardRow({
   }
 
   return (
-    <RowCard
-      $pending={row.pending}
-      role="button"
-      tabIndex={0}
-      onClick={() => void viewJob(row.jobId)}
-      onKeyDown={(e) => {
-        if (e.key !== "Enter" && e.key !== " ") return;
-        e.preventDefault();
-        void viewJob(row.jobId);
-      }}
-    >
+    <RowCard $pending={row.pending}>
       <RowTop>
         <RowTitle>{row.title}</RowTitle>
       </RowTop>
@@ -363,9 +363,10 @@ function BoardRow({
           {row.matchReason ? ` — ${row.matchReason}` : ""}
         </ScanTag>
       )}
-      {!readOnly && row.stanceable && (
-        <StanceRow>
-          {STANCES.map((s) => (
+      <StanceRow>
+        {!readOnly &&
+          row.stanceable &&
+          STANCES.map((s) => (
             <StanceButton
               key={s.value}
               $active={stance === s.value}
@@ -380,18 +381,16 @@ function BoardRow({
                   ? `${s.label} — click again to leave it undecided`
                   : s.label
               }
-              // The card navigates; marking must not also open the role.
-              onClick={(e) => {
-                e.stopPropagation();
-                void mark(s.value);
-              }}
+              onClick={() => void mark(s.value)}
             >
               <s.Icon />
             </StanceButton>
           ))}
-          {busy && <ScanTag>saving…</ScanTag>}
-        </StanceRow>
-      )}
+        {busy && <ScanTag>saving…</ScanTag>}
+        <ViewRoleButton onClick={() => void viewJob(row.jobId)}>
+          View role →
+        </ViewRoleButton>
+      </StanceRow>
     </RowCard>
   );
 }

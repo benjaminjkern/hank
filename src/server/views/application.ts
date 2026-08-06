@@ -60,6 +60,13 @@ export type ApplicationItem = {
   // Null when nothing has ruled on it: no draft pass has run AND the widget
   // type isn't a stock field.
   verdict: DraftVerdict | null;
+  // This user described this question by hand, so they may reword it. A scraped
+  // question is what the form actually says, and someone else's wording isn't
+  // theirs to change — both render read-only.
+  addedByYou: boolean;
+  // Added by hand and not yet carried to Hank. Counts toward pendingEditCount
+  // exactly like an edited answer: the form asks something he can't see.
+  addedNotRelayed: boolean;
 };
 
 export type ApplicationView = {
@@ -163,6 +170,8 @@ export async function loadApplicationView(
         note: decision?.coverLetter?.reason ?? null,
         owned: isUserOwned(row, { kind: "cover_letter" }),
         edited: isEdited(row, { kind: "cover_letter" }),
+        addedByYou: false,
+        addedNotRelayed: false,
       }),
     );
   }
@@ -191,6 +200,8 @@ export async function loadApplicationView(
         note: verdict?.reason ?? null,
         owned: isUserOwned(row, { kind: "question", question: q.question }),
         edited: isEdited(row, { kind: "question", question: q.question }),
+        addedByYou: q.addedByUserId === userId,
+        addedNotRelayed: q.addedByUserId === userId && !q.relayedAt,
       }),
     );
   }
@@ -214,6 +225,8 @@ export async function loadApplicationView(
         note: null,
         owned: isUserOwned(row, { kind: "question", question: a.question }),
         edited: isEdited(row, { kind: "question", question: a.question }),
+        addedByYou: false,
+        addedNotRelayed: false,
       }),
     );
   }
@@ -241,7 +254,7 @@ export async function loadApplicationView(
     formEmpty: items.length === 0 && !merged.formNeverFetched,
     wantsCoverLetter: merged.formWantsCoverLetter,
     items,
-    pendingEditCount: items.filter((i) => i.edited).length,
+    pendingEditCount: items.filter((i) => i.edited || i.addedNotRelayed).length,
   };
 }
 
@@ -289,6 +302,8 @@ function buildItem(input: {
   note: string | null;
   owned: boolean;
   edited: boolean;
+  addedByYou: boolean;
+  addedNotRelayed: boolean;
 }): ApplicationItem {
   const hasText = (input.text ?? "").trim().length > 0;
   const status: ApplicationItemStatus = hasText
@@ -311,5 +326,7 @@ function buildItem(input: {
     // A reason only earns space when there's nothing written to read instead.
     note: hasText ? null : input.note?.trim() || null,
     verdict: input.verdict,
+    addedByYou: input.addedByYou,
+    addedNotRelayed: input.addedNotRelayed,
   };
 }

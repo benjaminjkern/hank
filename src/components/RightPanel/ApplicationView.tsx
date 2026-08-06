@@ -228,6 +228,13 @@ const StockRow = styled.div`
   overflow-wrap: anywhere;
 `;
 
+const RenameRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.space.xs};
+  flex-wrap: wrap;
+`;
+
 const AddRow = styled.div`
   display: flex;
   align-items: center;
@@ -536,6 +543,40 @@ function ApplicationItemCard({
     "idle" | "saving" | "saved" | "error"
   >("idle");
   const savedRef = useRef(item.text ?? "");
+  const [renamingLabel, setRenamingLabel] = useState(false);
+  const [label, setLabel] = useState(item.label);
+  const [renaming, setRenaming] = useState(false);
+
+  function cancelRename() {
+    setRenamingLabel(false);
+    setLabel(item.label);
+  }
+
+  // The question text is the key its answer is stored under, so this goes
+  // through its own endpoint — the server moves the answer with it.
+  async function renameLabel() {
+    const next = label.trim();
+    if (!next || renaming) return;
+    if (next === item.label) {
+      setRenamingLabel(false);
+      return;
+    }
+    setRenaming(true);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/application`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: item.id, question: next }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      replaceViewedApplication((await res.json()) as ApplicationViewPayload);
+      setRenamingLabel(false);
+    } catch {
+      setSaveState("error");
+    } finally {
+      setRenaming(false);
+    }
+  }
 
   // Follow the server when it changes underneath us (Hank drafted, or a
   // revision landed) — but never clobber what's being typed right now.
@@ -546,6 +587,10 @@ function ApplicationItemCard({
       setText(incoming);
     }
   }, [item.text]);
+
+  useEffect(() => {
+    setLabel(item.label);
+  }, [item.label]);
 
   async function persist(patch: { text?: string; reuse?: boolean }) {
     if (readOnly) return;
@@ -572,11 +617,37 @@ function ApplicationItemCard({
     <Item $edited={item.edited}>
       <ItemHead>
         <ItemLabel>
-          {item.label}
+          {renamingLabel ? (
+            <RenameRow>
+              <AddInput
+                autoFocus
+                value={label}
+                disabled={renaming}
+                onChange={(e) => setLabel(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void renameLabel();
+                  if (e.key === "Escape") cancelRename();
+                }}
+              />
+              <AddButton
+                onClick={() => void renameLabel()}
+                disabled={renaming || !label.trim()}
+              >
+                {renaming ? "Saving…" : "Save"}
+              </AddButton>
+              <AddButton onClick={cancelRename} disabled={renaming}>
+                Cancel
+              </AddButton>
+            </RenameRow>
+          ) : (
+            item.label
+          )}
           {item.required && <SubLabel>Required</SubLabel>}
         </ItemLabel>
         {item.edited ? (
           <Tag $tone="accent">edited · not sent yet</Tag>
+        ) : item.addedNotRelayed ? (
+          <Tag $tone="accent">added · not sent yet</Tag>
         ) : (
           tag && <Tag $tone="muted">{tag}</Tag>
         )}
@@ -585,6 +656,14 @@ function ApplicationItemCard({
       {item.source === "user" && (
         <SubLabel>
           Added by hand — Hank couldn&apos;t read this one off the form.
+          {item.addedByYou && !readOnly && !renamingLabel && (
+            <>
+              {" "}
+              <AddButton onClick={() => setRenamingLabel(true)}>
+                Reword it
+              </AddButton>
+            </>
+          )}
         </SubLabel>
       )}
       {item.note && <SubLabel>{item.note}</SubLabel>}

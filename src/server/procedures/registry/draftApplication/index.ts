@@ -40,7 +40,10 @@ import type {
 } from "@/server/subagents/registry/applicationDecider";
 
 import { critiqueAndReviseForm } from "./critiqueAndRevise";
-import { decideApplicationForm } from "./decideApplicationForm";
+import {
+  decideApplicationForm,
+  decisionCoversForm,
+} from "./decideApplicationForm";
 import { draftSingleApplicationItem } from "./draftSingleApplicationItem";
 import { ensureApplicationForm } from "./ensureApplicationForm";
 
@@ -151,10 +154,15 @@ export async function* runDraftApplication(
 
   // Step 4.5: decide once per job (cached on draftDecision). forceRedecide or
   // fresh extraContext re-runs it — the user's input can flip verdicts.
-  let decision =
+  const cached =
     args.forceRedecide || args.extraContext?.trim()
       ? null
       : ((jobInteraction?.draftDecision as ApplicationDecision | null) ?? null);
+  // A decision that predates a question (hand-added, or turned up by a
+  // re-scrape) can't speak for the whole form, so re-run rather than draft
+  // against a partial verdict set.
+  let decision =
+    cached && decisionCoversForm(cached, merged.merged) ? cached : null;
   if (!decision && (hasQuestions || formWantsCoverLetter)) {
     didWork = true;
     yield status(

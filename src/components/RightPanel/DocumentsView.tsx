@@ -583,7 +583,8 @@ function ResumeBody({
                     // Always confirm: this row is the only copy of the file.
                     hasText
                     label="Remove"
-                    title={`Remove ${r.fileName}. Your background text stays — but this is the only copy of the file.`}
+                    prompt="Delete the file? Your merged background above won't change."
+                    title={`Remove ${r.fileName}. This is the only copy of the file — the background it was folded into stays as it is.`}
                     onRemove={() => void onRemoveFile(r.id)}
                   />
                 )}

@@ -182,17 +182,22 @@ export function ConfirmRemoveButton({
   onRemove,
   label = "Remove",
   title,
+  prompt = "Delete?",
 }: {
   hasText: boolean;
   onRemove: () => void;
   label?: string;
   title?: string;
+  // What the armed state asks. Override it wherever "Delete?" understates or
+  // overstates the consequence — a resume file, for instance, is the only copy
+  // of the file but its contents already live in the merged background.
+  prompt?: string;
 }) {
   const [armed, setArmed] = useState(false);
   if (armed) {
     return (
       <ConfirmRow>
-        <ConfirmPrompt>Delete?</ConfirmPrompt>
+        <ConfirmPrompt>{prompt}</ConfirmPrompt>
         <DangerInlineButton
           onClick={() => {
             setArmed(false);

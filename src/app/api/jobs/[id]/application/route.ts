@@ -33,6 +33,7 @@ import {
 } from "@/server/entities/jobs/applicationItemId";
 import {
   addUserQuestion,
+  renameUserQuestion,
   resolveQuestionId,
 } from "@/server/entities/jobs/applicationQuestions";
 import { loadApplicationView } from "@/server/views/application";
@@ -54,6 +55,13 @@ const AddQuestionSchema = z.object({
   // answer saved against it.
   question: z.string().trim().min(1).max(2000),
   questionType: z.string().max(64).optional(),
+});
+
+// Reword a question this user added by hand. `itemId` addresses the existing
+// one; `question` is its new wording.
+const RenameQuestionSchema = z.object({
+  itemId: z.string(),
+  question: z.string().trim().min(1).max(2000),
 });
 
 export async function GET(
@@ -96,6 +104,48 @@ export async function POST(
     parsed.data.questionType,
   );
   if (!added.ok) return Response.json({ error: "not found" }, { status: 404 });
+
+  const view = await loadApplicationView(user.id, jobId);
+  if (!view) return Response.json({ error: "not found" }, { status: 404 });
+  return Response.json(view);
+}
+
+// Reword a hand-added question. Separate from PATCH because it isn't an edit to
+// an answer — it changes the KEY every answer is stored under, so it moves the
+// saved answer, Hank's baseline, and the cached verdict with it.
+export async function PUT(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const blocked = rejectImpersonatedWrite(req);
+  if (blocked) return blocked;
+  const user = await getCurrentUser();
+  const { id: jobId } = await params;
+
+  const parsed = RenameQuestionSchema.safeParse(
+    await req.json().catch(() => null),
+  );
+  if (!parsed.success) {
+    return Response.json({ error: "bad body" }, { status: 400 });
+  }
+
+  const resolved = await resolveQuestionId(jobId, parsed.data.itemId);
+  if (resolved?.kind !== "question") {
+    return Response.json({ error: "unknown item" }, { status: 404 });
+  }
+
+  const renamed = await renameUserQuestion(
+    user.id,
+    jobId,
+    resolved.text,
+    parsed.data.question.trim(),
+  );
+  if (!renamed.ok) {
+    // "not_yours" is a 403 rather than a 404: the question exists and is
+    // visible, it just isn't this user's wording to change.
+    const status = renamed.reason === "not_yours" ? 403 : 404;
+    return Response.json({ error: renamed.reason }, { status });
+  }
 
   const view = await loadApplicationView(user.id, jobId);
   if (!view) return Response.json({ error: "not found" }, { status: 404 });
