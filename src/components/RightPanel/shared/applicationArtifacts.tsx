@@ -15,7 +15,7 @@ import type {
 //
 // Writing the text itself lives on the application page
 // ([../ApplicationView.tsx](../ApplicationView.tsx)) and nowhere else — see
-// docs/application-page.md. What's here is what the Documents list and the job
+// docs/flows.md. What's here is what the Documents list and the job
 // page still need in order to show and manage an artifact they don't edit.
 
 export const Section = styled.section`

@@ -247,7 +247,7 @@ enum CompanyBlockReason {
 // It's the discovery half of what stance columns are to the shortlist board —
 // the record that makes a correction durable and feedable instead of a lost
 // click. loadFindCompaniesInput reads it back so the next search knows what was
-// already turned down and why. See docs/discovery-feedback.md.
+// already turned down and why. See docs/flows.md → Discovery flow.
 model CompanySuggestion {
   id     String @id @default(cuid())
   userId String
@@ -410,7 +410,7 @@ model JobInteraction {
   // runs on proposedVerdict vs placementVerdict, so editing back to Hank's
   // wording is a no-op rather than a change to report. Relaying (and submit)
   // re-baselines it. Null entry = the user authored that item outright.
-  // See docs/application-page.md.
+  // See docs/flows.md → Application drafting.
   proposedDrafts Json?
   // Cached application-decider output (src/server/subagents/applicationDecider.ts):
   // {questions:[{question,verdict:"draft"|"skip"|"ask_user",reason}],

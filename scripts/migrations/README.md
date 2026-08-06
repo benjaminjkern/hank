@@ -9,11 +9,25 @@ can't express: a conversion that needs app code (decrypting with the master key,
 re-running a parser, calling a sub-agent) rather than DDL. Schema changes still
 go in `prisma/migrations/` — see AGENTS.md → "Prisma schema changes".
 
-**If it can be written as SQL, it is not one of these.** A conversion that's
-expressible as `UPDATE … WHERE …` belongs in a `prisma/migrations/` entry —
+**If it can be written as SQL, it is not one of these** — and SQL can express far
+more than it looks like. Postgres has `regexp_replace`, `jsonb_array_elements`,
+`DISTINCT ON`, lateral joins, and `DO $$` blocks: string munging, JSON surgery,
+dedup, and conditional logic are all in reach. A transform you'd write in
+TypeScript because it's *more familiar* is still a `prisma/migrations/` entry —
 then `pnpm db:migrate` applies it, `_prisma_migrations` records that it ran, and
-there's one chain to track. A script here earns its place only by needing to
-pull rows into JS, transform them with app code, and write them back.
+there's one chain to track instead of two plus a gate plus an apply order that
+bites when you get it wrong.
+
+**Three things force a script; nothing else does.** Reaching for a **secret**
+(decrypting with the master key), calling **out of process** (an LLM, an HTTP
+fetch), or re-running a **parser** that only exists as app code. If you can't
+name which one applies, write the SQL.
+
+**"It has to match a TS function exactly" is not one of them.** Define the shared
+expression once as a `pg_temp` function and call it on both sides of whatever
+join needs it — then the two halves can't drift, which was the worry. Validate by
+running the migration inside `BEGIN … ROLLBACK` against real data and diffing the
+counts before shipping.
 
 ## Every script is paired with a gate migration
 
