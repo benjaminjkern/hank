@@ -115,9 +115,17 @@ export async function* runJobArm(
       yield* yieldUiEvents(
         (await buildApplicationEvents(args.userId, jobId)).events,
       );
+      // A read-back that stopped on something unresolved has to be SAID here.
+      // "Read it over and change anything that doesn't sound like you" is the
+      // line for a draft that came back clean; saying it over a known
+      // contradiction is how one ships.
+      const open = outcome.review?.open.length ?? 0;
       yield {
         type: "text",
-        text: "Your application's on the right — read it over and change anything that doesn't sound like you. Tap **I submitted ✓** once you've applied.",
+        text:
+          open > 0
+            ? `Your application's on the right. Reading it back against your résumé, ${open === 1 ? "one thing" : `${open} things`} I can't settle on my own — ${open === 1 ? "it's" : "they're"} marked against the answer${open === 1 ? "" : "s"} in question, and ${open === 1 ? "it's" : "they're"} the kind of thing only you can call. Worth a look before you send it.`
+            : "Your application's on the right — read it over and change anything that doesn't sound like you. Tap **I submitted ✓** once you've applied.",
       };
     }
   }

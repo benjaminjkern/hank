@@ -21,6 +21,12 @@ import {
   questionId,
 } from "@/server/entities/jobs/applicationItemId";
 import { loadMergedQuestions } from "@/server/entities/jobs/applicationQuestions";
+import {
+  findingsForItem,
+  readApplicationReview,
+  reviewState,
+  type ReviewState,
+} from "@/server/entities/jobs/applicationReview";
 import { isCoverLetterQuestion, isStockFieldType } from "@/server/scrape/types";
 import type {
   ApplicationDecision,
@@ -67,6 +73,10 @@ export type ApplicationItem = {
   // Added by hand and not yet carried to Hank. Counts toward pendingEditCount
   // exactly like an edited answer: the form asks something he can't see.
   addedNotRelayed: boolean;
+  // What the review couldn't settle about THIS item, in the reviewer's own
+  // words. Only a person can close these out, so they sit against the text they
+  // are about and clear when it's rewritten.
+  findings: string[];
 };
 
 export type ApplicationView = {
@@ -90,6 +100,19 @@ export type ApplicationView = {
   items: ApplicationItem[];
   // Items whose text hasn't been relayed to Hank yet.
   pendingEditCount: number;
+  // The last accuracy-and-consistency pass over the whole application. Null
+  // until one has run — which the page shows differently from a clean result,
+  // since "nobody has checked this" and "checked, nothing wrong" are not the
+  // same news.
+  review: {
+    state: ReviewState;
+    // Findings that outlived the revision rounds and aren't attached to any
+    // item still on the form — an answer the user deleted outright. They'd
+    // otherwise vanish silently.
+    orphaned: string[];
+  } | null;
+  // Open findings across every item — what submit asks about.
+  openFindingCount: number;
 };
 
 export async function loadApplicationView(
@@ -107,6 +130,7 @@ export async function loadApplicationView(
       shortAnswers: true,
       shortAnswersReuse: true,
       proposedDrafts: true,
+      applicationReview: true,
       job: {
         select: {
           id: true,
@@ -141,6 +165,7 @@ export async function loadApplicationView(
     });
   }
 
+  const review = readApplicationReview(row.applicationReview);
   const answers = readShortAnswers(row.shortAnswers);
   const reuseFlags = readReuseFlags(row.shortAnswersReuse);
   const answerByQuestion = new Map(
@@ -172,6 +197,7 @@ export async function loadApplicationView(
         edited: isEdited(row, { kind: "cover_letter" }),
         addedByYou: false,
         addedNotRelayed: false,
+        findings: findingsForItem(review, COVER_LETTER_ID).map((f) => f.note),
       }),
     );
   }
@@ -202,6 +228,7 @@ export async function loadApplicationView(
         edited: isEdited(row, { kind: "question", question: q.question }),
         addedByYou: q.addedByUserId === userId,
         addedNotRelayed: q.addedByUserId === userId && !q.relayedAt,
+        findings: findingsForItem(review, q.id).map((f) => f.note),
       }),
     );
   }
@@ -227,6 +254,9 @@ export async function loadApplicationView(
         edited: isEdited(row, { kind: "question", question: a.question }),
         addedByYou: false,
         addedNotRelayed: false,
+        findings: findingsForItem(review, questionId(a.question)).map(
+          (f) => f.note,
+        ),
       }),
     );
   }
@@ -255,6 +285,18 @@ export async function loadApplicationView(
     wantsCoverLetter: merged.formWantsCoverLetter,
     items,
     pendingEditCount: items.filter((i) => i.edited || i.addedNotRelayed).length,
+    review: review
+      ? {
+          state: reviewState(
+            review,
+            items.some((i) => i.edited),
+          ),
+          orphaned: review.open
+            .filter((f) => !items.some((i) => i.id === f.itemId))
+            .map((f) => `${f.label}: ${f.note}`),
+        }
+      : null,
+    openFindingCount: review?.open.length ?? 0,
   };
 }
 
@@ -304,6 +346,7 @@ function buildItem(input: {
   edited: boolean;
   addedByYou: boolean;
   addedNotRelayed: boolean;
+  findings: string[];
 }): ApplicationItem {
   const hasText = (input.text ?? "").trim().length > 0;
   const status: ApplicationItemStatus = hasText
@@ -328,5 +371,6 @@ function buildItem(input: {
     verdict: input.verdict,
     addedByYou: input.addedByYou,
     addedNotRelayed: input.addedNotRelayed,
+    findings: input.findings,
   };
 }

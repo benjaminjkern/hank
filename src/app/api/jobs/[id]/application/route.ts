@@ -36,6 +36,10 @@ import {
   renameUserQuestion,
   resolveQuestionId,
 } from "@/server/entities/jobs/applicationQuestions";
+import {
+  clearFindingsForItem,
+  readApplicationReview,
+} from "@/server/entities/jobs/applicationReview";
 import { loadApplicationView } from "@/server/views/application";
 import { normalizeForCompare } from "@/utils/text";
 
@@ -170,11 +174,27 @@ export async function PATCH(
 
   const existing = await prisma.jobInteraction.findUnique({
     where: { userId_jobId: { userId: user.id, jobId } },
-    select: { coverLetter: true, shortAnswers: true, shortAnswersReuse: true },
+    select: {
+      coverLetter: true,
+      shortAnswers: true,
+      shortAnswersReuse: true,
+      applicationReview: true,
+    },
   });
   if (!existing) return Response.json({ error: "not found" }, { status: 404 });
 
   const data: Prisma.JobInteractionUpdateInput = {};
+
+  // Rewriting an item settles whatever the review had open against it — the
+  // objection was to text that no longer exists. Toggling reuse doesn't: the
+  // words are unchanged, so the finding still stands.
+  if (text !== undefined) {
+    const cleared = clearFindingsForItem(
+      readApplicationReview(existing.applicationReview),
+      itemId,
+    );
+    if (cleared) data.applicationReview = cleared;
+  }
 
   if (itemId === COVER_LETTER_ID) {
     if (text !== undefined) {

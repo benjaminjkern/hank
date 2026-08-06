@@ -79,7 +79,9 @@ export async function setBoardStance(
   // as null rather than as a duplicate of his verdict. Without this, "changed
   // my mind back" would read as a standing disagreement forever.
   const userVerdict =
-    args.by === "user" && args.verdict === row.agentVerdict ? null : args.verdict;
+    args.by === "user" && args.verdict === row.agentVerdict
+      ? null
+      : args.verdict;
 
   await prisma.jobInteraction.update({
     where: { id: row.id },

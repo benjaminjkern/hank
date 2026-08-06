@@ -19,6 +19,11 @@ import { normalizeForCompare } from "@/utils/text";
 
 import { COVER_LETTER_ID, questionId } from "./applicationItemId";
 import {
+  drainSettledFindings,
+  readApplicationReview,
+  type ReviewFinding,
+} from "./applicationReview";
+import {
   markUserQuestionsRelayed,
   readStoredUserQuestions,
 } from "./userAddedQuestions";
@@ -222,6 +227,10 @@ export type ApplicationEditRelay = {
   // The hand-added questions carried by this relay, by their exact text —
   // settle stamps these relayedAt so they report once, not every message.
   addedQuestions: string[];
+  // Review findings this user answered by rewriting the item. The diff alone
+  // shows WHAT changed; pairing it with the objection shows what question the
+  // user was answering, which is the half worth remembering.
+  settledFindings: ReviewFinding[];
 };
 
 // An APPLIED row is a record, not a working surface: the user may still tidy
@@ -260,6 +269,7 @@ export async function listUnrelayedApplicationEdits(
       shortAnswers: true,
       shortAnswersReuse: true,
       proposedDrafts: true,
+      applicationReview: true,
       job: {
         select: {
           id: true,
@@ -285,7 +295,9 @@ export async function listUnrelayedApplicationEdits(
         diff: EMPTY_DIFF,
       })),
     ];
-    return edits.length === 0
+    const settledFindings =
+      readApplicationReview(r.applicationReview)?.settled ?? [];
+    return edits.length === 0 && settledFindings.length === 0
       ? []
       : [
           {
@@ -294,6 +306,7 @@ export async function listUnrelayedApplicationEdits(
             companyName: r.job.company?.name ?? null,
             edits,
             addedQuestions: added.map((q) => q.question),
+            settledFindings,
           },
         ];
   });
@@ -313,15 +326,34 @@ export async function settleRelayedApplicationEdits(
   if (relays.length === 0) return;
   const rows = await prisma.jobInteraction.findMany({
     where: { userId, jobId: { in: relays.map((r) => r.jobId) } },
-    select: { id: true, coverLetter: true, shortAnswers: true },
+    select: {
+      id: true,
+      coverLetter: true,
+      shortAnswers: true,
+      applicationReview: true,
+    },
   });
   await bulkUpdate(
     "JobInteraction",
     "id",
-    rows.map((row) => ({
-      key: row.id,
-      patch: { proposedDrafts: proposedDraftsPatch(row) as Prisma.JsonValue },
-    })),
+    rows.map((row) => {
+      // Settled findings ride this same relay, so they're spent once it lands.
+      // Only the rows that actually have some carry the column — which costs a
+      // second statement at most, since bulkUpdate groups by patch SHAPE, and
+      // blanket-writing it would erase a review that simply had nothing to drain.
+      const drained = drainSettledFindings(
+        readApplicationReview(row.applicationReview),
+      );
+      return {
+        key: row.id,
+        patch: {
+          proposedDrafts: proposedDraftsPatch(row) as Prisma.JsonValue,
+          ...(drained
+            ? { applicationReview: drained as unknown as Prisma.JsonValue }
+            : {}),
+        },
+      };
+    }),
   );
   // Added questions settle on their own marker rather than the draft baseline —
   // they live on the Job, and there's no text for a baseline to hold.
@@ -339,6 +371,10 @@ export function renderApplicationEditRelayText(
 ): string {
   const blocks = relays.map((r) => {
     const where = `${r.jobTitle}${r.companyName ? ` (${r.companyName})` : ""}`;
+    const settled = r.settledFindings.map(
+      (f) =>
+        `- ${f.label} — rewritten after the read-back raised: "${f.note}" Their new wording is the answer to it.`,
+    );
     const lines = r.edits.map((e) => {
       const verb =
         e.change === "wrote"
@@ -353,11 +389,12 @@ export function renderApplicationEditRelayText(
         ? `- ${e.label} — ${verb}`
         : `- ${e.label} — ${verb}:\n    ${renderWordDiff(e.diff)}`;
     });
-    return `${where}:\n${lines.join("\n")}`;
+    return `${where}:\n${[...lines, ...settled].join("\n")}`;
   });
   return [
     "(From the application page — the user changed this by hand since their last message.",
-    "[-cut-] and {+added+} mark what moved; text between them is unchanged.)",
+    "[-cut-] and {+added+} mark what moved; text between them is unchanged.",
+    "A line naming what the read-back raised is a question about the user that only they could settle — what they wrote back is the answer, and it holds for their other applications too.)",
     "",
     ...blocks,
   ].join("\n");

@@ -332,7 +332,9 @@ export const FIXTURES: Fixture[] = [
   },
 ];
 
-const SUB_AGENT_DESCRIPTION = `applicationCriticSubAgent is a post-draft, recruiter-lens reviewer. AFTER a job's answers are drafted, it reviews the WHOLE application at once and returns { issues[] } — an empty array IS the clean verdict — where each issue = { targets[], severity: "blocking"|"polish", kind: "contradiction"|"unsupported_claim"|"cross_application"|"jd_mismatch"|"redundancy"|"quality"|"other", note }. targets name the item(s): the literal "cover_letter" or the exact short-answer question text.
+const SUB_AGENT_DESCRIPTION = `applicationCriticSubAgent is a post-draft, recruiter-lens reviewer. AFTER a job's answers are drafted, it reviews the WHOLE application at once and returns { issues[] } — an empty array IS the clean verdict — where each issue = { targets[], severity: "blocking"|"polish", kind: "contradiction"|"unsupported_claim"|"cross_application"|"jd_mismatch"|"redundancy"|"quality"|"other", writerNote, userNote }. targets name the item(s): the literal "cover_letter" or the exact short-answer question text.
+
+Each issue is stated TWICE, for two readers. \`writerNote\` instructs the drafting agent that will redraft the item. \`userNote\` is shown to the CANDIDATE verbatim when the revision loop gives up — which is common, because many real findings turn on a fact only the person has (is that venture still running? where do they actually live?) and no rewrite can settle those.
 
 It sees ONLY what a hiring-side reviewer would: the job description, the drafted application, the candidate's résumé (ground truth for fact-checking), and the candidate's other submitted applications to the SAME company (for cross-application consistency). It gets NO user memory. It does NOT rewrite — it only critiques; a separate drafter revises.
 
@@ -344,10 +346,12 @@ const RUBRIC = `Evaluate the critic's output against the application, the inject
 - **Catches the planted problem.** For every fixture except the clean one, there is a specific planted issue (fabrication / internal contradiction — including a subtle same-fact number/duration mismatch / cross-application inconsistency / cross-artifact redundancy / generic non-answer). The critic MUST surface an issue that identifies it. Missing it — returning "clean", or flagging only something unrelated — is a fail. Check the issue's \`targets\` actually point at the right item(s); for the contradiction and redundancy fixtures BOTH items must be named.
 - **No false fabrication on the clean application.** On the clean fixture, the critic must NOT invent a blocking issue — no fake contradiction, no "unsupported" flag on a claim the résumé plainly supports. A trivial polish note is fine; a manufactured blocking issue is a fail. (Over-flagging a genuinely-clean application is as harmful as missing a real one.)
 - **Grounded in what's shown.** Every issue the critic raises must be checkable against the JD / résumé / siblings shown. Flagging a "contradiction" that isn't actually contradictory, or an "unsupported claim" the résumé does support, is a fail.
+- **Neither note shows its work.** \`userNote\` is displayed to the candidate verbatim, so a note that deliberates, checks itself, or reverses course mid-sentence ("Actually, the résumé does say 'engineering team of 5' — so this is fine. Let me re-check.") is a fail — and a reversal is doubly so, since an issue the critic argued ITSELF out of should not have been emitted at all. Same bar for \`writerNote\`. Reasoning belongs in \`analysis\`.
 
 **SHOULD (warn flags):**
 - **Right kind + severity.** Factual/contradiction/cross-application issues should be \`blocking\`; pure style/generic/redundancy issues \`polish\` (a doesn't-actually-answer issue may be either). A badly-miscategorised kind is a warn.
-- **Actionable notes.** Each note should name the specific claim/sentence and what's wrong, aimed at the writer — not vague ("could be stronger").
+- **Actionable writerNote.** It should name the specific claim/sentence and what's wrong, aimed at the writer — not vague ("could be stronger").
+- **userNote is addressed to the person and answerable by them.** Second person, plain language, no field names or severity/kind jargon, and it should end somewhere the candidate can act: what they'd confirm, correct, or decide. It states the SAME finding as \`writerNote\` — a userNote that raises a different concern is a warn.
 - **No pile-on.** Beyond the planted issue, it shouldn't manufacture several spurious extras.
 
 Anchor the rationale to the specific issues the critic returned (quote its notes) and to the specific lines of the application they're about. State plainly whether the planted problem was caught.`;
@@ -583,7 +587,9 @@ async function runOneCase(args: {
             (i, n) =>
               `${n + 1}. [${i.severity}/${i.kind}] targets=${i.targets
                 .map((t) => `"${t.slice(0, 50)}"`)
-                .join(", ")}\n   ${i.note}`,
+                .join(
+                  ", ",
+                )}\n   to writer: ${i.writerNote}\n   to user:   ${i.userNote || "(none emitted)"}`,
           )
           .join("\n")
       : "_(no issues)_";

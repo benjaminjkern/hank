@@ -398,11 +398,25 @@ model JobInteraction {
   // The application text as HANK last wrote it: {coverLetter, answers:[{question,text}]}.
   // Divergence from the live coverLetter/shortAnswers above is what marks a user
   // edit as not-yet-relayed — the same proposal-vs-what's-there test the board
-  // runs on proposedVerdict vs placementVerdict, so editing back to Hank's
-  // wording is a no-op rather than a change to report. Relaying (and submit)
+  // runs on agentVerdict vs placementVerdict, so editing back to Hank's wording
+  // is a no-op rather than a change to report. Relaying (and submit)
   // re-baselines it. Null entry = the user authored that item outright.
   // See docs/flows.md → Application drafting.
   proposedDrafts Json?
+  // What the recruiter-lens critic concluded on its LAST pass, and what it
+  // couldn't get resolved: {outcome:"clean"|"unresolved"|"error",
+  // open:[{itemId,label,note}], settled:[…]}. Null = no review has run, which is
+  // a third state the page shows differently from a clean one. Carries no
+  // timestamp on purpose — "is this still about the text on the page" is
+  // answered by divergence from proposedDrafts, not by a clock.
+  //
+  // The revision loop can only reword the page; a finding like "the letter says
+  // this venture ended, the resume lists it as current" turns on a fact only the
+  // user has. So what the loop gives up on is persisted here rather than
+  // discarded, `open` notes are the critic's user-facing wording, and editing an
+  // item drops its entries (the objection was to text that no longer exists).
+  // See docs/flows.md → Application drafting.
+  applicationReview Json?
   // Cached application-decider output (src/server/subagents/applicationDecider.ts):
   // {questions:[{question,verdict:"draft"|"skip"|"ask_user",reason}],
   //  coverLetter?:{verdict,reason}, decidedAt}. Re-decided only when null. See

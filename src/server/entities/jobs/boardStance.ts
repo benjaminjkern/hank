@@ -59,7 +59,9 @@ export function isOverridden(row: StancedRow): boolean {
 }
 
 // On the board at all: someone has a verdict, or it's drawn somewhere.
-export function isOnBoard(row: StancedRow & { placementVerdict: ProposedVerdict | null }): boolean {
+export function isOnBoard(
+  row: StancedRow & { placementVerdict: ProposedVerdict | null },
+): boolean {
   return liveVerdict(row) !== null || row.placementVerdict !== null;
 }
 
