@@ -12,6 +12,8 @@ The loop runs distinct phases: **discovery** (build the watchlist; enrich = basi
 
 **`nameKey` is the identity** — `slugify` of the name minus any trailing `(Division)` qualifier, since the search likes to emit "The Trade Desk (Client Partnerships)" and without stripping one company keeps two histories. Corporate-suffix variants ("Evertune AI" vs "Evertune") deliberately do NOT merge: folding those would join genuinely different companies ("Scale" / "Scale AI"), and a wrong merge suppresses something the user never declined — worse than a wrong split, which only costs a repeat question.
 
+**Adding is a step, not a destination** — the checklist submission returns `consumed`, so once the ✓ lines land the runner falls through to the what's-next picker. The one exception is a disambiguation picker still awaiting an answer, which stays `terminal` so two widgets never stack.
+
 **Layer B — the enrich batch.** Picked/named companies → `create_companies` stubs → enrich. Both the top-level `company_checklist` dispatch ([`runChecklistAdd`](../src/server/procedures/registry/enrichCompanies/runChecklistAdd.ts)) and the `enrich_companies` tool route through one shared bounded-batch primitive (no per-company loop).
 
 **Enrichment is IDENTITY only — it does not scrape.** It answers "who is this company": canonical name, one-line description, careers/ATS URL, verified logo. Open roles are pulled in later, by the walkthrough on entry or an explicit `scrape_jobs_for_company`. So an added company lands at `NEW` with no roles, and `whats_next`'s backlog is what surfaces it (`loadBacklog` loads `READY` then `NEW`). Folding the scrape in here is what made five near-identical enrich paths drift apart.

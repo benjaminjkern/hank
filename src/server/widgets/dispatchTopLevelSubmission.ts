@@ -71,17 +71,22 @@ export async function* dispatchTopLevelSubmission(
       runId,
       leadingBlocks: await buildPanelEditBlocks(userId),
     });
-    yield* runCommitSuggestions({
+    const added = yield* runCommitSuggestions({
       ...args,
       picked: checklistSubmission.picked,
       declined: checklistSubmission.declined,
     });
-    return { kind: "terminal" };
+    // Growing the watchlist is a step, not a destination — so unless a
+    // disambiguation picker is sitting there unanswered, fall through to
+    // what's next rather than leaving the user on a batch of ✓ lines.
+    return added.awaitingDisambiguation
+      ? { kind: "terminal" }
+      : { kind: "consumed" };
   }
 
   // The user resolved a name collision the URL hunter flagged during a checklist
-  // add. Commit each chosen board + scrape + prescan, narrate ✓. Terminal like
-  // the checklist add.
+  // add. Commit each chosen board + scrape + prescan, narrate ✓ — then what's
+  // next, since this is the tail of the same add and nothing is left pending.
   const disambiguationSubmission =
     parseCompanyDisambiguationSubmission(userMessage);
   if (disambiguationSubmission) {
@@ -90,7 +95,7 @@ export async function* dispatchTopLevelSubmission(
       leadingBlocks: await buildPanelEditBlocks(userId),
     });
     yield* runDisambiguationResolution(disambiguationSubmission.resolved, args);
-    return { kind: "terminal" };
+    return { kind: "consumed" };
   }
 
   // The between-things "what's next" picker. The submission already encodes the

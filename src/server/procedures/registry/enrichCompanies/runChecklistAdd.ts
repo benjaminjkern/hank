@@ -8,8 +8,10 @@
 // backlog picks them up.
 //
 // Fully conversational: no add_more_companies widget at the end — the ✓ lines
-// are the narration and the user just keeps chatting. A disambiguation picker is
-// the one exception, because it's a genuine wait-for-user question.
+// are the narration, and the caller brings up what's next. A disambiguation
+// picker is the one exception: it's a genuine wait-for-user question, so it's
+// reported back and the caller stops rather than stacking another widget under
+// an unanswered one.
 
 import { Role } from "@/generated/prisma/client";
 import type { Prisma } from "@/generated/prisma/client";
@@ -90,10 +92,14 @@ function lineFor(result: CompanyEnrichResult): string | null {
   }
 }
 
+// `awaitingDisambiguation` = a picker is on screen and owes an answer, so the
+// caller must not follow it with anything.
+export type ChecklistAddResult = { awaitingDisambiguation: boolean };
+
 export async function* runChecklistAdd(
   picks: PickedCompany[],
   args: ChecklistAddArgs,
-): AsyncGenerator<TurnEvent> {
+): AsyncGenerator<TurnEvent, ChecklistAddResult> {
   // Create stubs first (dedupe-aware), then enrich the fresh ones. Each pick's
   // disambiguation context (suggestion reasoning) + captured board URL ride
   // through createCompanyStubs onto the outcome so the enrich step can forward
@@ -125,7 +131,7 @@ export async function* runChecklistAdd(
         : `Those are already on your list.`,
       args.runId,
     );
-    return;
+    return { awaitingDisambiguation: false };
   }
 
   const willRun = toEnrich.length;
@@ -183,7 +189,9 @@ export async function* runChecklistAdd(
     yield* persistWidget(args, "company_disambiguation", {
       companies: ambiguous,
     });
+    return { awaitingDisambiguation: true };
   }
+  return { awaitingDisambiguation: false };
 }
 
 // Resolve the user's disambiguation picks: commit the chosen board URL through

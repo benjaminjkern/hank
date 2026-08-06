@@ -23,7 +23,10 @@ import type { RunContext, TurnEvent } from "@/server/agent/contracts";
 import { narrateStatus } from "@/server/agent/session";
 import { SUGGESTION_DECLINE_LABELS } from "@/server/entities/companies/companySuggestionInputs";
 import { settleSuggestions } from "@/server/entities/companies/companySuggestions";
-import { runChecklistAdd } from "@/server/procedures/registry/enrichCompanies/runChecklistAdd";
+import {
+  runChecklistAdd,
+  type ChecklistAddResult,
+} from "@/server/procedures/registry/enrichCompanies/runChecklistAdd";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
 import type { DeclinedCompany, PickedCompany } from "@/server/widgets/parse";
 
@@ -55,7 +58,7 @@ function declineNote(
 
 export async function* runCommitSuggestions(
   args: CommitSuggestionsArgs,
-): AsyncGenerator<TurnEvent> {
+): AsyncGenerator<TurnEvent, ChecklistAddResult> {
   const { picked, declined } = args;
 
   // Verdicts first, so they're on file even if the enrich below fails or the
@@ -78,12 +81,15 @@ export async function* runCommitSuggestions(
     ],
   });
 
+  let added: ChecklistAddResult = { awaitingDisambiguation: false };
   if (picked.length > 0) {
-    yield* runChecklistAdd(picked, args);
+    added = yield* runChecklistAdd(picked, args);
   } else {
+    // No trailing "tell me what else you're after" — the caller brings up the
+    // what's-next picker straight after, which asks that better than prose.
     yield* narrateStatus(
       args.sessionId,
-      "No worries — nothing added. Tell me what else you're after whenever you like.",
+      "No worries — nothing added.",
       args.runId,
     );
   }
@@ -102,4 +108,6 @@ export async function* runCommitSuggestions(
     );
     await runConsolidateSessionMemory(args);
   }
+
+  return added;
 }
