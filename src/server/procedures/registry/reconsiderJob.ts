@@ -16,13 +16,15 @@
 import {
   JobEventType,
   JobInteractionStatus,
-  type ProposedBy,
   ProposedVerdict,
 } from "@/generated/prisma/client";
 import type { RunContext } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
 import { logJobEvent } from "@/server/entities/jobs/logJobEvents";
-import { setProposedStance } from "@/server/entities/jobs/setProposedStance";
+import {
+  setBoardStance,
+  type BoardStanceMove,
+} from "@/server/entities/jobs/setBoardStance";
 import { isStanceable } from "@/server/entities/jobs/shortlistPool";
 import {
   runEnrichJobBody,
@@ -50,7 +52,7 @@ export async function runReconsiderJob(
     // Null clears the row back to undecided.
     verdict: ProposedVerdict | null;
     reason: string | null;
-    by: ProposedBy;
+    by: BoardStanceMove["by"];
   },
 ): Promise<ReconsiderJobResult> {
   const row = await prisma.jobInteraction.findUnique({
@@ -84,12 +86,12 @@ export async function runReconsiderJob(
     });
   }
 
-  const stance = await setProposedStance({
+  const stance = await setBoardStance({
     userId: args.userId,
     jobId: args.jobId,
-    verdict: args.verdict,
-    reason: args.reason,
-    by: args.by,
+    ...(args.by === "agent"
+      ? ({ by: "agent", verdict: args.verdict, reason: args.reason } as const)
+      : ({ by: "user", verdict: args.verdict } as const)),
     // A role just pulled in wasn't on the board a moment ago, so there's no
     // "where it was" to hold it in — landing in the chosen group IS the
     // feedback for the click. Every other mark leaves placement alone.

@@ -10,13 +10,17 @@
 import {
   CompanyEventType,
   JobEventType,
+  MatchBucket,
   JobInteractionStatus,
-  ProposedBy,
   ProposedVerdict,
 } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import {
+  isOnBoard,
+  roundStartedAt,
+  isOverridden,
   isPending,
+  liveVerdict,
   placedVerdict,
   STANCE_WORDS,
   type PlaceableRow,
@@ -52,36 +56,6 @@ const SHORTLIST_BOARD_TIERS: ShortlistBoardTier[] = [
   "filteredThisRound",
 ];
 
-// When the round that produced the current board began. Closes at or after it
-// are this round's automatic filtering; older ones belong to rounds the user
-// already worked through, so they stay off the board.
-//
-// The board pull is the natural start (prescan runs on what the scrape just
-// brought in), and a commit ends a round — so whichever is later wins. Null
-// when the company has never been scraped: nothing to anchor on, so nothing
-// closed is shown.
-async function roundStartedAt(
-  userId: string,
-  companyId: string,
-): Promise<Date | null> {
-  const [interaction, lastCommit] = await Promise.all([
-    prisma.companyInteraction.findUnique({
-      where: { userId_companyId: { userId, companyId } },
-      select: { lastScrapedJobsAt: true },
-    }),
-    prisma.companyEvent.findFirst({
-      where: { userId, companyId, type: CompanyEventType.SHORTLIST_RAN },
-      orderBy: { occurredAt: "desc" },
-      select: { occurredAt: true },
-    }),
-  ]);
-  const scraped = interaction?.lastScrapedJobsAt ?? null;
-  const committed = lastCommit?.occurredAt ?? null;
-  if (!scraped) return committed;
-  if (!committed) return scraped;
-  return scraped > committed ? scraped : committed;
-}
-
 export type ShortlistBoardRow = {
   jobId: string;
   jobSlug: string | null;
@@ -91,23 +65,28 @@ export type ShortlistBoardRow = {
   employmentType: string | null;
   sourceUrl: string | null;
   status: JobInteractionStatus;
-  // The scan pass's original read — shown as a secondary line on pool rows so
-  // the negotiated stance and the machine's prior stay distinguishable.
-  matchBucket: string | null;
-  matchReason: string | null;
   // The one-line rationale for the row: the stance reason while a negotiation
   // is open, otherwise the deferNote a commit left on a set-aside role.
   reason: string | null;
+  // The scan pass's read, ONLY when it contradicts where the row ended up.
+  // Null on the ordinary agreeing row — the shortlist reason is written later
+  // and with more context, so repeating the earlier one just doubles the row.
+  scanDissent: string | null;
   // The LIVE stance — what the panel shows selected. Null = undecided.
   // Distinct from the row's tier, which follows `placementVerdict`.
   verdict: ProposedVerdict | null;
+  // Hank's proposal, populated ONLY where the user overruled it — so the
+  // disagreement is visible without labelling every untouched row "Hank:".
+  overriddenAgentVerdict: ProposedVerdict | null;
+  overriddenAgentReason: string | null;
   // The user re-marked this row and hasn't sent a message yet, so it's drawn
   // under its old group with the new mark selected.
   pending: boolean;
-  // Who last set the stance.
-  proposedBy: ProposedBy | null;
   // Whether the panel offers the stance buttons on this row.
   stanceable: boolean;
+  // Whether the panel offers "actually, consider this" — filtered rows only,
+  // and only while the round is open.
+  revivable: boolean;
 };
 
 export type ShortlistBoardTierRows = {
@@ -127,6 +106,24 @@ export type ShortlistBoardView = {
   pendingEdits: number;
   tiers: ShortlistBoardTierRows[];
 };
+
+// The first read only earns a line when it genuinely contradicts the stance —
+// two steps apart on the same axis. A POSSIBLE bucket contradicts nothing, and
+// one step (STRONG demoted to borderline) is ordinary re-ranking, not a
+// disagreement worth a second line on every row.
+function scanDissent(
+  bucket: MatchBucket | null,
+  verdict: ProposedVerdict | null,
+): string | null {
+  if (!bucket || !verdict) return null;
+  if (bucket === MatchBucket.STRONG && verdict === ProposedVerdict.PASS) {
+    return "The first read called this a strong match.";
+  }
+  if (bucket === MatchBucket.WEAK && verdict === ProposedVerdict.PICK) {
+    return "The first read called this a stretch.";
+  }
+  return null;
+}
 
 function tierFor(row: PlaceableRow): ShortlistBoardTier {
   if (row.status === JobInteractionStatus.CLOSED) return "filteredThisRound";
@@ -189,10 +186,10 @@ export async function loadShortlistBoard(
     },
     select: {
       status: true,
-      proposedVerdict: true,
+      agentVerdict: true,
+      agentReason: true,
+      userVerdict: true,
       placementVerdict: true,
-      proposedReason: true,
-      proposedBy: true,
       deferReason: true,
       deferNote: true,
       closeNote: true,
@@ -217,15 +214,13 @@ export async function loadShortlistBoard(
   // A proposal is on the table iff some row carries a stance. Committing clears
   // them all, which is what CLOSES the board: nothing is editable afterwards,
   // because the decision has been made and re-opening it is a fresh round.
-  const open = rows.some(
-    (r) => r.proposedVerdict !== null || r.placementVerdict !== null,
-  );
+  const open = rows.some(isOnBoard);
 
   const byTier = new Map<ShortlistBoardTier, ShortlistBoardRow[]>();
   let pendingEdits = 0;
   for (const r of rows) {
     const tier = tierFor(r);
-    const onBoard = r.proposedVerdict !== null || r.placementVerdict !== null;
+    const onBoard = isOnBoard(r);
     const pending = isPending(r);
 
     if (pending) pendingEdits++;
@@ -233,7 +228,7 @@ export async function loadShortlistBoard(
       r.status === JobInteractionStatus.CLOSED
         ? r.closeNote
         : onBoard
-          ? r.proposedReason
+          ? r.agentReason
           : r.status === JobInteractionStatus.DEFERRED
             ? r.deferNote
             : null;
@@ -247,16 +242,23 @@ export async function loadShortlistBoard(
       employmentType: r.job.employmentType,
       sourceUrl: r.job.sourceUrl,
       status: r.status,
-      matchBucket: r.matchBucket,
-      matchReason: r.matchReason,
+      // Only when the first read CONTRADICTS where the row ended up. Agreement
+      // is the boring case and repeating it doubles every row.
+      scanDissent: scanDissent(r.matchBucket, liveVerdict(r)),
       reason,
-      verdict: r.proposedVerdict,
+      verdict: liveVerdict(r),
+      // Hank's side, shown only when the user has overruled him — on an
+      // untouched row his reason IS the row's reason, above.
+      overriddenAgentVerdict: isOverridden(r) ? r.agentVerdict : null,
+      overriddenAgentReason: isOverridden(r) ? r.agentReason : null,
       pending,
-      proposedBy: onBoard ? r.proposedBy : null,
       // Only while a proposal is open: a committed board is a record, not a
       // working surface. Changing a decided role is a conversation with Hank
       // ("actually, close that one"), not a click here.
       stanceable: open && isStanceable(r.status),
+      // The filtered tail is correctable for exactly as long as the round is —
+      // committing closes that door with the rest of the board.
+      revivable: open && r.status === JobInteractionStatus.CLOSED,
     });
     byTier.set(tier, list);
   }
@@ -319,9 +321,10 @@ export function renderShortlistBoardText(
         // rather than letting the grouping imply a stance the user changed.
         row.pending
           ? `the user just marked this ${row.verdict ? STANCE_WORDS[row.verdict] : "undecided"}`
-          : row.proposedBy === ProposedBy.USER
-            ? "set by the user"
+          : row.overriddenAgentVerdict
+            ? `the user overruled your ${STANCE_WORDS[row.overriddenAgentVerdict]}`
             : null,
+        row.scanDissent,
       ].filter(Boolean);
       lines.push(
         `  - ${row.title}${bits.length ? ` (${bits.join(", ")})` : ""}${row.reason ? ` — ${row.reason}` : ""}`,

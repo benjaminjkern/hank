@@ -3,7 +3,7 @@
 // Stances only — no status changes, no events; commit_shortlist is where the
 // board becomes real (entities/companies/commitShortlist.ts).
 
-import { ProposedBy, ProposedVerdict } from "@/generated/prisma/client";
+import { ProposedVerdict } from "@/generated/prisma/client";
 import { bulkUpdate, type Database } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
 import { shortlistPoolStatusWhere } from "@/server/entities/jobs/shortlistPool";
@@ -131,14 +131,13 @@ export async function seedBoardStances(args: {
     patches.push({
       key: interactionId,
       patch: {
-        proposedVerdict: verdict,
+        agentVerdict: verdict,
         // A seed PLACES as it stances — the board is being drawn fresh, so
         // there is no earlier grouping to hold rows in. Only a user's later
-        // mark leaves placement behind (see setProposedStance).
+        // mark leaves placement behind (see setBoardStance).
         placementVerdict: verdict,
-        proposedReason: args.picks.reasons[c.id] ?? null,
-        proposedBy: ProposedBy.HANK,
-        proposedAt: now,
+        agentReason: args.picks.reasons[c.id] ?? null,
+        stanceAt: now,
       },
     });
   }

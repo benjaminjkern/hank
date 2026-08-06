@@ -3,7 +3,6 @@ import {
   JobCloseReason,
   JobDeferReason,
   JobInteractionStatus,
-  ProposedBy,
   ProposedVerdict,
 } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
@@ -74,10 +73,10 @@ const scenario: Scenario = {
         closeNote: true,
         deferReason: true,
         deferNote: true,
-        proposedVerdict: true,
-        proposedReason: true,
-        proposedBy: true,
-        proposedAt: true,
+        agentVerdict: true,
+        agentReason: true,
+        userVerdict: true,
+        stanceAt: true,
       },
     });
     const beforeCompany = await prisma.companyInteraction.findUniqueOrThrow({
@@ -92,10 +91,9 @@ const scenario: Scenario = {
           prisma.jobInteraction.update({
             where: { userId_jobId: { userId: USER_ID, jobId } },
             data: {
-              proposedVerdict: stanceFor(i),
-              proposedReason: `scenario stance ${i}`,
-              proposedBy: ProposedBy.HANK,
-              proposedAt: new Date(),
+              agentVerdict: stanceFor(i),
+              agentReason: `scenario stance ${i}`,
+              stanceAt: new Date(),
             },
           }),
         ),
@@ -115,7 +113,8 @@ const scenario: Scenario = {
           closeReason: true,
           deferReason: true,
           deferNote: true,
-          proposedVerdict: true,
+          agentVerdict: true,
+          userVerdict: true,
         },
       });
       const byId = new Map(after.map((j) => [j.jobId, j]));
@@ -138,7 +137,7 @@ const scenario: Scenario = {
         );
       });
       const stancesCleared = allJobIds.every(
-        (id) => byId.get(id)?.proposedVerdict === null,
+        (id) => byId.get(id)?.agentVerdict === null,
       );
       const postCompany = await prisma.companyInteraction.findUniqueOrThrow({
         where: { userId_companyId: { userId: USER_ID, companyId } },
@@ -187,10 +186,10 @@ const scenario: Scenario = {
               closeNote: j.closeNote,
               deferReason: j.deferReason,
               deferNote: j.deferNote,
-              proposedVerdict: j.proposedVerdict,
-              proposedReason: j.proposedReason,
-              proposedBy: j.proposedBy,
-              proposedAt: j.proposedAt,
+              agentVerdict: j.agentVerdict,
+              agentReason: j.agentReason,
+              userVerdict: j.userVerdict,
+              stanceAt: j.stanceAt,
             },
           }),
         ),

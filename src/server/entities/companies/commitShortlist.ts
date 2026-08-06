@@ -48,8 +48,9 @@ export async function commitShortlist(args: {
       jobId: true,
       status: true,
       deferReason: true,
-      proposedVerdict: true,
-      proposedReason: true,
+      agentVerdict: true,
+      agentReason: true,
+      userVerdict: true,
     },
   });
   if (rows.length === 0) return { ok: false, code: "NO_OPEN_BOARD" };
@@ -63,19 +64,20 @@ export async function commitShortlist(args: {
     data: Prisma.JobInteractionUncheckedUpdateInput;
   }> = [];
   const clearStance = {
-    proposedVerdict: null,
+    agentVerdict: null,
+      userVerdict: null,
     placementVerdict: null,
-    proposedReason: null,
-    proposedBy: null,
-    proposedAt: null,
+    agentReason: null,
+    stanceAt: null,
   };
 
   let picked = 0;
   let setAside = 0;
   let closed = 0;
   for (const row of rows) {
-    const reason = row.proposedReason;
-    switch (row.proposedVerdict) {
+    // The user's override when they made one, otherwise Hank's proposal.
+    const reason = row.agentReason;
+    switch (row.userVerdict ?? row.agentVerdict) {
       case ProposedVerdict.PICK: {
         picked++;
         if (row.status === JobInteractionStatus.SHORTLISTED) {

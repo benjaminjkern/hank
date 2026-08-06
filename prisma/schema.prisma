@@ -386,21 +386,27 @@ model JobInteraction {
   // Populated when status=DEFERRED ("could apply, outranked now"); cleared on exit.
   deferReason  JobDeferReason?
   deferNote    String?
-  // Shortlist-board stance — the negotiated pre-commit verdict. Non-null on any
-  // row while a negotiation is open at its company; all cleared when the board
+  // Shortlist-board stance — the negotiated pre-commit verdict, split by WHO
+  // holds it so neither side can overwrite the other. All cleared when the board
   // is committed (commit_shortlist maps PICK→SHORTLISTED,
-  // BORDERLINE→DEFERRED/OUTRANKED, PASS→CLOSED). proposedBy = who last moved
-  // it; null proposedVerdict on an open board = undecided. See
-  // docs/flows.md (shortlist).
-  proposedVerdict ProposedVerdict?
-  proposedReason  String?
-  proposedBy      ProposedBy?
-  proposedAt      DateTime?
-  // Which group the board DISPLAYS this row under. Diverges from
-  // proposedVerdict only between a user's panel edit and their next chat
-  // message: their marks stay put (pending) until that message relays them to
-  // Hank, which is what stops rows from jumping tier mid-review. Hank's own
-  // moves set both, so a difference always means "unrelayed user edit".
+  // BORDERLINE→DEFERRED/OUTRANKED, PASS→CLOSED). See docs/flows.md (shortlist).
+  //
+  // agentVerdict/agentReason are Hank's proposal and ONLY Hank writes them, so
+  // his rationale survives the user disagreeing with it.
+  agentVerdict ProposedVerdict?
+  agentReason  String?
+  // The user's override. **Null means "I accept Hank's"** — which is what makes
+  // marking a row back to what he proposed restore his reason for free, instead
+  // of leaving it destroyed. The live stance is `userVerdict ?? agentVerdict`;
+  // the two differing is a disagreement worth showing.
+  userVerdict ProposedVerdict?
+  // When the live stance last moved, either side. Orders the edit relay.
+  stanceAt    DateTime?
+  // Which group the board DISPLAYS this row under. Diverges from the live stance
+  // only between a user's panel edit and their next chat message: their marks
+  // stay put (pending) until that message relays them to Hank, which is what
+  // stops rows from jumping tier mid-review. Hank's own moves set both, so a
+  // difference always means "unrelayed user edit".
   placementVerdict ProposedVerdict?
   coverLetter  String?
   shortAnswers Json? // [{question, answer}]
@@ -496,11 +502,6 @@ enum ProposedVerdict {
   PASS // recommended: don't apply — closes the role at commit
 }
 
-// Who last set a board stance. What the board renders and what the edit relay reports.
-enum ProposedBy {
-  HANK
-  USER
-}
 
 // How a JobInteraction reached APPLIED (set on the APPLIED event; null for legacy).
 // RECRUITER = anyone mediating the apply; REFERRAL = a contact pointed them at it;
@@ -544,6 +545,7 @@ enum JobEventType {
   REJECTED
   WITHDRAWN
   DEFERRED // job deferred ("could apply, outranked now") — replaces the old bare NOTE
+  REVIVED // user overruled an automatic close and put the role back in the running
   DELISTED // posting taken down (per-user projection of Job.closedAt)
   DRAFT_USED // LEGACY tombstone — no longer emitted (usage lives on JobInteraction.*UsedAt); historical rows only
   NOTE

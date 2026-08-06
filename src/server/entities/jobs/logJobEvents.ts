@@ -199,13 +199,13 @@ export async function planJobEvents(
     // Stance clear-on-transition: a status change ends whatever the shortlist
     // board proposed for this row — the stance belongs to the negotiation the old
     // status was part of. Board writers that manage the stance themselves (the
-    // commit) pass proposed* fields explicitly, which suppresses the default.
-    if (update.status !== undefined && !("proposedVerdict" in update)) {
-      update.proposedVerdict = null;
+    // commit) pass the stance fields explicitly, which suppresses the default.
+    if (update.status !== undefined && !("agentVerdict" in update)) {
+      update.agentVerdict = null;
+      update.agentReason = null;
+      update.userVerdict = null;
       update.placementVerdict = null;
-      update.proposedReason = null;
-      update.proposedBy = null;
-      update.proposedAt = null;
+      update.stanceAt = null;
     }
 
     if (Object.keys(update).length > 0) {

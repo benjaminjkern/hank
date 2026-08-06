@@ -387,6 +387,7 @@ type Actions = {
   // immediately — the board is DB truth), refreshes the board payload, and
   // bumps the pending-edit chip. The relay to Hank is server-derived at the
   // next send; this never touches the composer.
+  reviveFilteredJob: (companyId: string, jobId: string) => Promise<void>;
   editShortlistBoard: (
     companyId: string,
     jobId: string,
@@ -1017,6 +1018,33 @@ export const useChatStore = create<State & Actions>((set, get) => ({
         panelMovedBy: "user",
         pendingBoardEditCount: data.pendingEdits,
       });
+    } catch {
+      // ignore
+    }
+  },
+
+  // "Actually, consider this" on a row the automatic filtering closed. Not a
+  // fourth stance: it un-closes the row, which lands it back in the pool
+  // unmarked, and the ordinary marks take over from there.
+  async reviveFilteredJob(companyId, jobId) {
+    if (get().impersonateSessionId) return;
+    try {
+      const res = await fetch(
+        `/api/companies/${companyId}/shortlist-board/edit`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId, action: "revive" }),
+        },
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as ShortlistBoardView;
+      set((s) => ({
+        pendingBoardEditCount: data.pendingEdits,
+        ...(s.viewedBoard?.companyId === companyId
+          ? { viewedBoard: data }
+          : {}),
+      }));
     } catch {
       // ignore
     }
