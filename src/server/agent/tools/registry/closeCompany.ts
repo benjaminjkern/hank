@@ -28,6 +28,8 @@ export const closeCompanyTool: ToolDef<{
       reason: {
         type: "string",
         enum: COMPANY_CLOSE_REASONS as readonly string[] as string[],
+        description:
+          "Why this whole EMPLOYER is a dead end. NOT_A_MATCH = the company or its domain is off-thesis. LOCATION_MISMATCH = everything they post is somewhere the user can never take. OTHER = anything else (put it in the note). These are COMPANY-level values: the same three names on close_job mean that one role. There is deliberately no USER_REJECTED here — a user passing on a specific role is close_job.",
       },
       note: {
         type: "string",

@@ -207,8 +207,8 @@ export function CompanyChecklistWidget({ payload }: Props) {
     >
       {payload.provenance && <Provenance>{payload.provenance}</Provenance>}
       <Meta>
-        Uncheck any you don&apos;t want — say why if you like, and I&apos;ll stop
-        surfacing that kind.
+        Uncheck any you don&apos;t want — say why if you like, and I&apos;ll
+        stop surfacing that kind.
       </Meta>
       <SuggestionList>
         {payload.suggestions.map((s) => {

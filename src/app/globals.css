@@ -50,6 +50,61 @@ html:not([data-theme]) ::selection {
   background: rgba(161, 109, 255, 0.4);
 }
 
+/* Scrollbars. The browser default thumb is near-invisible against the dark
+   panel backgrounds, so both themes get an explicit one. Two syntaxes because
+   they're mutually exclusive: Firefox reads `scrollbar-color`, WebKit/Blink
+   read the pseudo-elements and ignore it. Colors mirror theme.borderStrong /
+   theme.textSubtle — keep in sync. */
+* {
+  scrollbar-width: thin;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  /* Inset via a transparent border + background-clip so the thumb reads as a
+     rounded pill with breathing room rather than filling the gutter edge to
+     edge. */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+html[data-theme="dark"] * {
+  scrollbar-color: #3a3a44 transparent;
+}
+html[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background-color: #3a3a44;
+}
+html[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background-color: #6a6a73;
+}
+html[data-theme="light"] * {
+  scrollbar-color: #cdcdd5 transparent;
+}
+html[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background-color: #cdcdd5;
+}
+html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background-color: #8a8a94;
+}
+html:not([data-theme]) * {
+  scrollbar-color: #3a3a44 transparent;
+}
+html:not([data-theme]) ::-webkit-scrollbar-thumb {
+  background-color: #3a3a44;
+}
+html:not([data-theme]) ::-webkit-scrollbar-thumb:hover {
+  background-color: #6a6a73;
+}
+
 textarea {
   overscroll-behavior: contain;
 }

@@ -222,7 +222,8 @@ function renderHistory(history: SuggestionHistoryEntry[]): string {
   const declined = history.filter((h) => h.verdict === "DECLINED");
   if (declined.length === 0) return "";
   const line = (h: SuggestionHistoryEntry) => {
-    const times = h.timesDeclined > 1 ? ` (turned down ${h.timesDeclined}x)` : "";
+    const times =
+      h.timesDeclined > 1 ? ` (turned down ${h.timesDeclined}x)` : "";
     const latest = h.inLatestRound ? " [LAST ROUND]" : "";
     return `- ${h.name}${times}${latest}${h.why ? ` — "${h.why}"` : ""}`;
   };

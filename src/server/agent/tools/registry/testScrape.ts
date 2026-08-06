@@ -91,12 +91,18 @@ function describeBoard(
     jobCount: number;
     companyName: string;
     sampleTitles: string[];
+    truncatedAt?: number;
   },
 ): string {
   const titles = r.sampleTitles.length
     ? `\nsample titles: ${r.sampleTitles.map((t) => `"${t}"`).join(", ")}`
     : "";
-  return `${prefix}: ok via ${r.provider}, ${r.jobCount} job${r.jobCount === 1 ? "" : "s"} found at ${boardUrl}, companyName="${r.companyName}"${titles}`;
+  // A capped board still verifies the URL — jobCount just isn't the board size.
+  const partial =
+    r.truncatedAt != null
+      ? ` (PARTIAL — the first ${r.truncatedAt} of a larger board; the URL is confirmed good, but this is not the board's real size)`
+      : "";
+  return `${prefix}: ok via ${r.provider}, ${r.jobCount} job${r.jobCount === 1 ? "" : "s"} found at ${boardUrl}${partial}, companyName="${r.companyName}"${titles}`;
 }
 
 // Deterministically probe the slug-guessable ATSes for a company.

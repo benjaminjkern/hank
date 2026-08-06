@@ -28,7 +28,7 @@ export const deferJobTool: ToolDef<{
         type: "string",
         enum: JOB_DEFER_REASONS as readonly string[] as string[],
         description:
-          "OUTRANKED = could apply, but other roles rank higher right now (the usual case). OTHER = some other 'not now' reason (put it in the note).",
+          "OUTRANKED = could apply, but other roles rank higher right now (the usual case). OTHER = some other 'not now' reason (put it in the note). JOB-level values: parking a whole company is pause_company, whose reasons are a separate list (USER_PAUSED / OTHER) — the two never overlap, so don't cross-use them.",
       },
       note: {
         type: "string",

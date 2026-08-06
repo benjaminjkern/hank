@@ -20,6 +20,10 @@ type TestScrapeResult =
       jobCount: number;
       sampleTitles: string[]; // up to 5
       companyName: string;
+      // Set when jobCount is only the first slice of a bigger board. Material
+      // to the hunter's verdict: "this URL produces real jobs" is still true,
+      // but "this board has 42 roles" would not be.
+      truncatedAt?: number;
     }
   | { ok: false; error: string; provider?: AtsProvider };
 
@@ -47,6 +51,9 @@ export async function testScrape(url: string): Promise<TestScrapeResult> {
     jobCount: result.data.jobs.length,
     sampleTitles: result.data.jobs.slice(0, 5).map((j) => j.title),
     companyName: result.data.companyName,
+    ...(result.data.diagnostics?.truncatedAt != null
+      ? { truncatedAt: result.data.diagnostics.truncatedAt }
+      : {}),
   };
 }
 

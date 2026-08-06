@@ -195,7 +195,8 @@ export async function getFocusedJobView(
               .find((e) => e.type === "APPLIED")
               ?.occurredAt.toISOString() ?? null)
           : null,
-      // When the role ended. DELISTED's date lives on Job.closedAt (no event);
+      // When the role ended. DELISTED dates off Job.closedAt — the global
+      // takedown date, and the authority (its JobEvent isn't fetched here);
       // CLOSED/REJECTED (withdrawals log a WITHDRAWN event) use the latest
       // terminal event.
       closedAt:

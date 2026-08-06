@@ -12,12 +12,12 @@ import {
 } from "@/lib/statusColors";
 import type {
   FocusedOpportunityView,
-  OpportunityContactView,
   OpportunityJobView,
 } from "@/server/agent/tools/lib/types";
 import { relativeTime } from "@/utils/date";
 import { nowMs } from "@/utils/now";
 
+import { ContactCard } from "./shared/ContactCard";
 import {
   RecentActivity,
   type RecentActivityItem,
@@ -90,42 +90,6 @@ const SectionLabel = styled.div`
   text-transform: uppercase;
   letter-spacing: 0.4px;
   margin-bottom: ${({ theme }) => theme.space.sm};
-`;
-
-const ContactRow = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: ${({ theme }) => `${theme.space.sm} 0`};
-  border-bottom: 1px dashed ${({ theme }) => theme.colors.border};
-  &:last-child {
-    border-bottom: none;
-  }
-`;
-
-const ContactName = styled.div`
-  font-size: 14px;
-  font-weight: 500;
-  color: ${({ theme }) => theme.colors.text};
-`;
-
-const ContactMeta = styled.div`
-  font-size: 12px;
-  color: ${({ theme }) => theme.colors.textMuted};
-`;
-
-const ContactLinks = styled.div`
-  display: flex;
-  gap: ${({ theme }) => theme.space.sm};
-  font-size: 12px;
-  margin-top: 2px;
-`;
-
-const LinkA = styled.a`
-  color: ${({ theme }) => theme.colors.accent};
-  &:hover {
-    text-decoration: underline;
-  }
 `;
 
 const CompanyLink = styled.button`
@@ -362,38 +326,6 @@ export function OpportunityDetailView({
         />
       </Section>
     </Card>
-  );
-}
-
-function ContactCard({ contact }: { contact: OpportunityContactView }) {
-  const subLineParts: string[] = [];
-  if (contact.role) subLineParts.push(contact.role);
-  if (contact.agency) subLineParts.push(`@ ${contact.agency}`);
-  if (contact.channel) subLineParts.push(`via ${contact.channel}`);
-
-  return (
-    <ContactRow>
-      <ContactName>{contact.name}</ContactName>
-      {subLineParts.length > 0 && (
-        <ContactMeta>{subLineParts.join(" · ")}</ContactMeta>
-      )}
-      {(contact.email || contact.phone || contact.linkedinUrl) && (
-        <ContactLinks>
-          {contact.email && (
-            <LinkA href={`mailto:${contact.email}`}>{contact.email}</LinkA>
-          )}
-          {contact.phone && (
-            <LinkA href={`tel:${contact.phone}`}>{contact.phone}</LinkA>
-          )}
-          {contact.linkedinUrl && (
-            <LinkA href={contact.linkedinUrl} target="_blank" rel="noreferrer">
-              LinkedIn
-            </LinkA>
-          )}
-        </ContactLinks>
-      )}
-      {contact.notes && <ContactMeta>{contact.notes}</ContactMeta>}
-    </ContactRow>
   );
 }
 

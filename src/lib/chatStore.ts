@@ -442,10 +442,12 @@ type Actions = {
   // out of the modal — call it after a successful saveApiKey + session
   // refetch confirms the key is good.
   setApiKeyBlocker: (reason: ApiKeyBlockerReason | null) => void;
-  // Set by the /admin/session/[sessionId] page (via ChatHydrator) before the
-  // first hydrate(). Once set, every read fetch carries the impersonate param.
-  // Reset to null is not supported — page navigation back to / drops this
-  // store entirely.
+  // Which user's data this store holds: null = the signed-in user, a session
+  // id = that session's owner (set by /admin/session/[sessionId] via
+  // ChatHydrator, and every read fetch then carries the impersonate param).
+  // Changing it RESETS the store — routes into and out of the admin viewer are
+  // client-side navigations, so this module singleton survives them with the
+  // previous identity's messages, dashboard and `hydrated` flag intact.
   setImpersonateSessionId: (sessionId: string | null) => void;
 };
 
@@ -863,7 +865,14 @@ export const useChatStore = create<State & Actions>((set, get) => ({
   },
 
   setImpersonateSessionId(sessionId) {
-    set({ impersonateSessionId: sessionId });
+    if (get().impersonateSessionId === sessionId) return;
+    // Whose data this store holds just changed, so everything in it is stale —
+    // and `hydrated` staying true would make the next hydrate() a no-op, so
+    // the stale data would never be replaced. Reset to `initial` (which clears
+    // `hydrated`) rather than clearing fields piecemeal: a field added later
+    // would otherwise silently leak across the identity boundary.
+    turnEpoch++; // discard any /api/session response still in flight for the old identity
+    set({ ...initial, impersonateSessionId: sessionId });
   },
 
   setActivePanel(panel) {

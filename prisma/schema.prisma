@@ -315,8 +315,8 @@ model Job {
   rawContent String? // raw posting text/markdown (used for drafting); null if manual
   // Promoted ATS scalars for cheap pre-filtering without loading rawContent.
   // locationAndArrangement blends place + work arrangement (remote/hybrid/on-site);
-  // the enrich pass folds in arrangement. @map: physical column kept as "location".
-  locationAndArrangement String?  @map("location")
+  // the enrich pass folds in arrangement.
+  locationAndArrangement String?
   department     String?
   compensation   String?
   employmentType String?
@@ -513,8 +513,8 @@ enum ApplyChannel {
 
 // -- Events (timeline) ----------------------------------------------------
 
-// Per-job timeline (parallel to OpportunityEvent). @@map keeps the physical
-// table "Event". Event vocab in docs/lifecycle.md.
+// Per-job timeline (parallel to OpportunityEvent). Event vocab in
+// docs/lifecycle.md.
 model JobEvent {
   id               String       @id @default(cuid())
   jobInteractionId String
@@ -528,7 +528,6 @@ model JobEvent {
   jobInteraction JobInteraction @relation(fields: [jobInteractionId], references: [id], onDelete: Cascade)
 
   @@index([jobInteractionId])
-  @@map("Event")
 }
 
 enum JobEventType {
@@ -548,8 +547,6 @@ enum JobEventType {
   DELISTED // posting taken down (per-user projection of Job.closedAt)
   DRAFT_USED // LEGACY tombstone — no longer emitted (usage lives on JobInteraction.*UsedAt); historical rows only
   NOTE
-
-  @@map("EventType")
 }
 
 enum EventSource {
@@ -812,9 +809,8 @@ model SubAgentRun {
   ok            Boolean  @default(true) // false = sub-agent errored / exhausted turns
   // Which output schema the sub-agent emitted — the branch it took in
   // multi-output mode (e.g. commit_shortlist_picks vs decline_shortlist). NOT a
-  // tool the sub-agent called; see subAgent.ts's header. Physical column is
-  // still `finalToolName` via @map, so the rename needs no migration.
-  outputSchemaName String? @map("finalToolName")
+  // tool the sub-agent called; see subAgent.ts's header.
+  outputSchemaName String?
   input         Json // { system, initialUserContent } as sent to the model
   output        Json? // the emitted schema's payload (structured output); null on failure
   error         String? // populated when ok=false

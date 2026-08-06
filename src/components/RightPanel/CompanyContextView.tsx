@@ -21,6 +21,7 @@ import { relativeTime } from "@/utils/date";
 import { nowMs } from "@/utils/now";
 import { initial } from "@/utils/text";
 
+import { ContactCard } from "./shared/ContactCard";
 import {
   RecentActivityList,
   type RecentActivityItem,
@@ -374,6 +375,10 @@ const RecentActivityBody = styled.div`
   padding: ${({ theme }) => `${theme.space.md} ${theme.space.lg}`};
 `;
 
+const ContactsBody = styled.div`
+  padding: ${({ theme }) => `0 ${theme.space.lg} ${theme.space.md}`};
+`;
+
 const NoteBody = styled.pre`
   margin: 0;
   padding: ${({ theme }) => `${theme.space.md} ${theme.space.lg}`};
@@ -387,10 +392,12 @@ const NoteBody = styled.pre`
 `;
 
 // Company page job groups, split by whether the user actually pursued the role:
-// - pipeline      = still open, work to be done. Everything not terminally
-//                   closed: NEW + SCANNED + SHORTLISTED + APPLIED + interview
-//                   stages + OFFERED + deferred. Sorted so roles the user owes
-//                   a move on float above freshly-scanned ones.
+// - pipeline      = still open AND live work: NEW + SCANNED + SHORTLISTED +
+//                   APPLIED + interview stages + OFFERED. Sorted so roles the
+//                   user owes a move on float above freshly-scanned ones.
+// - deferred      = "could apply, outranked for now". Open, but deliberately
+//                   parked — nothing is owed on it, so counting it as pipeline
+//                   overstates how much is actually in flight.
 // - pursuedClosed = roles the user actually engaged with that are now closed:
 //                   REJECTED (company passed after you applied) and
 //                   CLOSED/WITHDRAWN (applied, then pulled the application).
@@ -402,23 +409,24 @@ const NoteBody = styled.pre`
 //                   applied to: a lost cause). Noise; hidden behind a toggle.
 type CompanyJobGroups = {
   pipeline: CompanyJobView[];
+  deferred: CompanyJobView[];
   pursuedClosed: CompanyJobView[];
   neverPursued: CompanyJobView[];
 };
 
 // Within the pipeline, float the roles the user owes a move on (focusNow:
 // SCANNED/SHORTLISTED/OFFERED/…) above applied/in-flight (resting), then
-// deferred, then freshly-surfaced NEW — so a scan dropping 20 new roles doesn't
-// bury an offer awaiting a decision under the preview cap.
+// freshly-surfaced NEW — so a scan dropping 20 new roles doesn't bury an offer
+// awaiting a decision under the preview cap.
 const PIPELINE_TONE_RANK: Record<string, number> = {
   focusNow: 0,
   resting: 1,
-  deferred: 2,
-  notStarted: 3,
+  notStarted: 2,
 };
 
 function groupJobs(jobs: CompanyJobView[]): CompanyJobGroups {
   const pipeline: CompanyJobView[] = [];
+  const deferred: CompanyJobView[] = [];
   const pursuedClosed: CompanyJobView[] = [];
   const neverPursued: CompanyJobView[] = [];
   for (const j of jobs) {
@@ -433,6 +441,8 @@ function groupJobs(jobs: CompanyJobView[]): CompanyJobGroups {
       // close reason is a pre-apply pass.
       if (j.closeReason === "WITHDRAWN") pursuedClosed.push(j);
       else neverPursued.push(j);
+    } else if (j.status === "DEFERRED") {
+      deferred.push(j);
     } else {
       pipeline.push(j);
     }
@@ -440,13 +450,14 @@ function groupJobs(jobs: CompanyJobView[]): CompanyJobGroups {
   const byRecency = (a: CompanyJobView, b: CompanyJobView) =>
     b.updatedAt.localeCompare(a.updatedAt);
   pipeline.sort((a, b) => {
-    const ra = PIPELINE_TONE_RANK[statusTone(a.status)] ?? 3;
-    const rb = PIPELINE_TONE_RANK[statusTone(b.status)] ?? 3;
+    const ra = PIPELINE_TONE_RANK[statusTone(a.status)] ?? 2;
+    const rb = PIPELINE_TONE_RANK[statusTone(b.status)] ?? 2;
     return ra - rb || byRecency(a, b);
   });
+  deferred.sort(byRecency);
   pursuedClosed.sort(byRecency);
   neverPursued.sort(byRecency);
-  return { pipeline, pursuedClosed, neverPursued };
+  return { pipeline, deferred, pursuedClosed, neverPursued };
 }
 
 const PREVIEW_COUNT = 5;
@@ -462,6 +473,14 @@ export function CompanyContextView({
   const viewJob = useChatStore((s) => s.viewJob);
   const viewShortlistBoard = useChatStore((s) => s.viewShortlistBoard);
   const buckets = groupJobs(company.jobs);
+  const {
+    visible: visibleContacts,
+    truncated: contactsTruncated,
+    canCollapse: canCollapseContacts,
+    hiddenCount: hiddenContactCount,
+    expand: expandContacts,
+    collapse: collapseContacts,
+  } = useExpandable(company.contacts, PREVIEW_COUNT);
 
   return (
     <>
@@ -551,6 +570,10 @@ export function CompanyContextView({
             <StatLabel>In pipeline</StatLabel>
           </Stat>
           <Stat>
+            <StatValue $tone="muted">{buckets.deferred.length}</StatValue>
+            <StatLabel>Deferred</StatLabel>
+          </Stat>
+          <Stat>
             <StatValue>{buckets.pursuedClosed.length}</StatValue>
             <StatLabel>Pursued</StatLabel>
           </Stat>
@@ -568,6 +591,15 @@ export function CompanyContextView({
         previewCount={PIPELINE_PREVIEW_COUNT}
         onPick={(j) => void viewJob(j.jobId)}
       />
+      {buckets.deferred.length > 0 && (
+        <JobGroup
+          title="Deferred"
+          jobs={buckets.deferred}
+          emptyText=""
+          previewCount={PREVIEW_COUNT}
+          onPick={(j) => void viewJob(j.jobId)}
+        />
+      )}
       {buckets.pursuedClosed.length > 0 && (
         <JobGroup
           title="Pursued and closed"
@@ -582,6 +614,30 @@ export function CompanyContextView({
         jobs={buckets.neverPursued}
         onPick={(j) => void viewJob(j.jobId)}
       />
+
+      {company.contacts.length > 0 && (
+        <Card>
+          <SectionHead>
+            <SectionTitle>Contacts</SectionTitle>
+            <SectionCount>{company.contacts.length}</SectionCount>
+          </SectionHead>
+          <ContactsBody>
+            {visibleContacts.map((c) => (
+              <ContactCard key={c.id} contact={c} />
+            ))}
+            {contactsTruncated && (
+              <ShowMoreButton onClick={expandContacts}>
+                Show {hiddenContactCount} more
+              </ShowMoreButton>
+            )}
+            {!contactsTruncated && canCollapseContacts && (
+              <ShowMoreButton onClick={collapseContacts}>
+                Collapse
+              </ShowMoreButton>
+            )}
+          </ContactsBody>
+        </Card>
+      )}
 
       {company.recentEvents.length > 0 && (
         <Card>
@@ -658,15 +714,18 @@ function JobGroup({
       ) : (
         <>
           {visible.map((j) => {
-            // One timing caption per row: when it was applied (still open) or
-            // when it ended (terminal). Statuses are mutually exclusive, so at
-            // most one fires.
+            // One caption per row, saying why it's sitting where it is: when it
+            // was applied (still open), why it's parked (deferred), or when it
+            // ended (terminal). Statuses are mutually exclusive, so at most one
+            // fires.
             const caption =
               j.status === "APPLIED" && j.appliedAt
                 ? `Applied ${relativeTime(j.appliedAt)}`
-                : j.closedAt
-                  ? `${closedActionLabel(j.status, j.closeReason)} ${relativeTime(j.closedAt)}`
-                  : null;
+                : j.status === "DEFERRED"
+                  ? (j.deferNote ?? statusLabel(j.deferReason ?? "OTHER"))
+                  : j.closedAt
+                    ? `${closedActionLabel(j.status, j.closeReason)} ${relativeTime(j.closedAt)}`
+                    : null;
             return (
               <Row key={j.jobInteractionId} onClick={() => onPick(j)}>
                 <div>

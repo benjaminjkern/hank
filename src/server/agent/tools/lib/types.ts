@@ -22,9 +22,9 @@ export type { FocusedJobView } from "@/server/views/getFocusedJob";
 export type { ShortAnswer } from "@/server/entities/jobs/types";
 export type {
   OpportunityJobView,
-  OpportunityContactView,
   FocusedOpportunityView,
 } from "@/server/views/getFocusedOpportunity";
+export type { ContactView } from "@/server/views/contactView";
 
 export type {
   ApplicationQuestion,

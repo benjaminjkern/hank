@@ -160,15 +160,21 @@ const StanceRow = styled.div`
 `;
 
 const StanceButton = styled.button<{ $active?: boolean }>`
-  font-size: 12px;
-  padding: 2px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Square rather than the old text pill's 2px/10px — an icon has no width of
+     its own to shape the target, and 28px keeps it tappable. */
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
   border: 1px solid
     ${({ theme, $active }) =>
       $active ? theme.colors.accent : theme.colors.border};
   color: ${({ theme, $active }) =>
     $active ? theme.colors.accent : theme.colors.textMuted};
-  background: transparent;
+  background: ${({ theme, $active }) =>
+    $active ? theme.colors.bgMuted : "transparent"};
   cursor: pointer;
 
   &:hover:not(:disabled) {
@@ -222,13 +228,59 @@ const TIER_META: Record<
   },
 };
 
+// 16px, stroke-only, inheriting the button's color so the $active accent
+// applies for free — same convention as ThemeToggle's icons. `aria-hidden`
+// because the accessible name comes from the button's aria-label.
+function iconProps() {
+  return {
+    width: 16,
+    height: 16,
+    viewBox: "0 0 16 16",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.75,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+}
+
+function ShortlistIcon() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M3 8.5 6.5 12 13 4.5" />
+    </svg>
+  );
+}
+
+function DeferIcon() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M2.5 9.5c1.4-2.8 2.8-2.8 4.2 0s2.8 2.8 4.2 0" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg {...iconProps()}>
+      <path d="M4 4l8 8M12 4l-8 8" />
+    </svg>
+  );
+}
+
 // The three marks, in board order. Every row that can still be decided offers
 // all three — there is no separate "reconsider" affordance, and the one already
 // set is pre-selected, so agreeing with Hank is doing nothing at all.
+//
+// `value` is the wire vocabulary (pick / borderline / pass, what the board and
+// the agent speak); `label` is the LIFECYCLE word the mark lands the role on,
+// which is what the rest of the app shows on the status pill. They differ on
+// purpose — naming the button "Pick" left no way to tell which status it sets.
 const STANCES = [
-  { value: "pick", label: "Pick" },
-  { value: "borderline", label: "Maybe" },
-  { value: "pass", label: "Pass" },
+  { value: "pick", label: "Shortlist", Icon: ShortlistIcon },
+  { value: "borderline", label: "Defer", Icon: DeferIcon },
+  { value: "pass", label: "Close", Icon: CloseIcon },
 ] as const;
 
 type StanceValue = (typeof STANCES)[number]["value"];
@@ -329,14 +381,19 @@ function TierRows({
                       key={s.value}
                       $active={stance === s.value}
                       disabled={busy}
+                      // The icon carries no text, so the button needs its own
+                      // accessible name — and the tooltip has to say what the
+                      // mark does now that the label isn't on screen.
+                      aria-label={s.label}
+                      aria-pressed={stance === s.value}
                       title={
                         stance === s.value
-                          ? "Click again to leave it undecided"
-                          : undefined
+                          ? `${s.label} — click again to leave it undecided`
+                          : s.label
                       }
                       onClick={() => void mark(row, s.value, stance)}
                     >
-                      {s.label}
+                      <s.Icon />
                     </StanceButton>
                   ))}
                   {busy && <ScanTag>saving…</ScanTag>}

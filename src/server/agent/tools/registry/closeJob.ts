@@ -27,6 +27,8 @@ export const closeJobTool: ToolDef<{
       reason: {
         type: "string",
         enum: JOB_CLOSE_REASONS as readonly string[] as string[],
+        description:
+          "Why this ONE role is dead. NOT_A_MATCH = the role itself doesn't fit. LOCATION_MISMATCH = its location or work arrangement doesn't work. USER_REJECTED = the user looked at it and said no. OTHER = anything else (put it in the note). These are JOB-level values: NOT_A_MATCH / LOCATION_MISMATCH / OTHER also appear on close_company, where they mean the whole employer — writing off an employer is close_company, not this.",
       },
       note: {
         type: "string",

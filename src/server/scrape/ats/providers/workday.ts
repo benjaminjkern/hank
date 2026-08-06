@@ -72,7 +72,7 @@ export function extractWorkdayBoardUrlFromHtml(html: string): string | null {
 // knows the result is partial.
 
 const WORKDAY_PAGE_LIMIT = 20;
-const WORKDAY_MAX_DETAIL_JOBS = 100;
+const WORKDAY_MAX_DETAIL_JOBS = 300;
 const WORKDAY_DETAIL_CONCURRENCY = 5;
 
 const WORKDAY_JOB_RE =
@@ -190,7 +190,12 @@ async function fetchAllWorkday(
     }
   }
 
-  const truncated = total > WORKDAY_MAX_DETAIL_JOBS;
+  // Against what we RETURNED, not against the cap: a detail fetch that failed
+  // drops a job from `jobs` without the cap ever biting, and that gap is the
+  // same lie as a capped board — a posting the board still lists is missing
+  // from our snapshot. Closure detection reads this to decide whether the
+  // absence of a posting is evidence it came down.
+  const truncated = total > jobs.length;
   return {
     ok: true,
     data: {
@@ -201,7 +206,7 @@ async function fetchAllWorkday(
         fetchedUrl: listUrl,
         pageLength: listBytes,
         pageSnippet: lastListSnippet,
-        ...(truncated ? { truncatedAt: WORKDAY_MAX_DETAIL_JOBS } : {}),
+        ...(truncated ? { truncatedAt: jobs.length } : {}),
       },
     },
   };

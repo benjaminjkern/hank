@@ -29,7 +29,7 @@ export const pauseCompanyTool: ToolDef<{
         type: "string",
         enum: COMPANY_PAUSE_REASONS as readonly string[] as string[],
         description:
-          "USER_PAUSED when the user asked to set it aside; OTHER otherwise.",
+          "USER_PAUSED when the user asked to set it aside; OTHER otherwise. COMPANY-level values: parking a single role is defer_job, whose reasons are a separate list (OUTRANKED / OTHER) — the two never overlap, so don't cross-use them.",
       },
       note: {
         type: "string",

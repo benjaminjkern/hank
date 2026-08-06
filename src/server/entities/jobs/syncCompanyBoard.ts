@@ -23,6 +23,13 @@ export type SyncCompanyBoardResult =
       totalJobs: number;
       // Postings created as NEW JobInteractions this run (the genuine delta).
       newJobInteractions: number;
+      // Postings this pass found gone from the board and delisted.
+      delistedJobs: number;
+      // Set when `totalJobs` is only part of the board — the provider's cap bit
+      // or a detail fetch dropped a row. A caller reporting the count to a
+      // human or to the agent must say so, or a partial board reads as the
+      // whole one. Also why `delistedJobs` is 0 whenever this is set.
+      truncatedAt?: number;
       // The scrape's start timestamp — also what lastScrapedJobsAt was stamped to.
       scrapeStartedAt: Date;
     }
@@ -47,6 +54,9 @@ export async function syncCompanyBoard(args: {
     userId: args.userId,
     companyId: args.companyId,
     jobs: scrape.data.jobs,
+    // Carries `truncatedAt`, which is what stops closure detection from
+    // delisting the postings a capped scrape never fetched.
+    diagnostics: scrape.data.diagnostics,
     scrapeStartedAt,
   });
 
@@ -61,6 +71,10 @@ export async function syncCompanyBoard(args: {
     ok: true,
     totalJobs: delta.totalJobs,
     newJobInteractions: delta.newJobInteractions,
+    delistedJobs: delta.delistedJobs,
+    ...(scrape.data.diagnostics?.truncatedAt != null
+      ? { truncatedAt: scrape.data.diagnostics.truncatedAt }
+      : {}),
     scrapeStartedAt,
   };
 }

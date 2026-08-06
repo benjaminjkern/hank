@@ -49,11 +49,22 @@ export type PreScanOutcome =
 
 export type ScrapeOutcome =
   | { kind: "scrape_failed"; error: string }
-  | { kind: "no_delta"; totalJobs: number; priorStatus: CompanyStatus }
+  | {
+      kind: "no_delta";
+      totalJobs: number;
+      truncatedAt?: number;
+      priorStatus: CompanyStatus;
+    }
   | {
       kind: "scraped";
       newJobInteractions: number;
       totalJobs: number;
+      // Postings that came down off the board this pass.
+      delistedJobs: number;
+      // Set when the board came back partial (provider cap or a dropped detail
+      // fetch). Both success outcomes carry it because "12 roles" and "12 of
+      // 1078 roles" are different facts, and the agent phrases them differently.
+      truncatedAt?: number;
       scrapeStartedAt: Date;
       preScan: PreScanOutcome;
     };
@@ -150,6 +161,9 @@ async function drive(
       outcome: {
         kind: "no_delta",
         totalJobs: scraped.totalJobs,
+        ...(scraped.truncatedAt != null
+          ? { truncatedAt: scraped.truncatedAt }
+          : {}),
         priorStatus: args.priorStatus,
       },
       events,
@@ -181,6 +195,10 @@ async function drive(
       kind: "scraped",
       newJobInteractions: scraped.newJobInteractions,
       totalJobs: scraped.totalJobs,
+      delistedJobs: scraped.delistedJobs,
+      ...(scraped.truncatedAt != null
+        ? { truncatedAt: scraped.truncatedAt }
+        : {}),
       scrapeStartedAt: scraped.scrapeStartedAt,
       preScan: !preScan.ok
         ? { kind: "failed", error: preScan.error }

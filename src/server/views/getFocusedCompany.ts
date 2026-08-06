@@ -5,6 +5,7 @@ import { companyLogoUrl } from "@/lib/companyLogo";
 import { prisma } from "@/server/db/prisma";
 import { flipDueInterviewsToDebrief } from "@/server/entities/jobs/flipDueInterviews";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
+import { CONTACT_SELECT, type ContactView } from "@/server/views/contactView";
 
 export type CompanyJobView = {
   jobId: string;
@@ -79,6 +80,9 @@ export type FocusedCompanyView = {
   // capped slice in recentEvents). Powers the "Show X more" expansion.
   recentEventsTotal: number;
   memoryNote: string | null;
+  // People at this company, via Contact.companyId — recruiters, hiring
+  // managers, anyone the user has talked to. Empty for most companies.
+  contacts: ContactView[];
   lastActivityAt: string | null;
   lastScrapedJobsAt: string | null;
   // A shortlist proposal is on the table for this company — the only state in
@@ -103,8 +107,9 @@ const JOB_DATING_EVENT_TYPES = [
 ] as const;
 
 // Event types that mark a role ending — used to date a terminal CLOSED/REJECTED
-// row (a withdrawal logs a WITHDRAWN event but lands as CLOSED). DELISTED has no
-// event; its date comes from Job.closedAt instead.
+// row (a withdrawal logs a WITHDRAWN event but lands as CLOSED). DELISTED is
+// dated off Job.closedAt instead: that's the global takedown date, and the
+// authority over the per-user event.
 const TERMINAL_EVENT_TYPES = new Set<string>([
   "CLOSED",
   "REJECTED",
@@ -141,6 +146,13 @@ export async function getFocusedCompanyView(
           lastScrapedJobsAt: true,
         },
         take: 1,
+      },
+      // Contact is user-scoped even though it hangs off the global Company, so
+      // this relation needs its own userId filter.
+      contacts: {
+        where: { userId },
+        orderBy: { name: "asc" },
+        select: CONTACT_SELECT,
       },
       jobs: {
         select: {
@@ -283,6 +295,7 @@ export async function getFocusedCompanyView(
     recentEvents,
     recentEventsTotal,
     memoryNote: note?.content ?? null,
+    contacts: company.contacts,
     lastActivityAt,
     lastScrapedJobsAt:
       companyInteraction?.lastScrapedJobsAt?.toISOString() ?? null,
