@@ -28,15 +28,33 @@ export function unescapeHtml(s: string): string {
 }
 
 export function decodeEntities(s: string): string {
-  return s
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)));
+  return (
+    s
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&apos;/g, "'")
+      // Numeric entities, hex before decimal: `&#x27;` would otherwise fall
+      // through both (the decimal pattern needs `\d+`, and `x27` isn't digits)
+      // and reach the user as literal `&#x27;`. Greenhouse hex-encodes every
+      // apostrophe in its question labels, so this is the common case, not an
+      // edge one. fromCodePoint, not fromCharCode — the latter truncates
+      // anything above U+FFFF (emoji, some CJK) to garbage.
+      .replace(/&#[xX]([0-9a-fA-F]+);/g, (m, h: string) =>
+        codePointOr(m, parseInt(h, 16)),
+      )
+      .replace(/&#(\d+);/g, (m, n: string) => codePointOr(m, parseInt(n, 10)))
+  );
+}
+
+// A malformed entity (`&#1114112;`) must come back unchanged rather than throw
+// — this runs over scraped HTML nobody validated.
+function codePointOr(original: string, code: number): string {
+  if (!Number.isInteger(code) || code < 0 || code > 0x10ffff) return original;
+  return String.fromCodePoint(code);
 }
 
 // Flatten an HTML fragment to readable plain text: block tags become newlines,

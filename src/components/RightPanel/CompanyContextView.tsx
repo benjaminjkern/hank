@@ -158,10 +158,14 @@ const CloseNoteText = styled.span`
 `;
 
 // One-line company description (the basic-info hunter's shortDescription). Sits
-// under the header so the user sees what the company actually does.
+// under the header so the user sees what the company actually does. Padded on
+// all four sides — it butts up against HeaderRow's bottom rule otherwise, with
+// only the line-height's half-leading between the rule and the glyphs.
+// CloseBanner renders in this same slot, so keep the two vertically symmetric.
 const Description = styled.p`
   margin: 0;
-  padding: ${({ theme }) => `0 ${theme.space.xl} ${theme.space.md}`};
+  padding: ${({ theme }) =>
+    `${theme.space.md} ${theme.space.xl} ${theme.space.md}`};
   font-size: 13px;
   line-height: 1.45;
   color: ${({ theme }) => theme.colors.textMuted};

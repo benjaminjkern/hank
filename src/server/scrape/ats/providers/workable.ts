@@ -1,5 +1,5 @@
 import { isRecord } from "@/utils/guards";
-import { htmlToText } from "@/utils/html";
+import { decodeEntities, htmlToText } from "@/utils/html";
 import { titleCaseSlug } from "@/utils/text";
 
 import { fetchText, rawAttrs, type AtsProviderModule } from "../shared";
@@ -185,7 +185,7 @@ async function fetchWorkableQuestions(
         continue;
       }
       if (WORKABLE_BUILTIN_FIELD_IDS.has(id)) continue;
-      const label = (f.label ?? "").trim();
+      const label = decodeEntities(f.label ?? "").trim();
       if (!label) continue;
       const item: ApplicationQuestion = { question: label };
       if (f.required) item.required = true;

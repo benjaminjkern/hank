@@ -22,7 +22,7 @@ import { useState, type ReactNode } from "react";
 import styled from "styled-components";
 
 import { useChatStore } from "@/lib/chatStore";
-import { asNonEmptyString, asStringArray, isRecord } from "@/utils/guards";
+import { asArray, asNonEmptyString, isRecord } from "@/utils/guards";
 import { initial } from "@/utils/text";
 
 const MARKER_RE = /^<!--widget-response:(\{[\s\S]*?\})-->/;
@@ -67,7 +67,14 @@ export function WidgetResponseCard({
 
   switch (kind) {
     case "company_checklist": {
-      const picked = asStringArray(obj.picked);
+      // Each pick is `{name, context, url}` — the extra fields are what let the
+      // add resolve a name collision to the right company, so the card has to
+      // reach into the record for the name rather than read a flat list.
+      const picked = asArray(obj.picked).flatMap((p) =>
+        isRecord(p) && typeof p.name === "string" && p.name.length > 0
+          ? [p.name]
+          : [],
+      );
       if (picked.length === 0) {
         return <Chip icon="⊘" tone="muted" title="Added none of these" />;
       }

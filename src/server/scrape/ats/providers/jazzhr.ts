@@ -1,4 +1,4 @@
-import { htmlToText } from "@/utils/html";
+import { decodeEntities, htmlToText } from "@/utils/html";
 import { titleCaseSlug } from "@/utils/text";
 
 import { fetchText, rawAttrs, type AtsProviderModule } from "../shared";
@@ -256,7 +256,10 @@ async function fetchJazzHRQuestions(
     // resumator-* ids are JazzHR's built-in standard fields (address/city/state/
     // postal/resume/etc.), not recruiter questions — skip them.
     if (id.startsWith("resumator-")) continue;
-    const text = (q.question ?? "").trim().replace(/\*+$/, "").trim();
+    const text = decodeEntities(q.question ?? "")
+      .trim()
+      .replace(/\*+$/, "")
+      .trim();
     if (!text) continue;
     if (/\bcover\s*letter\b/i.test(text)) coverLetter = true;
     const item: ApplicationQuestion = { question: text };

@@ -20,12 +20,6 @@ export function asNonEmptyString(v: unknown): string | null {
   return typeof v === "string" && v.length > 0 ? v : null;
 }
 
-export function asStringArray(v: unknown): string[] {
-  return Array.isArray(v)
-    ? v.filter((x): x is string => typeof x === "string")
-    : [];
-}
-
 // Renderable as a single cell — anything that isn't an object or array.
 export function isScalar(v: unknown): boolean {
   return (
