@@ -13,9 +13,7 @@
 // Marker extraction + JSON.parse is shared via extractWidgetMarker; each parser
 // only owns its per-kind field validation.
 
-import type { CompanySuggestionDeclineReason } from "@/generated/prisma/client";
 import { extractWidgetMarker } from "@/lib/widgetMarker";
-import { COMPANY_SUGGESTION_DECLINE_REASONS } from "@/server/entities/companies/companySuggestionInputs";
 
 // ---------------------------------------------------------------------------
 // Walkthrough pipeline widgets: confirm_revive_company,
@@ -82,11 +80,12 @@ export function parseWidgetSubmission(
 
 // ---------------------------------------------------------------------------
 // Grow-the-watchlist widgets: company_checklist (pick from the find_companies
-// suggestion set) and company_disambiguation (resolve a name collision the URL
-// hunter flagged). Both are dispatched at the TOP LEVEL
-// (dispatchTopLevelSubmission), before Hank runs at all, so a checklist emitted
-// by the find_companies tool from ANY conversation commits its picks the same
-// way — growing the watchlist is conversational, not a flow of its own.
+// suggestion set), company_disambiguation (resolve a name collision the URL
+// hunter flagged), and add_more_companies (keep hunting or wrap up). All three
+// are dispatched at the TOP LEVEL (dispatchTopLevelSubmission), before Hank runs
+// at all, so a checklist emitted by the find_companies tool from ANY
+// conversation commits its picks the same way — growing the watchlist is
+// conversational, not a flow of its own.
 // ---------------------------------------------------------------------------
 
 // A company kept from the checklist. `context` (the suggestion reasoning) and
@@ -94,14 +93,10 @@ export function parseWidgetSubmission(
 // company on a name collision. Both optional.
 export type PickedCompany = { name: string; context?: string; url?: string };
 
-// A candidate the user unchecked, with the optional "why not" the checklist
-// offered. Both fields absent is the ordinary case — a bare uncheck still
-// records and still steers the next search.
-export type DeclinedCompany = {
-  name: string;
-  reason?: CompanySuggestionDeclineReason;
-  note?: string;
-};
+// A candidate the user unchecked. The name is the whole payload: what was
+// wrong with a batch is a sentence they type in chat, which reaches the next
+// search as its direction — a per-name reason code was a lossy version of it.
+export type DeclinedCompany = { name: string };
 
 // One resolved branch of a flagged name collision: the user picked
 // which real company the ambiguous name maps to, identified by the verified
@@ -130,6 +125,9 @@ export function parseCompanyChecklistSubmission(
   };
 }
 
+// Accepts both the bare-string and the object form: markers persisted while the
+// checklist captured a per-name reason carry `{name, reason?, note?}`, and the
+// extra keys are simply ignored.
 function asDeclinedCompanies(v: unknown): DeclinedCompany[] {
   if (!Array.isArray(v)) return [];
   const out: DeclinedCompany[] = [];
@@ -141,22 +139,21 @@ function asDeclinedCompanies(v: unknown): DeclinedCompany[] {
     if (!item || typeof item !== "object") continue;
     const o = item as Record<string, unknown>;
     if (typeof o.name !== "string" || !o.name.trim()) continue;
-    const reason =
-      typeof o.reason === "string" &&
-      (COMPANY_SUGGESTION_DECLINE_REASONS as readonly string[]).includes(
-        o.reason,
-      )
-        ? (o.reason as CompanySuggestionDeclineReason)
-        : undefined;
-    out.push({
-      name: o.name.trim(),
-      ...(reason ? { reason } : {}),
-      ...(typeof o.note === "string" && o.note.trim()
-        ? { note: o.note.trim() }
-        : {}),
-    });
+    out.push({ name: o.name.trim() });
   }
   return out;
+}
+
+// add_more_companies submission — the yes/no that follows a completed add.
+// "yes" re-enters discovery; "no" hands off to what's next. Returns null when
+// the message isn't an add_more_companies marker.
+export function parseAddMoreCompaniesSubmission(
+  userMessage: string,
+): { answer: "yes" | "no" } | null {
+  const obj = extractWidgetMarker(userMessage);
+  if (!obj || obj.kind !== "add_more_companies") return null;
+  if (obj.answer !== "yes" && obj.answer !== "no") return null;
+  return { answer: obj.answer };
 }
 
 // company_disambiguation submission — the user resolved one or more flagged name

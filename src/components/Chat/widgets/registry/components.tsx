@@ -16,6 +16,7 @@
 
 import type { WidgetKind } from "@/lib/widgetKinds";
 
+import { AddMoreCompaniesWidget } from "./addMoreCompanies/Widget";
 import { CompanyChecklistWidget } from "./companyChecklist/Widget";
 import { CompanyDisambiguationWidget } from "./companyDisambiguation/Widget";
 import { ConfirmApplicationSubmitWidget } from "./confirmApplicationSubmit/Widget";
@@ -31,6 +32,7 @@ import type { ComponentType } from "react";
 export const WIDGET_COMPONENTS = {
   shortlist_proposal: ShortlistProposalWidget,
   company_checklist: CompanyChecklistWidget,
+  add_more_companies: AddMoreCompaniesWidget,
   company_disambiguation: CompanyDisambiguationWidget,
   confirm_revive_company: ConfirmReviveCompanyWidget,
   confirm_application_submit: ConfirmApplicationSubmitWidget,

@@ -27,6 +27,12 @@ export type CompanyChecklistPayload = {
   provenance?: string;
 };
 
+// add_more_companies — emitted once a checklist add has finished. Names what
+// landed and asks the only question left: keep hunting, or move on.
+export type AddMoreCompaniesPayload = {
+  addedThisBatch: string[];
+};
+
 // company_disambiguation — emitted by the watchlist-add runner when the URL
 // hunter flagged a name collision: one queried name maps to ≥2 real
 // companies. The user picks which one each ambiguous name means; the pick
@@ -191,14 +197,10 @@ export type NextCompanyPickerPayload = {
 // optional — a knowledge-only suggestion carries just context.
 export type PickedCompany = { name: string; context?: string; url?: string };
 
-// A candidate the user unchecked, plus the optional "why not" the checklist
-// offers. Both fields absent is the ordinary case — a bare uncheck is still
-// recorded, and still steers the next search away from that company's shape.
-export type DeclinedCompany = {
-  name: string;
-  reason?: string;
-  note?: string;
-};
+// A candidate the user unchecked. The name is the whole payload — the checklist
+// captures WHICH names were wrong, and the user says WHY in chat, where one
+// sentence covers the batch and reaches the next search as its direction.
+export type DeclinedCompany = { name: string };
 
 // One resolved branch of a flagged name collision: the user picked
 // which real company the ambiguous name maps to. Companies the user skipped are
@@ -217,6 +219,9 @@ export type WidgetSubmission =
       declined: DeclinedCompany[];
     }
   | { kind: "company_disambiguation"; resolved: DisambiguationResolution[] }
+  // Keep hunting after an add landed ("yes" re-runs the search) or move on
+  // ("no" hands off to what's next).
+  | { kind: "add_more_companies"; answer: "yes" | "no" }
   | { kind: "confirm_revive_company"; companyId: string; answer: "yes" | "no" }
   | { kind: "confirm_application_submit"; jobId: string }
   // Three branches for the next-company picker:
@@ -267,8 +272,8 @@ export type WidgetSubmission =
 // widget payload with titles/names is gone after dismissal).
 //
 // Only fields NOT already present in the submission go here; the card render
-// model merges submission fields + `_view`. mode_picker / add_more_companies
-// / company_checklist carry everything in the submission and pass no `_view`.
+// model merges submission fields + `_view`. add_more_companies and
+// company_checklist carry everything in the submission and pass no `_view`.
 type WidgetResponseView =
   | { kind: "confirm_revive_company"; companyName: string }
   | {

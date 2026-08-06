@@ -9,6 +9,10 @@
 // confirm_revive_company and friends — are dispatched inside its state machine
 // instead and never reach here; only their parsers are shared (widgets/parse.ts).
 //
+// Order matters where two branches could both match a message: they can't, since
+// each parser keys on its own marker kind. It's listed in the order a discovery
+// round runs — checklist, then any name collision it flagged, then add-more.
+//
 // Every branch does the same three things: persist the user's message, run its
 // deterministic dispatch, and report back what the caller should do next
 // (TopLevelSubmissionOutcome). Nothing here calls an LLM to decide anything.
@@ -21,11 +25,15 @@ import type {
 } from "@/server/agent/contracts";
 import { appendUserMessage, narrateStatus } from "@/server/agent/session";
 import { runCommitSuggestions } from "@/server/procedures/registry/commitSuggestions";
-import { runDisambiguationResolution } from "@/server/procedures/registry/enrichCompanies";
+import {
+  promptAddMoreCompanies,
+  runDisambiguationResolution,
+} from "@/server/procedures/registry/enrichCompanies";
 import { showTargetFor, buildShowEvents } from "@/server/views/showEvents";
 import { dispatchNextCompanyPicker } from "@/server/widgets/dispatchNextCompanyPicker";
 import {
   parseNextCompanyPickerSubmission,
+  parseAddMoreCompaniesSubmission,
   parseCompanyChecklistSubmission,
   parseCompanyDisambiguationSubmission,
 } from "@/server/widgets/parse";
@@ -62,31 +70,25 @@ export async function* dispatchTopLevelSubmission(
 
   // The find_companies checklist submission: record every verdict, enrich the
   // kept ones (URL hunt + scrape + prescan) narrating ✓ per company, and learn
-  // from what was turned down. Terminal — the turn ends with the ✓ lines (or a
-  // disambiguation picker if a name collided) and the user just keeps chatting;
-  // there's no add-more widget.
+  // from what was turned down. Terminal either way — it ends on a question the
+  // user owes an answer to (add more, or which company a collided name meant).
   const checklistSubmission = parseCompanyChecklistSubmission(userMessage);
   if (checklistSubmission) {
     await appendUserMessage(sessionId, userMessage, attachmentIds, {
       runId,
       leadingBlocks: await buildPanelEditBlocks(userId),
     });
-    const added = yield* runCommitSuggestions({
+    yield* runCommitSuggestions({
       ...args,
       picked: checklistSubmission.picked,
       declined: checklistSubmission.declined,
     });
-    // Growing the watchlist is a step, not a destination — so unless a
-    // disambiguation picker is sitting there unanswered, fall through to
-    // what's next rather than leaving the user on a batch of ✓ lines.
-    return added.awaitingDisambiguation
-      ? { kind: "terminal" }
-      : { kind: "consumed" };
+    return { kind: "terminal" };
   }
 
   // The user resolved a name collision the URL hunter flagged during a checklist
-  // add. Commit each chosen board + scrape + prescan, narrate ✓ — then what's
-  // next, since this is the tail of the same add and nothing is left pending.
+  // add. Commit each chosen board + scrape + prescan, narrate ✓ — then the same
+  // add-more question, since this is the tail of the same add.
   const disambiguationSubmission =
     parseCompanyDisambiguationSubmission(userMessage);
   if (disambiguationSubmission) {
@@ -94,8 +96,26 @@ export async function* dispatchTopLevelSubmission(
       runId,
       leadingBlocks: await buildPanelEditBlocks(userId),
     });
-    yield* runDisambiguationResolution(disambiguationSubmission.resolved, args);
-    return { kind: "consumed" };
+    const added = yield* runDisambiguationResolution(
+      disambiguationSubmission.resolved,
+      args,
+    );
+    yield* promptAddMoreCompanies(added, args);
+    return { kind: "terminal" };
+  }
+
+  // "Add more" / "Done" after a finished add. More re-enters the search with no
+  // direction (the watchlist just grew, so a fresh run reads differently);
+  // done falls through to what's next.
+  const addMoreSubmission = parseAddMoreCompaniesSubmission(userMessage);
+  if (addMoreSubmission) {
+    await appendUserMessage(sessionId, userMessage, attachmentIds, {
+      runId,
+      leadingBlocks: await buildPanelEditBlocks(userId),
+    });
+    return addMoreSubmission.answer === "yes"
+      ? { kind: "enter", entryTarget: { kind: "discovery" } }
+      : { kind: "consumed" };
   }
 
   // The between-things "what's next" picker. The submission already encodes the

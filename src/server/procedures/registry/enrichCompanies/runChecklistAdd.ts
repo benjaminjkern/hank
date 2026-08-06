@@ -7,19 +7,12 @@
 // role count, and every company lands at NEW, which is where whats_next's
 // backlog picks them up.
 //
-// Fully conversational: no add_more_companies widget at the end — the ✓ lines
-// are the narration, and the caller brings up what's next. A disambiguation
-// picker is the one exception: it's a genuine wait-for-user question, so it's
-// reported back and the caller stops rather than stacking another widget under
-// an unanswered one.
+// The ✓ lines are the narration; the caller asks whether to keep hunting. A
+// disambiguation picker is the one exception: it's a genuine wait-for-user
+// question, so it's reported back and the caller stops rather than stacking
+// another widget under an unanswered one.
 
-import { Role } from "@/generated/prisma/client";
-import type { Prisma } from "@/generated/prisma/client";
-import type {
-  RunContext,
-  TurnEvent,
-  WidgetKind,
-} from "@/server/agent/contracts";
+import type { TurnEvent } from "@/server/agent/contracts";
 import { narrateStatus, narrateText } from "@/server/agent/session";
 import { prisma } from "@/server/db/prisma";
 import { createCompanyStubs } from "@/server/entities/companies/createCompanyStubs";
@@ -29,10 +22,9 @@ import type {
 } from "@/server/widgets/parse";
 
 import { runEnrichCompanies } from "./enrichCompanies";
+import { persistWidget, type WatchlistAddArgs } from "./persistWidget";
 
 import type { CompanyEnrichResult } from "./types";
-
-type ChecklistAddArgs = RunContext & { sessionId: string };
 
 // Every line this procedure emits goes through narrateStatus / narrateText
 // (agent/session/narrate.ts), which stream the event AND persist it as its own
@@ -40,25 +32,6 @@ type ChecklistAddArgs = RunContext & { sessionId: string };
 // has no outer buffer collecting and persisting its events the way the
 // walkthrough state machine does, so without it the streamed line vanishes on
 // refresh.
-
-async function* persistWidget(
-  args: ChecklistAddArgs,
-  kind: WidgetKind,
-  payload: unknown,
-): AsyncGenerator<TurnEvent> {
-  const toolUseId = `pipeline-${kind}-${crypto.randomUUID()}`;
-  await prisma.chatMessage.create({
-    data: {
-      sessionId: args.sessionId,
-      role: Role.ASSISTANT,
-      content: [
-        { type: "pipeline_widget", toolUseId, kind, payload },
-      ] as unknown as Prisma.InputJsonValue,
-      runId: args.runId ?? null,
-    },
-  });
-  yield { type: "widget", toolUseId, kind, payload };
-}
 
 // Shape the disambiguation widget renders + round-trips. `companyId` is the
 // stub (unresolved, NEW) the picker resolves on selection; each candidate
@@ -93,12 +66,26 @@ function lineFor(result: CompanyEnrichResult): string | null {
 }
 
 // `awaitingDisambiguation` = a picker is on screen and owes an answer, so the
-// caller must not follow it with anything.
-export type ChecklistAddResult = { awaitingDisambiguation: boolean };
+// caller must not follow it with anything. `added` names the companies that
+// actually landed — what the caller reports back to the user, so a name that
+// failed its lookup or was already on the list isn't in it.
+export type ChecklistAddResult = {
+  awaitingDisambiguation: boolean;
+  added: string[];
+};
+
+// Did this company end up on the watchlist? "already_enriched" counts: the
+// company is there and ready, which is what the user asked for.
+function landed(result: CompanyEnrichResult): boolean {
+  return (
+    result.outcome.kind === "enriched" ||
+    result.outcome.kind === "already_enriched"
+  );
+}
 
 export async function* runChecklistAdd(
   picks: PickedCompany[],
-  args: ChecklistAddArgs,
+  args: WatchlistAddArgs,
 ): AsyncGenerator<TurnEvent, ChecklistAddResult> {
   // Create stubs first (dedupe-aware), then enrich the fresh ones. Each pick's
   // disambiguation context (suggestion reasoning) + captured board URL ride
@@ -131,7 +118,7 @@ export async function* runChecklistAdd(
         : `Those are already on your list.`,
       args.runId,
     );
-    return { awaitingDisambiguation: false };
+    return { awaitingDisambiguation: false, added: [] };
   }
 
   const willRun = toEnrich.length;
@@ -147,6 +134,7 @@ export async function* runChecklistAdd(
   // ONE picker at the end of the batch rather than pausing mid-loop (the pool
   // can't yield a widget and wait per company).
   const ambiguous: AmbiguousCompanyForPicker[] = [];
+  const added: string[] = [];
   let step = await it.next();
   while (!step.done) {
     const ev = step.value;
@@ -158,6 +146,7 @@ export async function* runChecklistAdd(
       );
     } else {
       const { result } = ev;
+      if (landed(result)) added.push(result.name);
       if (result.outcome.kind === "ambiguous") {
         ambiguous.push({
           companyId: result.companyId,
@@ -193,9 +182,9 @@ export async function* runChecklistAdd(
     yield* persistWidget(args, "company_disambiguation", {
       companies: ambiguous,
     });
-    return { awaitingDisambiguation: true };
+    return { awaitingDisambiguation: true, added };
   }
-  return { awaitingDisambiguation: false };
+  return { awaitingDisambiguation: false, added };
 }
 
 // Resolve the user's disambiguation picks: commit the chosen board URL through
@@ -203,8 +192,8 @@ export async function* runChecklistAdd(
 // narrate one line each.
 export async function* runDisambiguationResolution(
   resolved: DisambiguationResolution[],
-  args: ChecklistAddArgs,
-): AsyncGenerator<TurnEvent> {
+  args: WatchlistAddArgs,
+): AsyncGenerator<TurnEvent, string[]> {
   const companies = await prisma.company.findMany({
     where: { id: { in: resolved.map((r) => r.companyId) } },
     select: { id: true, slug: true },
@@ -224,10 +213,11 @@ export async function* runDisambiguationResolution(
         shortDescription: r.shortDescription,
       },
     }));
-  if (toEnrich.length === 0) return;
+  if (toEnrich.length === 0) return [];
 
   const it = runEnrichCompanies({ ...args, companies: toEnrich });
 
+  const added: string[] = [];
   let step = await it.next();
   while (!step.done) {
     const ev = step.value;
@@ -238,6 +228,7 @@ export async function* runDisambiguationResolution(
         args.runId,
       );
     } else {
+      if (landed(ev.result)) added.push(ev.result.name);
       const line = lineFor(ev.result);
       if (line) yield* narrateText(args.sessionId, line, args.runId);
       yield { type: "refresh_viewed_state" };
@@ -245,4 +236,5 @@ export async function* runDisambiguationResolution(
     // eslint-disable-next-line no-await-in-loop -- draining a generator — each step is produced by the previous one
     step = await it.next();
   }
+  return added;
 }

@@ -2,32 +2,21 @@ import { widgetEvent } from "@/server/agent/contracts";
 import type { TurnEvent } from "@/server/agent/contracts";
 import { runFindCompanies } from "@/server/procedures/registry/findCompanies";
 
-import { loadPendingChecklist } from "./pendingWidgets";
-
 import type { WalkthroughArgs, WalkthroughResult } from "./types";
 
 // Find companies worth adding and put the checklist on screen. Entered by the
 // `find_companies` handoff; `direction` is Hank's free-text steer (absent = work
 // from the user's thesis alone).
 //
-// Re-entry re-SHOWS a pending checklist rather than re-running the search. The
-// candidate list is an LLM call and it's already persisted in the
-// widget payload, so when the user types past the checklist and comes back, the
-// cheap thing is also the right thing — they see the question they still owe an
-// answer to. A NEW direction always searches again: that's the user asking for
-// different results, not returning to the same ones.
+// Re-entry always searches. Candidates the user never answered aren't lost by
+// that — they're carried into the search's own input and re-emitted when the new
+// direction still supports them (entities/companies/companySuggestions.ts), so
+// the list that comes back is the same names filtered against what the user just
+// said, rather than a replay of a batch they'd already walked away from.
 export async function* runDiscoveryArm(
   direction: string | undefined,
   args: WalkthroughArgs,
 ): AsyncGenerator<TurnEvent, WalkthroughResult> {
-  if (!direction) {
-    const pending = await loadPendingChecklist(args.sessionId);
-    if (pending) {
-      yield widgetEvent("company_checklist", pending);
-      return { wrappedUp: false };
-    }
-  }
-
   const r = await runFindCompanies({ direction }, args);
 
   // Both empty cases have to speak for themselves — a handoff already ended
