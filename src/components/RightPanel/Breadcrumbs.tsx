@@ -3,6 +3,7 @@
 import styled from "styled-components";
 
 import { useChatStore } from "@/lib/chatStore";
+import { documentsSubPageLabel, type DocumentsSubPage } from "@/lib/panelMode";
 
 const Nav = styled.nav`
   display: flex;
@@ -58,6 +59,7 @@ export function Breadcrumbs({
   opportunity,
   unaffiliatedJob,
   documents,
+  documentsSubPage,
   analytics,
   shortlistBoard,
   jobId,
@@ -73,8 +75,10 @@ export function Breadcrumbs({
   // an italic `<unaffiliated>` slot before the job title so the breadcrumb's
   // depth stays consistent and the missing-parent state is visible.
   unaffiliatedJob?: boolean;
-  // True for the documents view: `Dashboard / Documents`.
+  // True for the documents view: `Dashboard / Documents`, plus a third crumb
+  // for the open sub-page.
   documents?: boolean;
+  documentsSubPage?: DocumentsSubPage;
   // True for the analytics view: `Dashboard / Analytics`.
   analytics?: boolean;
   // Company whose shortlist board is showing: `Dashboard / <Company> / Shortlist`.
@@ -85,6 +89,7 @@ export function Breadcrumbs({
   application?: boolean;
 }) {
   const viewDashboard = useChatStore((s) => s.viewDashboard);
+  const setDocumentsSubPage = useChatStore((s) => s.setDocumentsSubPage);
   const viewCompany = useChatStore((s) => s.viewCompany);
   const viewJob = useChatStore((s) => s.viewJob);
 
@@ -126,13 +131,26 @@ export function Breadcrumbs({
     );
   }
 
-  // Documents: `Dashboard / Documents`. Current node is non-clickable.
+  // Documents: `Dashboard / Documents[ / <sub-page>]`. On a sub-page the
+  // Documents crumb is what goes back up to the index.
   if (documents) {
+    const onSubPage =
+      documentsSubPage !== undefined && documentsSubPage !== "index";
     return (
       <Nav aria-label="Breadcrumb">
         <Crumb onClick={() => viewDashboard()}>Dashboard</Crumb>
         <Sep>/</Sep>
-        <Current>Documents</Current>
+        {onSubPage ? (
+          <>
+            <Crumb onClick={() => setDocumentsSubPage("index")}>
+              Documents
+            </Crumb>
+            <Sep>/</Sep>
+            <Current>{documentsSubPageLabel(documentsSubPage)}</Current>
+          </>
+        ) : (
+          <Current>Documents</Current>
+        )}
       </Nav>
     );
   }

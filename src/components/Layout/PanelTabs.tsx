@@ -2,7 +2,8 @@
 
 import styled from "styled-components";
 
-import { useChatStore, type PanelMode } from "@/lib/chatStore";
+import { useChatStore } from "@/lib/chatStore";
+import type { PanelMode } from "@/lib/panelMode";
 
 // Narrow-only tab switcher between Chat and the right panel. Styled as an
 // iOS-style segmented pill: one rounded container with a filled "active"

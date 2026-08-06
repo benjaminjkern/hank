@@ -43,6 +43,9 @@ export type OpportunityEventView = {
 
 export type FocusedOpportunityView = {
   id: string;
+  // The lead's URL segment (/dashboard/<slug>). Null on rows minted before
+  // slugs; the URL falls back to the cuid.
+  slug: string | null;
   label: string;
   status: OpportunityStatusName;
   nextStepAt: string | null;
@@ -214,6 +217,7 @@ export async function getFocusedOpportunityView(
 
   return {
     id: opp.id,
+    slug: opp.slug,
     label: opp.label,
     status: opp.status,
     nextStepAt: opp.nextStepAt?.toISOString() ?? null,

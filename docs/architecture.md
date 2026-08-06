@@ -4,7 +4,7 @@
 
 **Focus is ephemeral — there is NO persisted focus slot.** "Focus" is just the entity the deterministic pipeline is working on for the duration of ONE turn: the walkthrough state machine takes an `entryTarget` (`EntryTarget = { kind: "company"; id; direction? } | { kind: "job" | "opportunity"; id } | { kind: "discovery"; direction? }`, in [contracts/entryTarget.ts](../src/server/agent/contracts/entryTarget.ts)) threaded in-memory and dispatches on it. Nothing is written to `ChatSession`. Continuity across turns rides on **widget payloads** (every picker/confirm carries its `companyId`/`jobId`, and the user's next click carries it back) and, in free chat, on **Hank re-supplying a slug** via a tool. This replaced the old sticky `ChatSession.focused*` columns + the `set_focus` tool + the three companion markers — **all removed** (migration `20260724130000_drop_ephemeral_focus_columns`).
 
-**View** = what the user is displaying in the right panel (`chatStore.viewed*` + `panelMode`), transient and client-only. It is the only durable "what's on screen" state now.
+**View** = what the user is displaying in the right panel (`chatStore.viewed*` + `panelMode`). It is the only durable "what's on screen" state now, and it is **addressable**: the panel writes its state into the URL and restores from it on load, so a refresh or a bookmark comes back to the same view. See [ui.md → The panel's address](ui.md).
 
 **Focus switches are legible + clickable via the `focus_ref` chip.** Every focus-change seam emits a `focus_ref` token — **server-side, never typed by Hank** — that renders as a clickable chip in chat ("Picking up **Stripe**"). Click = **view-only** navigation to that entity's detail page (like `<job-ref/>`; see [ui.md → chat message shape](ui.md#chat-message-shape)). The token rides inside a `pipeline_status` block, reusing that channel's persist / stream / strip-for-the-LLM provenance ([focusRefToken.ts](../src/lib/focusRefToken.ts)). The chip is the durable, replayable record of where focus went — but it is **never read back** to determine "current focus" (that would be re-deriving sticky state; deliberately not done).
 
@@ -18,9 +18,9 @@
 
 **Free chat has no focus.** Hank's walkthrough prompt has no "you're focused on X" block — he works from the conversation + the chips. To put something on screen he calls a `show_*` tool; to work on it, `work_on_job` / `company_walkthrough`. Tools that used to default to the focused entity (`close_job`, `defer_job`, `save_application_answer`, `show_next_role`, …) now **require an explicit slug** (the resolver no longer falls back to a focused entity) — Hank supplies it from context.
 
-**Panel-sync is `buildShowEvents(userId, target)`** ([showEvents.ts](../src/server/views/showEvents.ts)) — takes the entity explicitly (no slot read), emits a `show` UI event (updates only `viewed*`/`panelMode`, never a sticky pill — there isn't one) + `panel_mode`, precedence job > opportunity > company > dashboard. Pass `{}` for the dashboard fallback (after a wrap). The deterministic mutators call it with the entity they just acted on; `/api/session` cold-load has no focus to restore, so a reload opens on the **dashboard**.
+**Panel-sync is `buildShowEvents(userId, target)`** ([showEvents.ts](../src/server/views/showEvents.ts)) — takes the entity explicitly (no slot read), emits a `show` UI event (updates only `viewed*`/`panelMode`, never a sticky pill — there isn't one) + `panel_mode`, precedence job > opportunity > company > dashboard. Pass `{}` for the dashboard fallback (after a wrap). The deterministic mutators call it with the entity they just acted on. Its cold-load counterpart is `loadPanelView` ([panelView.ts](../src/server/views/panelView.ts)), which takes a parsed URL instead of an entity — a reload opens on whatever the URL names.
 
-**All UI navigation is view-only.** Dashboard / breadcrumb / entity rows / `focus_ref` chips call `viewDashboard()` / `viewCompany(id)` / `viewJob(id)` / `viewOpportunity(id)` in [chatStore.ts](../src/lib/chatStore.ts), which fetch `/api/<entity>/[id]` and update `viewed*` + `panelMode`. There is no `goToFocus()` and no `set_focus`/`show_focus` — those are gone with the slot.
+**All UI navigation is view-only, and every route into the panel goes through a chatStore action.** Dashboard / breadcrumb / entity rows / `focus_ref` chips call `viewDashboard()` / `viewCompany(id)` / `viewJob(id)` / `viewOpportunity(id)` in [chatStore.ts](../src/lib/chatStore.ts), which fetch `/api/<entity>/[id]` and update `viewed*` + `panelMode`. That funnel is what lets a single store subscription keep the URL in step with all of them ([ui.md → The panel's address](ui.md)) — a new navigator needs no URL code of its own, only a `panelMovedBy` mark. There is no `goToFocus()` and no `set_focus`/`show_focus` — those are gone with the slot.
 
 **Non-entity panel modes** (no `viewed*` slot): `dashboard`, `documents`, `analytics`, reached from the TopBar. A `show` event with no entity resolves to `dashboard`. If you add another, follow the shape (a `panelMode` value + a `view*()` action + self-fetching component) rather than inventing focus state. (`shortlist-board` is entity-scoped — `viewedBoard` + `viewShortlistBoard(companyId)` — and gets its show events from the sibling builder `buildShortlistBoardEvents`, since `buildShowEvents` derives its mode from which entity loaded and a per-company board isn't distinguishable that way.)
 
@@ -42,16 +42,21 @@ There is no "add a fifth flow" recipe any more, because there is no flow registr
 
 The dashboard's old focused-state **visual cascade** (a Company/Opportunity group glowing when a child matched `focus.jobId`) is now **inert** — there's no sticky focus to match, so nothing glows. `chatStore.focus` survives as an always-null field the DashboardView / CompanyContextView tint logic still reads; removing the tint code entirely is follow-up polish. The clickable `focus_ref` chips are the new "where did focus go" signal.
 
-Breadcrumbs in [RightPanel.tsx](../src/components/RightPanel/RightPanel.tsx) are derived from the _viewed_ entities (what's displayed) — unchanged:
+Breadcrumbs in [RightPanel.tsx](../src/components/RightPanel/RightPanel.tsx) are derived from the _viewed_ entities (what's displayed), and the URL is the same trail lowercased with slugs for the names:
 
-| Panel mode                               | Breadcrumb                                                                                    |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `dashboard`                              | (none)                                                                                        |
-| `documents`                              | `Dashboard / Documents` (current node non-clickable)                                          |
-| `company-context`                        | `Dashboard / <CompanyName>`                                                                   |
-| `job-detail` with `job.company` set      | `Dashboard / <CompanyName> / <JobTitle>`                                                      |
-| `job-detail` with `job.company === null` | `Dashboard / <unaffiliated> / <JobTitle>` (middle slot is a non-navigable italic placeholder) |
-| `opportunity-detail`                     | `Dashboard / <OpportunityLabel>` (leads span multiple companies, so no company crumb)         |
+| Panel mode                               | Breadcrumb                                                                                    | URL |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------- | --- |
+| `dashboard`                              | (none)                                                                                        | `/` |
+| `documents`                              | `Dashboard / Documents[ / <SubPage>]` (current node non-clickable)                            | `/dashboard/documents[/<sub-page>]` |
+| `analytics`                              | `Dashboard / Analytics`                                                                       | `/dashboard/analytics` |
+| `company-context`                        | `Dashboard / <CompanyName>`                                                                   | `/dashboard/<company>` |
+| `shortlist-board`                        | `Dashboard / <CompanyName> / Shortlist`                                                       | `/dashboard/<company>/shortlist` |
+| `job-detail` with `job.company` set      | `Dashboard / <CompanyName> / <JobTitle>`                                                      | `/dashboard/<company>/<job>` |
+| `job-detail` with `job.company === null` | `Dashboard / <unaffiliated> / <JobTitle>` (middle slot is a non-navigable italic placeholder) | `/dashboard/unaffiliated/<job>` |
+| `application`                            | `Dashboard / <CompanyName> / <JobTitle> / Application`                                        | `/dashboard/<company>/<job>/application` |
+| `opportunity-detail`                     | `Dashboard / <OpportunityLabel>` (leads span multiple companies, so no company crumb)         | `/dashboard/<lead>` |
+
+A bare depth-1 segment could name a company or a lead, so `loadPanelView` tries company first — a slug that collides across the two makes the lead unreachable by URL. `documents` / `analytics` / `unaffiliated` shadow an identically-slugged entity for the same reason; the minter carries no reserved list.
 
 The lead context for an opportunity-linked job lives on the JobDetailView itself (a `← Pitched via <lead label>` chip), not the breadcrumb — keeping breadcrumbs as pure navigation.
 

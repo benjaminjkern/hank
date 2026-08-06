@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 
-import { useChatStore, type DocumentsSubPage } from "@/lib/chatStore";
+import { useChatStore } from "@/lib/chatStore";
 import { withImpersonate } from "@/lib/impersonation";
+import { documentsSubPageLabel, type DocumentsSubPage } from "@/lib/panelMode";
 import { statusColor, statusLabel } from "@/lib/statusColors";
 import type { FocusedJobView } from "@/server/agent/tools/lib/types";
 import type { EditableDocKind } from "@/server/entities/narrativeDocs";
@@ -136,23 +137,6 @@ function IndexRow({
 
 // ---- sub-page chrome --------------------------------------------------------
 
-const BackBar = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: ${({ theme }) => theme.space.xs};
-  align-self: flex-start;
-  background: transparent;
-  padding: 2px 6px 2px 4px;
-  font-size: 12px;
-  font-family: ${({ theme }) => theme.font.mono};
-  color: ${({ theme }) => theme.colors.accent};
-  border-radius: ${({ theme }) => theme.radius.sm};
-  cursor: pointer;
-  &:hover {
-    background: ${({ theme }) => theme.colors.bgHover};
-  }
-`;
-
 const SubTitle = styled.h3`
   font-size: 15px;
   font-weight: 600;
@@ -167,24 +151,21 @@ const SubHint = styled.div`
   margin-top: 2px;
 `;
 
+// Getting back up to the index is the breadcrumb's job (`Dashboard /
+// Documents / <this page>`) and the browser's — each sub-page has its own URL.
 function SubPageShell({
-  title,
+  subPage,
   hint,
-  onBack,
   children,
 }: {
-  title: string;
+  subPage: DocumentsSubPage;
   hint?: string;
-  onBack: () => void;
   children: React.ReactNode;
 }) {
   return (
     <Wrap>
       <PageHead>
-        <BackBar type="button" onClick={onBack}>
-          ← All documents
-        </BackBar>
-        <SubTitle>{title}</SubTitle>
+        <SubTitle>{documentsSubPageLabel(subPage)}</SubTitle>
         {hint && <SubHint>{hint}</SubHint>}
       </PageHead>
       {children}
@@ -343,12 +324,6 @@ function saveToneLabel(t: SaveTone): string {
   if (t === "saved") return "Saved";
   if (t === "error") return "Save failed";
   return "";
-}
-
-// Find the right-panel scroll container (tagged in RightPanel) so the artifacts
-// sub-page can capture / restore its offset across a job round-trip.
-function scrollEl(): HTMLElement | null {
-  return document.querySelector<HTMLElement>("[data-rp-scroll]");
 }
 
 // ---- editable narrative doc (edit in place, autosave on blur) ---------------
@@ -939,7 +914,6 @@ function ArtifactsBody({
   artifacts,
   readOnly,
   expandedArtifacts,
-  scrollTop,
   onToggleArtifact,
   onOpenApplication,
   onCanonical,
@@ -948,24 +922,11 @@ function ArtifactsBody({
   artifacts: DocumentArtifact[];
   readOnly: boolean;
   expandedArtifacts: string[];
-  scrollTop: number;
   onToggleArtifact: (jobInteractionId: string) => void;
   onOpenApplication: (jobId: string) => void;
   onCanonical: (jobId: string, fresh: FocusedJobView) => void;
   onOptimistic: (jobId: string, patch: Partial<DocumentArtifact>) => void;
 }) {
-  // Restore the offset captured when the user opened a job from this page,
-  // once, after this list has mounted with its expanded blocks in place.
-  const restored = useRef(false);
-  useEffect(() => {
-    if (restored.current) return;
-    restored.current = true;
-    if (scrollTop > 0) {
-      const el = scrollEl();
-      if (el) el.scrollTop = scrollTop;
-    }
-  }, [scrollTop]);
-
   if (artifacts.length === 0) {
     return (
       <EmptyHint>
@@ -1084,12 +1045,9 @@ export function DocumentsView() {
   const expandedArtifacts = useChatStore(
     (s) => s.documentsNav.expandedArtifacts,
   );
-  const scrollTop = useChatStore((s) => s.documentsNav.scrollTop);
   const setSubPage = useChatStore((s) => s.setDocumentsSubPage);
   const toggleArtifact = useChatStore((s) => s.toggleDocumentsArtifact);
-  const openApplicationFromDocuments = useChatStore(
-    (s) => s.openApplicationFromDocuments,
-  );
+  const viewApplication = useChatStore((s) => s.viewApplication);
   const documentsEpoch = useChatStore((s) => s.documentsEpoch);
 
   const [data, setData] = useState<DocumentsPayload | null>(null);
@@ -1178,12 +1136,10 @@ export function DocumentsView() {
         : prev,
     );
 
-  const backToIndex = () => setSubPage("index");
-
   // ---- sub-pages ----
   if (subPage === "resume") {
     return (
-      <SubPageShell title="Resume" onBack={backToIndex}>
+      <SubPageShell subPage="resume">
         <ResumeBody
           resumes={data.resumes}
           background={data.docs.resume}
@@ -1199,9 +1155,8 @@ export function DocumentsView() {
   if (subPage === "profile") {
     return (
       <SubPageShell
-        title="Profile"
+        subPage="profile"
         hint="Your target role, level, location and comp, plus the preferences Hank applies everywhere (e.g. 'always IC, never lead')."
-        onBack={backToIndex}
       >
         <CardPad>
           <InlineEditableDoc
@@ -1219,9 +1174,8 @@ export function DocumentsView() {
   if (subPage === "frequent") {
     return (
       <SubPageShell
-        title="Frequent questions"
+        subPage="frequent"
         hint="Saved answers to recurring application questions Hank reuses when drafting."
-        onBack={backToIndex}
       >
         <CardPad>
           <InlineEditableDoc
@@ -1239,20 +1193,15 @@ export function DocumentsView() {
   if (subPage === "artifacts") {
     return (
       <SubPageShell
-        title="Cover letters & short answers"
+        subPage="artifacts"
         hint="Drafts you've created. Expand one to read it or toggle whether Hank reuses it for new applications; open the job to edit the text."
-        onBack={backToIndex}
       >
         <ArtifactsBody
           artifacts={data.artifacts}
           readOnly={readOnly}
           expandedArtifacts={expandedArtifacts}
-          scrollTop={scrollTop}
           onToggleArtifact={toggleArtifact}
-          onOpenApplication={(jobId) => {
-            const el = scrollEl();
-            void openApplicationFromDocuments(jobId, el ? el.scrollTop : 0);
-          }}
+          onOpenApplication={(jobId) => void viewApplication(jobId)}
           onCanonical={onArtifactCanonical}
           onOptimistic={onArtifactOptimistic}
         />
@@ -1262,7 +1211,7 @@ export function DocumentsView() {
 
   if (subPage === "files") {
     return (
-      <SubPageShell title="Uploaded files" onBack={backToIndex}>
+      <SubPageShell subPage="files">
         <AttachmentsBody
           attachments={data.attachments}
           impersonate={impersonate}
@@ -1273,15 +1222,13 @@ export function DocumentsView() {
 
   // ---- index ----
   const rows: Array<{
-    page: DocumentsSubPage;
-    title: string;
+    page: Exclude<DocumentsSubPage, "index">;
     description: string;
     meta: string;
     filled: boolean;
   }> = [
     {
       page: "resume",
-      title: "Resume",
       description: "What Hank reads to target roles and draft applications.",
       meta: data.docs.resume.trim()
         ? data.resumes.length
@@ -1292,7 +1239,6 @@ export function DocumentsView() {
     },
     {
       page: "profile",
-      title: "Profile",
       description:
         "Your target role, level, location and comp, plus the preferences Hank applies everywhere.",
       meta: data.docs.profile.trim() ? "Filled in" : "Empty",
@@ -1300,21 +1246,18 @@ export function DocumentsView() {
     },
     {
       page: "frequent",
-      title: "Frequent questions",
       description: "Saved answers to recurring questions Hank reuses.",
       meta: data.docs.frequentQuestions.trim() ? "Filled in" : "Empty",
       filled: data.docs.frequentQuestions.trim().length > 0,
     },
     {
       page: "artifacts",
-      title: "Cover letters & short answers",
       description: "Drafts you've created, and which ones Hank reuses.",
       meta: data.artifacts.length > 0 ? `${data.artifacts.length}` : "None yet",
       filled: data.artifacts.length > 0,
     },
     {
       page: "files",
-      title: "Uploaded files",
       description: "Files you dropped into chat.",
       meta: data.attachments.length > 0 ? `${data.attachments.length}` : "None",
       filled: data.attachments.length > 0,
@@ -1335,7 +1278,7 @@ export function DocumentsView() {
       {rows.map((r) => (
         <IndexRow
           key={r.page}
-          title={r.title}
+          title={documentsSubPageLabel(r.page)}
           description={r.description}
           meta={r.meta}
           filled={r.filled}

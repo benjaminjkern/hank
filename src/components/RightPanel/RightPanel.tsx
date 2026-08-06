@@ -118,6 +118,7 @@ export function RightPanel() {
   const viewedOpportunity = useChatStore((s) => s.viewedOpportunity);
   const viewedBoard = useChatStore((s) => s.viewedBoard);
   const viewedApplication = useChatStore((s) => s.viewedApplication);
+  const documentsSubPage = useChatStore((s) => s.documentsNav.subPage);
   const dashboard = useChatStore((s) => s.dashboard);
   const collapsed = useChatStore((s) => s.rightCollapsed);
   const toggle = useChatStore((s) => s.toggleRightCollapsed);
@@ -159,7 +160,9 @@ export function RightPanel() {
     );
 
   // Breadcrumbs reflect what the panel is currently *viewing*, not Hank's
-  // focus. Four panel modes, each with its own crumb shape:
+  // focus, and they're the shape the URL mirrors (see src/lib/panelUrl.ts).
+  // The three branches below cover documents / analytics / shortlist-board /
+  // application; this block builds the remaining ones:
   //   dashboard           — no crumbs
   //   company-context     — Dashboard / <CompanyName>
   //   job-detail (w/ co)  — Dashboard / <CompanyName> / <JobTitle>
@@ -191,7 +194,7 @@ export function RightPanel() {
       <Bar>
         <BarBreadcrumbs>
           {panelMode === "documents" ? (
-            <Breadcrumbs documents />
+            <Breadcrumbs documents documentsSubPage={documentsSubPage} />
           ) : panelMode === "analytics" ? (
             <Breadcrumbs analytics />
           ) : panelMode === "shortlist-board" && viewedBoard ? (
@@ -223,9 +226,7 @@ export function RightPanel() {
           ›
         </Toggle>
       </Bar>
-      {/* data-rp-scroll marks the single right-panel scroll container so the
-          Documents view can capture/restore its offset across a job round-trip. */}
-      <Content data-rp-scroll>
+      <Content>
         <ClientErrorBoundary
           component="RightPanel"
           fallback={

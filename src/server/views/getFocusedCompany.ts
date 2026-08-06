@@ -60,6 +60,8 @@ export type CompanyBlockReasonName =
 export type FocusedCompanyView = {
   id: string;
   name: string;
+  // The company's URL segment (/dashboard/<slug>). NOT NULL in the schema.
+  slug: string;
   // Nullable while the add_to_watchlist URL hunter is still in flight or
   // ended with CANNOT_SCRAPE. UI renders a placeholder when null.
   sourceUrl: string | null;
@@ -281,6 +283,7 @@ export async function getFocusedCompanyView(
   return {
     id: company.id,
     name: company.name,
+    slug: company.slug,
     sourceUrl: company.sourceUrl,
     description: company.description,
     status: companyInteraction?.status ?? "NEW",

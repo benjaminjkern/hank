@@ -3,6 +3,7 @@
 // the deterministic layer emits these too — views/showEvents.ts and the
 // widget dispatchers produce UiEvents without being tools.
 
+import type { PanelMode } from "@/lib/panelMode";
 import type { ApplicationView } from "@/server/views/application";
 import type { FocusedCompanyView } from "@/server/views/getFocusedCompany";
 import type { FocusedJobView } from "@/server/views/getFocusedJob";
@@ -22,13 +23,9 @@ export type UiEvent =
       board: ShortlistBoardView | null;
       application: ApplicationView | null;
     }
+  // Documents / analytics are excluded because nothing server-side can put
+  // them on screen — they carry no entity, so no show event resolves to one.
   | {
       type: "panel_mode";
-      mode:
-        | "dashboard"
-        | "company-context"
-        | "job-detail"
-        | "opportunity-detail"
-        | "shortlist-board"
-        | "application";
+      mode: Exclude<PanelMode, "documents" | "analytics">;
     };

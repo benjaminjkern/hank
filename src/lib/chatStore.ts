@@ -4,6 +4,7 @@ import { create } from "zustand";
 
 import { reportClientEvent } from "@/lib/clientEvents";
 import { withImpersonate } from "@/lib/impersonation";
+import type { DocumentsSubPage, PanelMode } from "@/lib/panelMode";
 import type { WidgetKind } from "@/lib/widgetKinds";
 import type {
   CompanyJobView,
@@ -13,6 +14,7 @@ import type {
   ShortAnswer,
 } from "@/server/agent/tools/lib/types";
 import type { ApplicationView } from "@/server/views/application";
+import type { PanelView } from "@/server/views/panelView";
 import type { ShortlistBoardView } from "@/server/views/shortlistBoard";
 
 export type { CompanyJobView };
@@ -103,50 +105,13 @@ type PendingAttachment = {
   error?: string;
 };
 
-export type PanelMode =
-  | "dashboard"
-  | "company-context"
-  | "job-detail"
-  | "opportunity-detail"
-  // Per-company shortlist board — every role considered, tiered, editable
-  // while a negotiation is open. Driven by the agent's board show events and
-  // user navigation (dashboard / company page links).
-  | "shortlist-board"
-  // One job's application: every item the form asks for, editable, with the
-  // submit action. Reached from the job page, a chat link, or Hank surfacing it
-  // when he finishes drafting.
-  | "application"
-  // Non-entity-scoped, user-navigable view (like dashboard). Shows the user's
-  // documents (profile / resume / frequent questions / used answers / uploaded
-  // files). Hank never focuses it — there's no session slot for it.
-  | "documents"
-  // Non-entity-scoped analytics view (like documents): activity-by-day grid +
-  // application-status funnel. Self-fetching from /api/analytics; no session slot.
-  | "analytics";
-
-// The Documents view is itself a tiny router: an index of cards, each opening
-// its own sub-page (so the page reads short instead of one long scroll). The
-// current sub-page lives in the store rather than DocumentsView's local state
-// so it survives the unmount when the user opens a job (panelMode flips to
-// "job-detail") and comes back — see `documentsNav` + `backToDocuments`.
-export type DocumentsSubPage =
-  "index" | "resume" | "profile" | "frequent" | "artifacts" | "files";
-
-// Persisted Documents navigation. Lives in the store (not DocumentsView local
-// state) so "open a job, then come back" lands the user on the same sub-page
-// with the same job blocks expanded and the same scroll offset.
+// Documents navigation. The sub-page lives in the store rather than
+// DocumentsView's local state because it's part of the panel's addressable
+// position — panelUrl reads it, and a URL restore writes it.
 type DocumentsNav = {
   subPage: DocumentsSubPage;
   // jobInteractionIds of the artifact blocks expanded on the "artifacts" sub-page.
   expandedArtifacts: string[];
-  // Last scroll offset of the right-panel scroll container while on Documents,
-  // restored on return from a job.
-  scrollTop: number;
-  // True only while viewing a job that was opened via "Open job →" from the
-  // Documents artifacts page — drives the "← Documents" back button on the job
-  // page. Any other way of landing on a job (dashboard, chat, focus) leaves it
-  // false, so the back button never points somewhere the user didn't come from.
-  returnFromJob: boolean;
 };
 
 // Aliases so existing UI imports keep working. The underlying types live in
@@ -317,7 +282,12 @@ type State = {
   // composer chip; the server derives the authoritative relay at send time.
   pendingBoardEditCount: number;
   panelMode: PanelMode;
-  // Sub-page + restore state for the Documents view. See DocumentsNav.
+  // Who moved the panel last, which is what decides whether the URL writer
+  // pushes a history entry or rewrites the current one: a user gesture is a
+  // navigation worth backing out of, while a panel move the agent made (or one
+  // the URL itself asked for) is not. Read only by PanelUrlSync.
+  panelMovedBy: "user" | "agent" | "url";
+  // Sub-page + expanded blocks for the Documents view. See DocumentsNav.
   documentsNav: DocumentsNav;
   // Bumped by refreshViewedEntities. Documents has no viewed-entity slot to
   // refetch — it owns its payload — so this counter is what tells it to reload
@@ -399,19 +369,14 @@ type Actions = {
   viewAnalytics: () => void;
   // Documents sub-page router. setDocumentsSubPage swaps the visible sub-page;
   // toggleDocumentsArtifact expands/collapses a job block (persisted across
-  // unmount); setDocumentsScrollTop records the scroll offset to restore.
+  // unmount).
   setDocumentsSubPage: (subPage: DocumentsSubPage) => void;
   toggleDocumentsArtifact: (jobInteractionId: string) => void;
-  setDocumentsScrollTop: (scrollTop: number) => void;
-  // Open a job from the Documents artifacts page, remembering the scroll offset
-  // and arming the "← Documents" back button on the job page.
-  openApplicationFromDocuments: (
-    jobId: string,
-    scrollTop: number,
-  ) => Promise<void>;
-  // Return to the Documents view an artifact was opened from. DocumentsView
-  // remounts (refetching drafts) and restores its sub-page / expanded / scroll.
-  backToDocuments: () => void;
+  // Put a whole panel state on screen at once, as loaded from a URL — the seed
+  // the shell hands ChatHydrator, and what a Back/Forward press applies.
+  showPanelView: (view: PanelView) => void;
+  // Load the panel a path names and show it. The pull half of showPanelView.
+  viewPanelPath: (path: string) => Promise<void>;
   viewCompany: (companyId: string) => Promise<void>;
   viewJob: (jobId: string) => Promise<void>;
   viewOpportunity: (opportunityId: string) => Promise<void>;
@@ -472,15 +437,14 @@ const initial: State = {
   viewedApplication: null,
   pendingBoardEditCount: 0,
   panelMode: "dashboard",
-  documentsNav: {
-    subPage: "index",
-    expandedArtifacts: [],
-    scrollTop: 0,
-    returnFromJob: false,
-  },
+  panelMovedBy: "user",
+  documentsNav: { subPage: "index", expandedArtifacts: [] },
   documentsEpoch: 0,
   dashboard: null,
-  rightCollapsed: false,
+  // A cold load on the dashboard is chat-first with the panel stowed; a URL
+  // naming a specific view opens expanded (showPanelView). A manual
+  // collapse-toggle sticks after that.
+  rightCollapsed: true,
   activePanel: "chat",
   panelBadge: false,
   pendingAttachments: [],
@@ -592,7 +556,6 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       );
       if (!res.ok) return;
       const data = (await res.json()) as {
-        panelMode: PanelMode;
         messages: MessageView[];
         hasMore: boolean;
         runActive?: boolean;
@@ -604,7 +567,6 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       // newer turn's own end-of-turn refetch supersedes this one.
       if (epochAtFetch !== turnEpoch) return;
 
-      const wasHydrated = get().hydrated;
       // `runActive` true while this client itself is mid-stream is just our
       // own run — only a run with no live local stream is a DRAINING run
       // worth surfacing/polling. (The response predating a brand-new local
@@ -620,19 +582,11 @@ export const useChatStore = create<State & Actions>((set, get) => ({
         // notice is now resolved.
         streamInterrupted: false,
       };
-      if (!wasHydrated) {
-        // First load: focus is ephemeral, so there's nothing persisted to
-        // restore — a cold load lands on the dashboard, chat-first, with the
-        // right panel collapsed until the user or the agent surfaces
-        // something. A manual collapse-toggle sticks after that.
-        next.panelMode = data.panelMode;
-        next.activePanel = "chat";
-        next.rightCollapsed = true;
-      }
-      // Post-hydration, refetchSession deliberately leaves viewed entities
-      // alone: the end-of-turn `done` handler and affectsViewedState pings
-      // drive refreshViewedEntities, which repaints whatever is on screen by
-      // its own id regardless of what the agent was working on.
+      // refetchSession deliberately leaves the panel alone — the URL is what
+      // says which view is open, seeded server-side before hydrate() runs, and
+      // post-hydration the end-of-turn `done` handler and affectsViewedState
+      // pings drive refreshViewedEntities, which repaints whatever is on
+      // screen by its own id regardless of what the agent was working on.
       set(next);
 
       // Drain transitions. Arm: the server is still working a run this client
@@ -895,37 +849,29 @@ export const useChatStore = create<State & Actions>((set, get) => ({
   },
 
   viewDashboard() {
-    // Pure view change — does NOT touch session focus.
-    set({ panelMode: "dashboard" });
+    set({ panelMode: "dashboard", panelMovedBy: "user" });
   },
 
   viewDocuments() {
-    // Pure view change — does NOT touch session focus. The DocumentsView
-    // fetches its own payload on mount, so there's nothing to preload here.
-    // A fresh top-level navigation resets to the index (the back/return path
-    // through backToDocuments preserves the prior sub-page instead).
+    // DocumentsView fetches its own payload on mount, so there's nothing to
+    // preload here. A top-level navigation opens the index; a sub-page is
+    // reached by its own URL, which goes through setDocumentsSubPage.
     set({
       panelMode: "documents",
-      documentsNav: {
-        subPage: "index",
-        expandedArtifacts: [],
-        scrollTop: 0,
-        returnFromJob: false,
-      },
+      panelMovedBy: "user",
+      documentsNav: { subPage: "index", expandedArtifacts: [] },
     });
   },
 
   viewAnalytics() {
-    // Pure view change — does NOT touch session focus. AnalyticsView fetches its
-    // own payload on mount, so there's nothing to preload here.
-    set({ panelMode: "analytics" });
+    // AnalyticsView fetches its own payload on mount — nothing to preload.
+    set({ panelMode: "analytics", panelMovedBy: "user" });
   },
 
   setDocumentsSubPage(subPage) {
-    // Reset scroll when switching sub-pages so each one opens at the top; the
-    // remembered offset only applies to round-trips through a job.
     set((s) => ({
-      documentsNav: { ...s.documentsNav, subPage, scrollTop: 0 },
+      documentsNav: { ...s.documentsNav, subPage },
+      panelMovedBy: "user",
     }));
   },
 
@@ -940,24 +886,38 @@ export const useChatStore = create<State & Actions>((set, get) => ({
     });
   },
 
-  setDocumentsScrollTop(scrollTop) {
-    set((s) => ({ documentsNav: { ...s.documentsNav, scrollTop } }));
-  },
-
-  async openApplicationFromDocuments(jobId, scrollTop) {
-    // Remember where we were before the panel swaps away (which unmounts
-    // DocumentsView), then arm the back button once the page has loaded.
-    set((s) => ({ documentsNav: { ...s.documentsNav, scrollTop } }));
-    await get().viewApplication(jobId);
-    set((s) => ({ documentsNav: { ...s.documentsNav, returnFromJob: true } }));
-  },
-
-  backToDocuments() {
+  showPanelView(view) {
     set((s) => ({
-      panelMode: "documents",
-      activePanel: "right",
-      documentsNav: { ...s.documentsNav, returnFromJob: false },
+      panelMode: view.panelMode,
+      viewedCompany: view.company,
+      viewedJob: view.job,
+      viewedOpportunity: view.opportunity,
+      viewedBoard: view.board,
+      viewedApplication: view.application,
+      pendingBoardEditCount: view.board?.pendingEdits ?? 0,
+      documentsNav: { ...s.documentsNav, subPage: view.documentsSubPage },
+      // A URL naming a specific view is a request to see it, so open the panel
+      // — the chat-first, stowed cold load is for the bare dashboard only.
+      ...(view.panelMode === "dashboard"
+        ? {}
+        : { rightCollapsed: false, activePanel: "right" as const }),
+      panelMovedBy: "url" as const,
     }));
+  },
+
+  async viewPanelPath(path) {
+    try {
+      const res = await fetch(
+        withImpersonate(
+          `/api/panel?path=${encodeURIComponent(path)}`,
+          get().impersonateSessionId,
+        ),
+      );
+      if (!res.ok) return;
+      get().showPanelView((await res.json()) as PanelView);
+    } catch {
+      // ignore — the panel stays where it was
+    }
   },
 
   async viewCompany(companyId: string) {
@@ -970,7 +930,11 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       );
       if (!res.ok) return;
       const data = (await res.json()) as ServerFocusedCompanyView;
-      set({ viewedCompany: data, panelMode: "company-context" });
+      set({
+        viewedCompany: data,
+        panelMode: "company-context",
+        panelMovedBy: "user",
+      });
     } catch {
       // ignore
     }
@@ -983,13 +947,7 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       );
       if (!res.ok) return;
       const data = (await res.json()) as ServerFocusedJobView;
-      // Default the back button off so an unrelated entity never inherits a
-      // stale "← Documents" target from a previous trip.
-      set((s) => ({
-        viewedJob: data,
-        panelMode: "job-detail",
-        documentsNav: { ...s.documentsNav, returnFromJob: false },
-      }));
+      set({ viewedJob: data, panelMode: "job-detail", panelMovedBy: "user" });
     } catch {
       // ignore
     }
@@ -1005,7 +963,11 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       );
       if (!res.ok) return;
       const data = (await res.json()) as ServerFocusedOpportunityView;
-      set({ viewedOpportunity: data, panelMode: "opportunity-detail" });
+      set({
+        viewedOpportunity: data,
+        panelMode: "opportunity-detail",
+        panelMovedBy: "user",
+      });
     } catch {
       // ignore
     }
@@ -1021,13 +983,11 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       );
       if (!res.ok) return;
       const data = (await res.json()) as ApplicationView;
-      // Same as viewJob: default the "← Documents" link off — only
-      // openApplicationFromDocuments re-arms it, after this resolves.
-      set((s) => ({
+      set({
         viewedApplication: data,
         panelMode: "application",
-        documentsNav: { ...s.documentsNav, returnFromJob: false },
-      }));
+        panelMovedBy: "user",
+      });
     } catch {
       // ignore
     }
@@ -1054,6 +1014,7 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       set({
         viewedBoard: data,
         panelMode: "shortlist-board",
+        panelMovedBy: "user",
         pendingBoardEditCount: data.pendingEdits,
       });
     } catch {
@@ -1131,12 +1092,8 @@ export const useChatStore = create<State & Actions>((set, get) => ({
         viewedApplication: null,
         pendingBoardEditCount: 0,
         panelMode: "dashboard",
-        documentsNav: {
-          subPage: "index",
-          expandedArtifacts: [],
-          scrollTop: 0,
-          returnFromJob: false,
-        },
+        panelMovedBy: "user",
+        documentsNav: { subPage: "index", expandedArtifacts: [] },
         activePanel: "chat",
         panelBadge: false,
         pendingAttachments: [],
@@ -1892,10 +1849,14 @@ function applyEvent(
           // right tab so they know there's something to look at. The end-of-
           // turn `done` handler decides whether to auto-flip.
           panelBadge: s.activePanel === "chat" ? true : s.panelBadge,
+          // Hank moving the panel isn't the user navigating, so the URL is
+          // rewritten rather than pushed — Back walks the user's own trail.
+          panelMovedBy: "agent" as const,
         }));
       } else if (inner.type === "panel_mode") {
         set((s) => ({
           panelMode: inner.mode,
+          panelMovedBy: "agent" as const,
           panelBadge: s.activePanel === "chat" ? true : s.panelBadge,
           // Wide viewport: a collapsed right panel hides whatever Hank just
           // surfaced. Expand on agent-driven panel changes so the user sees
