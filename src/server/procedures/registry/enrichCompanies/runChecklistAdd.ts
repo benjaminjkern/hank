@@ -151,7 +151,11 @@ export async function* runChecklistAdd(
   while (!step.done) {
     const ev = step.value;
     if (ev.type === "company_started") {
-      yield { type: "pipeline_status", text: `Looking up ${ev.name}…` };
+      yield* narrateStatus(
+        args.sessionId,
+        `Looking up ${ev.name}…`,
+        args.runId,
+      );
     } else {
       const { result } = ev;
       if (result.outcome.kind === "ambiguous") {

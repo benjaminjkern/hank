@@ -132,6 +132,9 @@ export async function* runHankTurn(
       turnIndex: args.turnIndex,
     });
   }
+  // These two rows carry the ids runAgentTurn already announced on the stream —
+  // pass them through, or the client's live bubbles and these rows are different
+  // messages and the turn re-shuffles on screen when the reconcile lands.
   if (turn.emittedWidgets.length > 0) {
     await appendAssistantMessage(
       args.sessionId,
@@ -144,7 +147,11 @@ export async function* runHankTurn(
             payload: w.payload,
           }) as unknown as Anthropic.ContentBlock,
       ),
-      { runId: args.runId, turnIndex: args.turnIndex },
+      {
+        id: turn.widgetsMessageId,
+        runId: args.runId,
+        turnIndex: args.turnIndex,
+      },
     );
   }
   if (turn.emittedStatusLines.length > 0) {
@@ -157,7 +164,11 @@ export async function* runHankTurn(
             text,
           }) as unknown as Anthropic.ContentBlock,
       ),
-      { runId: args.runId, turnIndex: args.turnIndex },
+      {
+        id: turn.statusLinesMessageId,
+        runId: args.runId,
+        turnIndex: args.turnIndex,
+      },
     );
   }
 

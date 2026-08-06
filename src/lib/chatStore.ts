@@ -1198,7 +1198,12 @@ export const useChatStore = create<State & Actions>((set, get) => ({
     }
 
     const userId = crypto.randomUUID();
+    // The bubble the turn opens in, before the server has named a row of its own.
+    // A `message_start` moves the target from here onward (see applyEvent); this
+    // one is left empty in that case and stops painting the moment the turn ends,
+    // having served as the "…" placeholder while the first row was being built.
     const assistantId = crypto.randomUUID();
+    let currentAssistantId = assistantId;
     const stopController = new AbortController();
 
     // A new turn begins: invalidate any /api/session snapshot still in flight
@@ -1318,7 +1323,7 @@ export const useChatStore = create<State & Actions>((set, get) => ({
           }));
           continue;
         }
-        applyEvent(set, assistantId, ev);
+        currentAssistantId = applyEvent(set, currentAssistantId, ev);
       }
       if (!sawTerminal) {
         // SSE dropped before the terminal event — most often a backgrounded
@@ -1704,6 +1709,9 @@ type LoopEventJson =
       kind: string;
       payload: unknown;
     }
+  // The server opened a new assistant ChatMessage row; everything after it
+  // belongs in a bubble under that id. See applyEvent's message_start case.
+  | { type: "message_start"; messageId: string }
   // Transient mid-turn refresh ping from a deterministic pipeline runner —
   // schedules the same debounced dashboard + viewed-entity refetch that an
   // affectsViewedState tool completion does. No payload, nothing to render.
@@ -1735,12 +1743,36 @@ function cancelPendingViewedStateRefresh() {
   }
 }
 
+// Apply one streamed event to `assistantId`'s bubble, and return the bubble the
+// NEXT event belongs to — normally the same one, but a `message_start` moves it.
+//
+// A run writes several assistant ChatMessage rows (each narrated line is its own
+// row, as is each Hank turn), so painting the whole run into one bubble meant the
+// end-of-turn reconcile — which loads those rows — visibly re-cut the
+// conversation the moment it finished. The server names each row's id as it opens
+// it; following that here is what makes the reconcile a no-op.
 function applyEvent(
   set: (fn: (s: State) => Partial<State>) => void,
   assistantId: string,
   ev: LoopEventJson,
-) {
+): string {
   switch (ev.type) {
+    case "message_start":
+      // First event of a new row. Open an empty bubble under the server's id so
+      // the segments below land in it and the reconcile recognises it. Nothing
+      // renders yet: an empty assistant bubble only paints while it's the last
+      // one and the turn is still streaming (the "…" placeholder).
+      set((s) =>
+        s.messages.some((m) => m.id === ev.messageId)
+          ? {}
+          : {
+              messages: [
+                ...s.messages,
+                { id: ev.messageId, role: "assistant", segments: [] },
+              ],
+            },
+      );
+      return ev.messageId;
     case "text":
       appendAssistantText(set, assistantId, ev.text, ev.parentToolUseId);
       break;
@@ -1952,6 +1984,7 @@ function applyEvent(
       void useChatStore.getState().refreshViewedEntities();
       break;
   }
+  return assistantId;
 }
 
 // Watchdog on the SSE reader. The server writes a `: keepalive` comment every
