@@ -26,8 +26,16 @@ import {
 import { nowDate } from "@/utils/now";
 import { normalizeForCompare } from "@/utils/text";
 
-import { proposedDraftsPatch } from "./applicationDrafts";
+import {
+  proposedDraftsPatch,
+  readProposedDrafts,
+  readShortAnswers,
+} from "./applicationDrafts";
 import { COVER_LETTER_ID, questionId } from "./applicationItemId";
+import {
+  readStoredUserQuestions,
+  writeStoredUserQuestions,
+} from "./userAddedQuestions";
 
 type QuestionSource = "scraped" | "user";
 type MergedQuestion = ApplicationQuestion & {
@@ -79,6 +87,7 @@ function readUserAddedQuestions(raw: unknown): ApplicationQuestion[] {
           ? { addedByUserId: o.addedByUserId }
           : {}),
         ...(typeof o.addedAt === "string" ? { addedAt: o.addedAt } : {}),
+        ...(typeof o.relayedAt === "string" ? { relayedAt: o.relayedAt } : {}),
       },
     ];
   });
@@ -158,10 +167,17 @@ export async function resolveQuestionId(
 }
 
 // Append a user-described question to the GLOBAL Job.userAddedQuestions with
-// provenance (who/when), deduped by normalizeForCompare against both the scraped form
-// and existing user-added entries. Also nulls the ADDING user's cached
-// draftDecision so the new question is included next whole-form pass (other
-// users pick it up when their decision next re-runs). Returns the question's id.
+// provenance (who/when), deduped by normalizeForCompare against both the scraped
+// form and existing user-added entries. Returns the question's id.
+//
+// It deliberately does NOT touch anyone's cached draftDecision. Clearing it to
+// force a re-decide threw away every other question's verdict to add one, and
+// the application page reads those verdicts to decide which questions it can
+// file under "you fill these in yourself" — so adding one question made a dozen
+// already-triaged ones reappear with editors. Staleness is detected instead:
+// `decisionCoversForm` re-decides when the cached decision no longer covers the
+// live form, which also catches a re-scrape that added questions, and does it
+// for EVERY user rather than only the one who typed.
 export async function addUserQuestion(
   userId: string,
   jobId: string,
@@ -204,18 +220,144 @@ export async function addUserQuestion(
   };
   const next = [...existingRaw, entry];
 
+  await prisma.job.update({
+    where: { id: jobId },
+    data: { userAddedQuestions: next as unknown as Prisma.InputJsonValue },
+  });
+  return { ok: true, id: questionId(question), alreadyPresent: false };
+}
+
+export type RenameUserQuestionResult =
+  | { ok: true; id: string }
+  | { ok: false; reason: "not_found" | "not_yours" | "duplicate" };
+
+// Reword a question the user described by hand. Only the person who added it
+// may — a scraped question is what the form actually says, and someone else's
+// wording isn't yours to change.
+//
+// The question text IS the key every answer is stored under (see
+// applicationItemId), so a rename has to carry this user's saved answer, Hank's
+// baseline, and the cached verdict across with it or the answer detaches and
+// resurfaces as an orphan. Other users of the same posting keep answers under
+// the old wording; those degrade to the orphan-answer path loadApplicationView
+// already renders, which is the honest outcome — their answer is still theirs,
+// it just no longer matches a question on the form.
+export async function renameUserQuestion(
+  userId: string,
+  jobId: string,
+  currentQuestion: string,
+  nextQuestion: string,
+): Promise<RenameUserQuestionResult> {
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    select: { applicationQuestions: true, userAddedQuestions: true },
+  });
+  if (!job) return { ok: false, reason: "not_found" };
+
+  const stored = readStoredUserQuestions(job.userAddedQuestions);
+  const currentNorm = normalizeForCompare(currentQuestion);
+  const idx = stored.findIndex(
+    (q) => normalizeForCompare(q.question) === currentNorm,
+  );
+  if (idx < 0) return { ok: false, reason: "not_found" };
+  if (stored[idx].addedByUserId !== userId) {
+    return { ok: false, reason: "not_yours" };
+  }
+
+  const nextNorm = normalizeForCompare(nextQuestion);
+  if (nextNorm !== currentNorm) {
+    const envelope =
+      (job.applicationQuestions as ApplicationQuestionsEnvelope | null) ?? null;
+    const taken = new Set([
+      ...(envelope?.status === "ok" && Array.isArray(envelope.questions)
+        ? envelope.questions.map((q) => normalizeForCompare(q.question))
+        : []),
+      ...stored
+        .filter((_, i) => i !== idx)
+        .map((q) => normalizeForCompare(q.question)),
+    ]);
+    if (taken.has(nextNorm)) return { ok: false, reason: "duplicate" };
+  }
+
+  const next = stored.map((q, i) =>
+    i === idx
+      ? // relayedAt is dropped: a reworded question is a change Hank hasn't
+        // been told about, exactly like a new one.
+        { ...q, question: nextQuestion, relayedAt: undefined }
+      : q,
+  );
+
+  const interaction = await prisma.jobInteraction.findUnique({
+    where: { userId_jobId: { userId, jobId } },
+    select: { shortAnswers: true, proposedDrafts: true, draftDecision: true },
+  });
+
   await prisma.$transaction([
     prisma.job.update({
       where: { id: jobId },
       data: { userAddedQuestions: next as unknown as Prisma.InputJsonValue },
     }),
-    // Force a re-decide for the adding user so the whole-form path sees it.
-    prisma.jobInteraction.updateMany({
-      where: { userId, jobId },
-      data: { draftDecision: Prisma.DbNull },
-    }),
+    ...(interaction
+      ? [
+          prisma.jobInteraction.update({
+            where: { userId_jobId: { userId, jobId } },
+            data: rekeyQuestion(interaction, currentNorm, nextQuestion),
+          }),
+        ]
+      : []),
   ]);
-  return { ok: true, id: questionId(question), alreadyPresent: false };
+  return { ok: true, id: questionId(nextQuestion) };
+}
+
+// Re-point every place this user's row names a question by its text. Each is a
+// JSON blob keyed by wording, so all three move together or the rename splits
+// the answer from its question.
+function rekeyQuestion(
+  row: {
+    shortAnswers: Prisma.JsonValue | null;
+    proposedDrafts: Prisma.JsonValue | null;
+    draftDecision: Prisma.JsonValue | null;
+  },
+  currentNorm: string,
+  nextQuestion: string,
+): Prisma.JobInteractionUpdateInput {
+  const rename = <T extends { question: string }>(entry: T): T =>
+    normalizeForCompare(entry.question) === currentNorm
+      ? { ...entry, question: nextQuestion }
+      : entry;
+
+  const data: Prisma.JobInteractionUpdateInput = {};
+
+  const answers = readShortAnswers(row.shortAnswers);
+  if (answers.some((a) => normalizeForCompare(a.question) === currentNorm)) {
+    data.shortAnswers = answers.map(rename);
+  }
+
+  const drafts = readProposedDrafts(row.proposedDrafts);
+  if (
+    drafts?.answers.some((a) => normalizeForCompare(a.question) === currentNorm)
+  ) {
+    data.proposedDrafts = {
+      ...drafts,
+      answers: drafts.answers.map(rename),
+    } as unknown as Prisma.InputJsonValue;
+  }
+
+  const decision = row.draftDecision as {
+    questions?: { question: string }[];
+  } | null;
+  if (
+    decision?.questions?.some(
+      (q) => normalizeForCompare(q.question) === currentNorm,
+    )
+  ) {
+    data.draftDecision = {
+      ...decision,
+      questions: decision.questions.map(rename),
+    } as unknown as Prisma.InputJsonValue;
+  }
+
+  return data;
 }
 
 // The merge-upsert for an application answer written BY HANK: replaces the cover

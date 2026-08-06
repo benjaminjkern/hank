@@ -5,6 +5,10 @@ import { useEffect } from "react";
 import { useChatStore, type ApiKeyBlockerReason } from "@/lib/chatStore";
 import type { PanelView } from "@/server/views/panelView";
 
+// Module scope = once per document load, which is exactly the lifetime the
+// server-rendered seed is valid for. A real navigation re-imports the module.
+let panelSeeded = false;
+
 export function ChatHydrator({
   initialApiKeyBlocker,
   initialPanel,
@@ -38,7 +42,19 @@ export function ChatHydrator({
     if (initialApiKeyBlocker) setApiKeyBlocker(initialApiKeyBlocker);
     // Same reason: the panel this URL names is already loaded, so paint it
     // rather than flashing the dashboard until /api/session lands.
-    if (initialPanel) showPanelView(initialPanel);
+    //
+    // ONCE per document, though. Next restores a Back press from its rendered
+    // tree rather than re-running the server component, and the client pushes
+    // panel URLs natively — so the tree behind `/dashboard/stripe` can be the
+    // one rendered for `/`, carrying ITS `initialPanel`. Re-seeding from that
+    // on remount reset the panel to the dashboard and the URL writer then
+    // followed it to `/`, which is the "Back loaded the right page then
+    // redirected" bug. After the first paint the URL is the authority, and
+    // PanelUrlSync reconciles to it.
+    if (initialPanel && !panelSeeded) {
+      panelSeeded = true;
+      showPanelView(initialPanel);
+    }
     void hydrate();
   }, [
     hydrate,

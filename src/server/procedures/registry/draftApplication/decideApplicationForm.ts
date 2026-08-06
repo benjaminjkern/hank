@@ -15,6 +15,7 @@ import {
   applicationDeciderSubAgent,
   type ApplicationDecision,
 } from "@/server/subagents/registry/applicationDecider";
+import { normalizeForCompare } from "@/utils/text";
 
 import {
   loadApplicationDeciderInput,
@@ -85,4 +86,23 @@ async function decideForm(
       decidedAt: new Date().toISOString(),
     },
   };
+}
+
+// Whether a cached decision still answers for the whole form. False once the
+// form has grown — a question described by hand, or one a re-scrape turned up.
+//
+// This is how a stale decision is noticed, and it replaced clearing the column
+// at the write site: a decision is N verdicts, and dropping all of them to add
+// one question made every previously-triaged question reappear on the
+// application page (which reads the verdicts to know what not to draft).
+// Comparing coverage re-decides exactly when it's warranted, for every user of
+// the posting rather than only whoever typed.
+export function decisionCoversForm(
+  decision: ApplicationDecision,
+  questions: { question: string }[],
+): boolean {
+  const decided = new Set(
+    decision.questions.map((q) => normalizeForCompare(q.question)),
+  );
+  return questions.every((q) => decided.has(normalizeForCompare(q.question)));
 }

@@ -34,6 +34,10 @@ export type PanelView = {
   board: ShortlistBoardView | null;
   application: ApplicationView | null;
   documentsSubPage: DocumentsSubPage;
+  // Whether this address wants the panel showing. Only the dashboard has both
+  // answers (`/` stows it, `/dashboard` opens it); naming any other view IS
+  // asking to see it, so they're all true.
+  panelOpen: boolean;
 };
 
 const EMPTY = {
@@ -45,9 +49,12 @@ const EMPTY = {
   documentsSubPage: "index",
 } as const;
 
+// The dashboard with the panel stowed — also where an unresolvable address
+// degrades to, since a slug that's gone shouldn't fling a panel open.
 export const DASHBOARD_PANEL_VIEW: PanelView = {
   panelMode: "dashboard",
   ...EMPTY,
+  panelOpen: false,
 };
 
 // Anything that doesn't resolve — a slug that's gone, a role the user doesn't
@@ -59,26 +66,38 @@ export async function loadPanelView(
 ): Promise<PanelView> {
   switch (path.kind) {
     case "dashboard":
-      return DASHBOARD_PANEL_VIEW;
+      return { ...DASHBOARD_PANEL_VIEW, panelOpen: path.open };
 
     case "documents":
       return {
         panelMode: "documents",
         ...EMPTY,
+        panelOpen: true,
         documentsSubPage: path.subPage,
       };
 
     case "analytics":
-      return { panelMode: "analytics", ...EMPTY };
+      return { panelMode: "analytics", ...EMPTY, panelOpen: true };
 
     // A bare segment is a company or a lead; companies win, so a slug that
     // collides across the two makes the lead unreachable by URL.
     case "entity": {
       const company = await loadCompany(userId, path.entity);
-      if (company) return { panelMode: "company-context", ...EMPTY, company };
+      if (company)
+        return {
+          panelMode: "company-context",
+          ...EMPTY,
+          panelOpen: true,
+          company,
+        };
       const opportunity = await loadOpportunity(userId, path.entity);
       return opportunity
-        ? { panelMode: "opportunity-detail", ...EMPTY, opportunity }
+        ? {
+            panelMode: "opportunity-detail",
+            ...EMPTY,
+            panelOpen: true,
+            opportunity,
+          }
         : DASHBOARD_PANEL_VIEW;
     }
 
@@ -87,7 +106,7 @@ export async function loadPanelView(
       if (!resolved.ok) return DASHBOARD_PANEL_VIEW;
       const board = await loadShortlistBoard(userId, resolved.value.id);
       return board
-        ? { panelMode: "shortlist-board", ...EMPTY, board }
+        ? { panelMode: "shortlist-board", ...EMPTY, panelOpen: true, board }
         : DASHBOARD_PANEL_VIEW;
     }
 
@@ -98,7 +117,7 @@ export async function loadPanelView(
       if (!resolved.ok) return DASHBOARD_PANEL_VIEW;
       const job = await getFocusedJobView(userId, resolved.value.id);
       return job
-        ? { panelMode: "job-detail", ...EMPTY, job }
+        ? { panelMode: "job-detail", ...EMPTY, panelOpen: true, job }
         : DASHBOARD_PANEL_VIEW;
     }
 
@@ -107,7 +126,7 @@ export async function loadPanelView(
       if (!resolved.ok) return DASHBOARD_PANEL_VIEW;
       const application = await loadApplicationView(userId, resolved.value.id);
       return application
-        ? { panelMode: "application", ...EMPTY, application }
+        ? { panelMode: "application", ...EMPTY, panelOpen: true, application }
         : DASHBOARD_PANEL_VIEW;
     }
   }

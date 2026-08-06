@@ -13,9 +13,14 @@
 import { JobInteractionStatus, Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { diffWords, renderWordDiff, type WordDiff } from "@/utils/diff";
+import { nowDate } from "@/utils/now";
 import { normalizeForCompare } from "@/utils/text";
 
 import { COVER_LETTER_ID, questionId } from "./applicationItemId";
+import {
+  markUserQuestionsRelayed,
+  readStoredUserQuestions,
+} from "./userAddedQuestions";
 
 import type { ShortAnswer } from "./types";
 
@@ -139,8 +144,9 @@ export type ApplicationEdit = {
   // "Cover letter", or the question as the form asks it.
   label: string;
   // "wrote" — nothing was there; "revised" — Hank's version changed;
-  // "cleared" — the user emptied it.
-  change: "wrote" | "revised" | "cleared";
+  // "cleared" — the user emptied it; "added" — the user described a question
+  // the scrape missed, which is news even with no answer under it yet.
+  change: "wrote" | "revised" | "cleared" | "added";
   diff: WordDiff;
 };
 
@@ -212,6 +218,9 @@ export type ApplicationEditRelay = {
   jobTitle: string;
   companyName: string | null;
   edits: ApplicationEdit[];
+  // The hand-added questions carried by this relay, by their exact text —
+  // settle stamps these relayedAt so they report once, not every message.
+  addedQuestions: string[];
 };
 
 // An APPLIED row is a record, not a working surface: the user may still tidy
@@ -239,6 +248,9 @@ export async function listUnrelayedApplicationEdits(
       OR: [
         { coverLetter: { not: null } },
         { shortAnswers: { not: Prisma.DbNull } },
+        // A question described by hand is a change even with nothing written
+        // under it — Hank has to hear the form asks something he couldn't read.
+        { job: { userAddedQuestions: { not: Prisma.DbNull } } },
       ],
     },
     select: {
@@ -248,12 +260,30 @@ export async function listUnrelayedApplicationEdits(
       shortAnswersReuse: true,
       proposedDrafts: true,
       job: {
-        select: { id: true, title: true, company: { select: { name: true } } },
+        select: {
+          id: true,
+          title: true,
+          userAddedQuestions: true,
+          company: { select: { name: true } },
+        },
       },
     },
   });
   return rows.flatMap((r) => {
-    const edits = applicationEditsFor(r);
+    // Only THIS user's unrelayed additions: the column is global to the job, so
+    // another account's question isn't news to this user's Hank.
+    const added = readStoredUserQuestions(r.job.userAddedQuestions).filter(
+      (q) => q.addedByUserId === userId && !q.relayedAt,
+    );
+    const edits = [
+      ...applicationEditsFor(r),
+      ...added.map((q) => ({
+        itemId: questionId(q.question),
+        label: q.question,
+        change: "added" as const,
+        diff: EMPTY_DIFF,
+      })),
+    ];
     return edits.length === 0
       ? []
       : [
@@ -262,10 +292,15 @@ export async function listUnrelayedApplicationEdits(
             jobTitle: r.job.title,
             companyName: r.job.company?.name ?? null,
             edits,
+            addedQuestions: added.map((q) => q.question),
           },
         ];
   });
 }
+
+// An added question has no before/after text, and the renderer skips the diff
+// for that change kind — this is the shape the field still has to hold.
+const EMPTY_DIFF: WordDiff = diffWords("", "");
 
 // Re-baseline the rows just relayed: Hank has now seen this version, so the next
 // divergence is measured from it. One statement per row is unavoidable (each
@@ -289,6 +324,16 @@ export async function settleRelayedApplicationEdits(
       }),
     ),
   );
+  // Added questions settle on their own marker rather than the draft baseline —
+  // they live on the Job, and there's no text for a baseline to hold.
+  const at = nowDate().toISOString();
+  await Promise.all(
+    relays
+      .filter((r) => r.addedQuestions.length > 0)
+      .map((r) =>
+        markUserQuestionsRelayed(userId, r.jobId, r.addedQuestions, at),
+      ),
+  );
 }
 
 // The model-facing prose for a relay — rendered once at write time and
@@ -304,8 +349,13 @@ export function renderApplicationEditRelayText(
           ? "wrote this themselves"
           : e.change === "cleared"
             ? "deleted what was there"
-            : "edited your draft";
-      return `- ${e.label} — ${verb}:\n    ${renderWordDiff(e.diff)}`;
+            : e.change === "added"
+              ? "added this question by hand — it wasn't on the form you could read"
+              : "edited your draft";
+      // An added question has no before/after to show, just the question.
+      return e.change === "added"
+        ? `- ${e.label} — ${verb}`
+        : `- ${e.label} — ${verb}:\n    ${renderWordDiff(e.diff)}`;
     });
     return `${where}:\n${lines.join("\n")}`;
   });

@@ -5,7 +5,8 @@
 // The grammar mirrors the breadcrumb the panel already renders, lowercased,
 // with entity slugs for the names:
 //
-//   /                                        dashboard
+//   /                                        chat only, panel stowed
+//   /dashboard                               dashboard, panel open
 //   /dashboard/documents[/<sub-page>]        documents
 //   /dashboard/analytics                     analytics
 //   /dashboard/<company>                     company page
@@ -14,8 +15,11 @@
 //   /dashboard/<company>/<job>/application   application page
 //   /dashboard/<lead>                        opportunity page
 //
-// `/dashboard` alone is an accepted alias for `/` — the client canonicalizes it
-// on the seed.
+// `/` and `/dashboard` name the same MODE and differ only in whether the panel
+// is open: the app is chat-first, so arriving at the root shouldn't fling a
+// dashboard open, but "show me the dashboard" needs an address of its own that
+// survives a refresh and a Back press. Every other view is open by definition —
+// naming a company IS asking to see it.
 
 import {
   isDocumentsSubPage,
@@ -23,7 +27,10 @@ import {
   type PanelMode,
 } from "@/lib/panelMode";
 
+// The two dashboard addresses. Panel state picks between them; both parse back
+// to the dashboard mode.
 export const DASHBOARD_PATH = "/";
+export const DASHBOARD_OPEN_PATH = "/dashboard";
 
 // The company slot for a role with no parent Company yet, mirroring the
 // breadcrumb's `<unaffiliated>` placeholder.
@@ -33,7 +40,8 @@ export const UNAFFILIATED = "unaffiliated";
 // deliberately un-disambiguated — a bare depth-1 segment could name either a
 // company or a lead, and only the database can say which.
 export type PanelPath =
-  | { kind: "dashboard" }
+  // `open` distinguishes /dashboard from / — same mode, panel shown vs stowed.
+  | { kind: "dashboard"; open: boolean }
   | { kind: "documents"; subPage: DocumentsSubPage }
   | { kind: "analytics" }
   | { kind: "entity"; entity: string }
@@ -45,34 +53,38 @@ export type PanelPath =
 // stale URL degrades instead of erroring.
 export function parsePanelUrl(pathname: string): PanelPath {
   const segments = pathname.split("/").filter(Boolean).map(decodeURIComponent);
-  if (segments[0] !== "dashboard") return { kind: "dashboard" };
+  // Anything outside the grammar degrades to the dashboard, open iff the path
+  // was reaching for one — a mistyped /dashboard/xyz still wanted the panel.
+  const under = segments[0] === "dashboard";
+  const dashboard = { kind: "dashboard", open: under } as const;
+  if (!under) return dashboard;
 
   const [, first, second, third] = segments;
-  if (first === undefined) return { kind: "dashboard" };
-  if (segments.length > 4) return { kind: "dashboard" };
+  if (first === undefined) return dashboard;
+  if (segments.length > 4) return dashboard;
 
   if (first === "documents") {
     if (second === undefined) return { kind: "documents", subPage: "index" };
     if (third !== undefined || !isDocumentsSubPage(second)) {
-      return { kind: "dashboard" };
+      return dashboard;
     }
     return { kind: "documents", subPage: second };
   }
   if (first === "analytics") {
-    return second === undefined ? { kind: "analytics" } : { kind: "dashboard" };
+    return second === undefined ? { kind: "analytics" } : dashboard;
   }
 
   if (second === undefined) return { kind: "entity", entity: first };
   if (second === "shortlist") {
     return third === undefined
       ? { kind: "shortlist", company: first }
-      : { kind: "dashboard" };
+      : dashboard;
   }
   if (third === undefined) return { kind: "job", company: first, job: second };
   if (third === "application") {
     return { kind: "application", company: first, job: second };
   }
-  return { kind: "dashboard" };
+  return dashboard;
 }
 
 // The panel state the writer reads. Declared structurally so this module
@@ -93,6 +105,9 @@ export type PanelUrlState = {
     company: { slug: string } | null;
   } | null;
   documentsNav: { subPage: DocumentsSubPage };
+  // Only the dashboard has two addresses; every other mode is open by
+  // definition, so this is read for that case alone.
+  rightCollapsed: boolean;
 };
 
 // `null` means "this state has no address" — an entity mode whose payload
@@ -103,7 +118,7 @@ export type PanelUrlState = {
 export function panelUrl(panel: PanelUrlState): string | null {
   switch (panel.panelMode) {
     case "dashboard":
-      return DASHBOARD_PATH;
+      return panel.rightCollapsed ? DASHBOARD_PATH : DASHBOARD_OPEN_PATH;
     case "documents": {
       const { subPage } = panel.documentsNav;
       return subPage === "index"

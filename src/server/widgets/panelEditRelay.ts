@@ -21,6 +21,7 @@ import {
   listUnrelayedApplicationEdits,
   renderApplicationEditRelayText,
   settleRelayedApplicationEdits,
+  type ApplicationEdit,
 } from "@/server/entities/jobs/applicationDrafts";
 import {
   listUnrelayedBoardEdits,
@@ -30,10 +31,11 @@ import {
 
 import type Anthropic from "@anthropic-ai/sdk";
 
-const CHIP_WORD: Record<"wrote" | "revised" | "cleared", string> = {
+const CHIP_WORD: Record<ApplicationEdit["change"], string> = {
   wrote: "written",
   revised: "edited",
   cleared: "cleared",
+  added: "added",
 };
 
 export async function buildPanelEditBlocks(

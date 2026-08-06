@@ -80,6 +80,11 @@ export type ApplicationQuestion = {
   source?: "scraped" | "user";
   addedByUserId?: string;
   addedAt?: string;
+  // When the adding user's chat last carried this question to Hank. Absent =
+  // he hasn't been told it exists, which is what the application page's
+  // pending-change chip and the panel-edit relay both key on. Cleared again on
+  // a rename, since the reworded question is news too.
+  relayedAt?: string;
 };
 
 // `coverLetter` on the ok/empty variants records whether the form has a

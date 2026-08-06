@@ -821,7 +821,10 @@ export const useChatStore = create<State & Actions>((set, get) => ({
   },
 
   toggleRightCollapsed() {
-    set((s) => ({ rightCollapsed: !s.rightCollapsed }));
+    // Collapsing the dashboard IS a change of address (/dashboard ⇄ /), so it
+    // moves the URL — but by replace rather than push: stowing a panel isn't a
+    // navigation the user should have to press Back through.
+    set((s) => ({ rightCollapsed: !s.rightCollapsed, panelMovedBy: "agent" }));
   },
 
   setApiKeyBlocker(reason) {
@@ -849,7 +852,13 @@ export const useChatStore = create<State & Actions>((set, get) => ({
   },
 
   viewDashboard() {
-    set({ panelMode: "dashboard", panelMovedBy: "user" });
+    // Asking for the dashboard is asking to see it — this is what makes the
+    // Dashboard breadcrumb land on /dashboard rather than the stowed root.
+    set({
+      panelMode: "dashboard",
+      rightCollapsed: false,
+      panelMovedBy: "user",
+    });
   },
 
   viewDocuments() {
@@ -896,11 +905,11 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       viewedApplication: view.application,
       pendingBoardEditCount: view.board?.pendingEdits ?? 0,
       documentsNav: { ...s.documentsNav, subPage: view.documentsSubPage },
-      // A URL naming a specific view is a request to see it, so open the panel
-      // — the chat-first, stowed cold load is for the bare dashboard only.
-      ...(view.panelMode === "dashboard"
-        ? {}
-        : { rightCollapsed: false, activePanel: "right" as const }),
+      // The address says whether the panel shows. Every view but the dashboard
+      // is open by definition; `/` is the chat-first stowed one and
+      // `/dashboard` its open twin.
+      rightCollapsed: !view.panelOpen,
+      activePanel: view.panelOpen ? ("right" as const) : ("chat" as const),
       panelMovedBy: "url" as const,
     }));
   },
@@ -1152,11 +1161,11 @@ export const useChatStore = create<State & Actions>((set, get) => ({
     if (application && application.pendingEditCount > 0) {
       pendingViews.push(
         ...application.items
-          .filter((i) => i.edited)
+          .filter((i) => i.edited || i.addedNotRelayed)
           .map((i) => ({
             title: i.label,
             companyName: application.companyName,
-            verdict: "edited",
+            verdict: i.edited ? "edited" : "added",
           })),
       );
     }
