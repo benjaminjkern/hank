@@ -54,6 +54,15 @@ export type { WidgetKind };
 // The two parameters exist to say, in the type, that nothing in this union is
 // ever inspected — a stream carries them from producer to client untouched.
 export type StreamEventOf<TUi, TWidgetKind extends string> =
+  // A new assistant ChatMessage row is opening. Every content event after it
+  // belongs to that row until the next boundary, and `messageId` is the row's
+  // PRE-MINTED `ChatMessage.id` — so the bubbles the client paints live carry
+  // the same ids and the same grouping as the rows the end-of-turn reconcile
+  // loads back. Without it the client had one bubble per send() while the DB had
+  // one row per narration, and every run ended by visibly re-shuffling itself.
+  // Re-entering an id already opened is fine and expected (a turn's tool loop
+  // alternates between its own row and the follow-up widget/status rows).
+  | { type: "message_start"; messageId: string }
   | { type: "text"; text: string; parentToolUseId?: string }
   | {
       type: "tool_use_start";

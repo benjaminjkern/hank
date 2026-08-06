@@ -83,6 +83,13 @@ export type AgentTurnResult = {
   // `pipeline_status` blocks on a follow-up assistant message, like
   // emittedWidgets. Empty when no tool emitted any.
   emittedStatusLines: string[];
+  // The pre-minted row ids for those two follow-up messages. The runner already
+  // named them in `message_start` boundaries as it streamed, so the caller MUST
+  // persist under these ids — otherwise the bubbles the client painted live are
+  // strangers to the rows the end-of-turn reconcile loads back, and the whole
+  // turn re-shuffles on screen the moment it ends.
+  widgetsMessageId: string;
+  statusLinesMessageId: string;
   // Every tool this turn dispatched, in order, with its raw result. The domain
   // layer folds these into whatever it means (last handoff wins; first company
   // to end wins) — see procedures/registry/chat/runChatTurn.ts.
@@ -148,10 +155,24 @@ export async function* runAgentTurn(
     input_schema: t.inputSchema,
   })) as unknown as Anthropic.ToolUnion[];
 
-  // Run-tree capture (admin /admin/runs). Pre-mint the assistant ChatMessage id
-  // so sub-agents spawned mid-turn can record it as their parentMessageId before
-  // the row is written.
+  // Pre-mint the ids of every ChatMessage row this turn will produce. Two
+  // separate needs, one mint: sub-agents spawned mid-turn record the assistant id
+  // as their parentMessageId before the row is written (run-tree capture), and
+  // the boundaries below name all three so the client groups its live bubbles
+  // exactly the way the reconcile will.
   const assistantMessageId = newRunTreeId();
+  const widgetsMessageId = newRunTreeId();
+  const statusLinesMessageId = newRunTreeId();
+  // A turn writes up to three rows and interleaves their events (tool 1's status
+  // line streams before tool 2's chip completes), so the stream has to say which
+  // row it's writing into as it moves between them. Deduped: re-announcing the
+  // row already open is a no-op, so call it freely before any group of events.
+  let openRowId: string | null = null;
+  function* inRow(messageId: string): Generator<StreamEvent> {
+    if (openRowId === messageId) return;
+    openRowId = messageId;
+    yield { type: "message_start", messageId };
+  }
   const traceAcc = createTraceAccumulator();
   const emitTrace = (ev: TraceEvent) => {
     traceAcc.emit(ev);
@@ -186,6 +207,10 @@ export async function* runAgentTurn(
     },
     args.signal ? { signal: args.signal } : undefined,
   );
+
+  // Everything the model itself produces — text deltas and tool chips — lands on
+  // the assistant row, so open it before the first byte arrives.
+  yield* inRow(assistantMessageId);
 
   const emittedStarts = new Set<string>();
   let final: Anthropic.Message;
@@ -253,6 +278,8 @@ export async function* runAgentTurn(
       toolResults: [],
       emittedWidgets: [],
       emittedStatusLines: [],
+      widgetsMessageId,
+      statusLinesMessageId,
       // The stream died before any tool ran.
       dispatched: [],
       stopped: streamStopped,
@@ -312,6 +339,9 @@ export async function* runAgentTurn(
       runId: args.runId,
       timeZone: args.timeZone,
     };
+    // Back to the assistant row: the previous iteration may have left the stream
+    // writing into the widget or status row.
+    yield* inRow(assistantMessageId);
     const tool = toolByName.get(tu.name);
     dispatched.push({ name: tu.name });
     if (!tool) {
@@ -369,6 +399,8 @@ export async function* runAgentTurn(
               toolResults,
               emittedWidgets,
               emittedStatusLines,
+              widgetsMessageId,
+              statusLinesMessageId,
               dispatched,
               stopped: true,
               errored: null,
@@ -408,6 +440,10 @@ export async function* runAgentTurn(
       for (const ui of uiEvents) {
         yield { type: "ui", event: ui };
       }
+      // Widgets and status lines are persisted as their own follow-up rows (see
+      // runHankTurn), so the stream moves into them here and back to the
+      // assistant row at the top of the next iteration.
+      if (widgets.length > 0) yield* inRow(widgetsMessageId);
       for (const w of widgets) {
         emittedWidgets.push(w);
         yield {
@@ -417,6 +453,7 @@ export async function* runAgentTurn(
           payload: w.payload,
         };
       }
+      if (statusLines.length > 0) yield* inRow(statusLinesMessageId);
       for (const line of statusLines) {
         emittedStatusLines.push(line);
         yield { type: "pipeline_status", text: line };
@@ -430,6 +467,8 @@ export async function* runAgentTurn(
     toolResults,
     emittedWidgets,
     emittedStatusLines,
+    widgetsMessageId,
+    statusLinesMessageId,
     dispatched,
     stopped: false,
     errored: null,

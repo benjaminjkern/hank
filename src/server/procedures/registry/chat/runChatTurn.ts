@@ -29,6 +29,7 @@ import {
   runHankTurn,
   type TranscriptInfo,
 } from "@/server/agent/runtime/runHankTurn";
+import { newRunTreeId } from "@/server/agent/runTree/ids";
 import {
   appendAssistantMessage,
   appendUserMessage,
@@ -240,10 +241,19 @@ async function buildTurnSystem(
 //      requiring per-helper inline DB writes.
 // Live SSE streaming is unaffected — events still yield in real time; the
 // persistence happens after the state-machine return.
+//
+// The row's id is minted up front and announced with a `message_start` before the
+// first event that lands in the buffer, so the single bubble the client paints
+// live IS the single row this flushes — the reconcile after the run finds the
+// same id and repaints nothing. The boundary is lazy rather than emitted at entry
+// because a pass that collects nothing must not open an empty bubble that later
+// events would then be misfiled into.
 async function* runStateMachineAndPersist(
   args: WalkthroughArgs,
 ): AsyncGenerator<TurnEvent, WalkthroughResult> {
   const collected: Anthropic.ContentBlock[] = [];
+  const messageId = newRunTreeId();
+  let openedRow = false;
   const sm = runWalkthrough(args);
   try {
     while (true) {
@@ -257,11 +267,14 @@ async function* runStateMachineAndPersist(
       );
       if (next.done) {
         // eslint-disable-next-line no-await-in-loop -- flushes what the generator produced, so it can only run after it
-        await flushCollected(args.sessionId, collected, args.runId);
+        await flushCollected(args.sessionId, collected, messageId, args.runId);
         return next.value;
       }
       const ev = next.value;
-      collectBlock(collected, ev);
+      if (collectBlock(collected, ev) && !openedRow) {
+        openedRow = true;
+        yield { type: "message_start", messageId };
+      }
       yield ev;
     }
   } catch (err) {
@@ -269,32 +282,36 @@ async function* runStateMachineAndPersist(
     // vanish. Focus is ephemeral now, so there's no paused-drafting marker to
     // stamp — re-entering the job re-derives from JobInteraction.status and the
     // saved partial draft, and continues where it left off.
-    await flushCollected(args.sessionId, collected, args.runId);
+    await flushCollected(args.sessionId, collected, messageId, args.runId);
     throw err;
   }
 }
 
+// Returns whether the event landed in the buffer — i.e. whether it is content
+// this pass will persist, which is what the caller opens the row on.
 function collectBlock(
   collected: Anthropic.ContentBlock[],
   ev: TurnEvent,
-): void {
+): boolean {
   if (ev.type === "text") {
     // Coalesce consecutive text into one block — Anthropic-friendly and
-    // reads naturally when the state machine yields a sentence in pieces.
+    // reads naturally when the state machine yields a sentence in pieces. The
+    // client's mergeTextDelta applies the same rule to the same events, so the
+    // live bubble and the persisted row agree block for block.
     const last = collected[collected.length - 1];
     if (last && last.type === "text") {
       (last as { text: string }).text += ev.text;
-      return;
+      return true;
     }
     collected.push({ type: "text", text: ev.text } as Anthropic.ContentBlock);
-    return;
+    return true;
   }
   if (ev.type === "pipeline_status") {
     collected.push({
       type: "pipeline_status",
       text: ev.text,
     } as unknown as Anthropic.ContentBlock);
-    return;
+    return true;
   }
   if (ev.type === "pipeline_widget") {
     collected.push({
@@ -303,18 +320,20 @@ function collectBlock(
       kind: ev.kind,
       payload: ev.payload,
     } as unknown as Anthropic.ContentBlock);
-    return;
+    return true;
   }
   // tool_use_*, ui, widget (live transient — handled by chatStore.currentWidget
-  // on the client), stopped, done, error — none of these are content blocks;
-  // they're stream control.
+  // on the client), message_start, stopped, done, error — none of these are
+  // content blocks; they're stream control.
+  return false;
 }
 
 async function flushCollected(
   sessionId: string,
   collected: Anthropic.ContentBlock[],
+  messageId: string,
   runId?: string,
 ): Promise<void> {
   if (collected.length === 0) return;
-  await appendAssistantMessage(sessionId, collected, { runId });
+  await appendAssistantMessage(sessionId, collected, { id: messageId, runId });
 }

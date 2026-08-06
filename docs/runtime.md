@@ -122,6 +122,20 @@ Submissions become an ordinary user chat message via [`buildWidgetSubmissionMess
 
 **Transient sibling: `refresh_viewed_state`.** A payload-free ping telling the client to refetch the dashboard + viewed entity mid-turn. Not persisted (pure stream control). Deterministic steps that write visible state without a tool — persisting a drafted cover letter, each company in a batch add — emit it right after the write. Rationale: [tools.md](tools.md#deterministic-pipeline-steps-refresh-via-refresh_viewed_state).
 
+## Message boundaries: the live stream groups the way the DB does
+
+One user message produces **many** assistant `ChatMessage` rows — each narrated line is its own row ([`narrateStatus`/`narrateText`](../src/server/agent/session/narrate.ts)), each Hank turn writes up to three (content+tool_use, emitted widgets, emitted status lines), and a state-machine pass flushes one for the whole pass. The client, meanwhile, gets a flat event stream. Nothing in that stream said where one row ended and the next began, so the client painted the entire run into a single bubble — and the end-of-turn `refetchSession`, which loads the rows, then visibly re-cut the conversation into its real shape and dropped anything that had streamed without being persisted.
+
+So **every producer of an assistant row announces it**: `{type:"message_start", messageId}`, carrying the row's **pre-minted** `ChatMessage.id`, yielded before the first content event that belongs to it. `applyEvent` opens an empty bubble under that id and routes subsequent segments into it, so the reconcile finds the same ids in the same order and repaints nothing.
+
+Three rules for anything new that persists an assistant row:
+
+- **Mint the id first** (`newRunTreeId`), announce it, then write the row with `appendAssistantMessage({id})`. A row whose id the stream never named is a bubble that appears out of nowhere when the run ends.
+- **Announce lazily where the row is conditional.** `runStateMachineAndPersist` opens its row on the first event it actually buffers — announcing at entry would leave an empty bubble that later events get misfiled into when the pass turns out to yield nothing.
+- **Re-announcing an already-open row is free and expected.** A turn's tool loop alternates between the assistant row and the widget/status rows, so `runAgentTurn` re-announces (deduped) rather than tracking which group it's in.
+
+A bare `yield {type:"pipeline_status", …}` outside the state machine's buffer is the failure this prevents: it streams, it renders, and it dies at the next reconcile, because no row was ever written for it.
+
 ## Provenance: the system-note channel
 
 `pipeline_widget` / `pipeline_status` blocks are persisted to `ChatMessage.content` on **assistant-role** rows for the UI; on replay [`loadSessionMessages`](../src/server/agent/session/) renders each to a plain-text "shown to the user" note via `renderWidgetText` (the same renderer the QA harness uses, so grounding stays in lockstep). Because those are assistant rows, keeping the note in the assistant channel let the model mistake it for its own prose and confabulate a fake on-screen menu.
