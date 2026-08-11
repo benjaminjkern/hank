@@ -25,7 +25,10 @@ import { bulkUpdate, type Database } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
 import { planJobEvents } from "@/server/entities/jobs/logJobEvents";
 import type { LogJobEventInput } from "@/server/entities/jobs/logJobEvents";
-import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
+import {
+  canHoldStance,
+  onBoardWhere,
+} from "@/server/entities/jobs/shortlistPool";
 
 import { logCompanyEvent } from "./logCompanyEvent";
 
@@ -75,6 +78,17 @@ export async function commitShortlist(args: {
   let setAside = 0;
   let closed = 0;
   for (const row of rows) {
+    // The role moved past the board while the round was open — applied to,
+    // answered, interviewed, delisted. The stance was a proposal about a
+    // decision that has since been made for real, so it is dropped rather than
+    // acted on: honouring a stale `pick` here writes SHORTLISTED over an APPLIED
+    // role, which is the board undoing what the user told Hank they'd done.
+    // (CLOSED is deliberately not in this set — a mark on a filtered row is the
+    // un-close, and `canHoldStance` says so.)
+    if (!canHoldStance(row.status)) {
+      noOpUpdates.push({ id: row.id, data: { ...clearStance } });
+      continue;
+    }
     // The user's override when they made one, otherwise Hank's proposal.
     const reason = row.agentReason;
     switch (row.userVerdict ?? row.agentVerdict) {
@@ -181,6 +195,7 @@ export async function commitShortlist(args: {
             in: [
               CompanyStatus.NEW,
               CompanyStatus.READY,
+              CompanyStatus.SHORTLISTING,
               CompanyStatus.CAUGHT_UP,
               CompanyStatus.IN_FLIGHT,
               CompanyStatus.IN_PROCESS,
@@ -188,6 +203,14 @@ export async function commitShortlist(args: {
           },
         },
         data: { status: CompanyStatus.APPLYING },
+      });
+    } else {
+      // Nothing picked, so there is nothing to work — but the board is settled
+      // either way, and SHORTLISTING means "waiting on you". Land READY and let
+      // the walkthrough's own tail decide whether this company is caught up.
+      await tx.companyInteraction.updateMany({
+        where: { userId, companyId, status: CompanyStatus.SHORTLISTING },
+        data: { status: CompanyStatus.READY },
       });
     }
   });

@@ -1,9 +1,9 @@
 // The PRE_SCAN procedure: bulk metadata-only filtering of a company's board at
 // watchlist-add / rescan time.
 //
-// Chain: load the candidate context + the NEW-status job pool → split the pool
-// into chunks → run the chunk sub-agent on each in parallel → concatenate their
-// verdicts → close the skipped roles.
+// Chain: load the candidate context + the not-yet-judged job pool (see pool.ts)
+// → split the pool into chunks → run the chunk sub-agent on each in parallel →
+// concatenate their verdicts → close the skipped roles and stamp the survivors.
 //
 // The sub-agent (subagents/registry/preScanJobBatch.ts) decides which jobs are
 // obvious nos and nothing else — it isn't told it's a chunk, and it doesn't
@@ -27,6 +27,7 @@
 
 import { CompanyEventType } from "@/generated/prisma/client";
 import type { RunContext, RunTrace } from "@/server/agent/contracts";
+import { prisma } from "@/server/db/prisma";
 import { logCompanyEvents } from "@/server/entities/companies/logCompanyEvent";
 import { closeJobs } from "@/server/entities/jobs/closeJobs";
 import { humanJobCloseReason } from "@/server/entities/jobs/humanJobReasonLabels";
@@ -38,6 +39,7 @@ import {
   type PreScanJobBatchInput,
 } from "@/server/subagents/registry/preScanJobBatch";
 import { chunk } from "@/utils/array";
+import { nowDate } from "@/utils/now";
 
 import { loadPreScanContext, type PreScanContext } from "./loadContext";
 import {
@@ -46,6 +48,7 @@ import {
   type MergedPreScan,
   type PreScanSkipBucket,
 } from "./mergeChunkVerdicts";
+import { preScanPoolWhere } from "./pool";
 
 // Split the board into parallel chunks above this size. Each chunk is its own
 // sub-agent call sharing the cached thesis/resume prefix; only the job slice
@@ -166,6 +169,18 @@ async function preScan(args: PreScanArgs): Promise<PreScanResult> {
       userId: args.userId,
       companyId: args.companyId,
       merged,
+    });
+    // Stamp what survived, so a scan that dies before reading these doesn't send
+    // the next entry back through this pass. Survivors only: a skipped role is
+    // CLOSED and out of the pool by status, and a role no chunk reached has to
+    // stay reachable. One statement regardless of pool size.
+    await prisma.jobInteraction.updateMany({
+      where: {
+        userId: args.userId,
+        jobId: { in: merged.survivingJobIds },
+        ...preScanPoolWhere(),
+      },
+      data: { preScannedAt: nowDate() },
     });
   }
 

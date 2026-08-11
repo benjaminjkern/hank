@@ -11,10 +11,10 @@ import { ApplicationView } from "./ApplicationView";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { CompanyContextView } from "./CompanyContextView";
 import { DashboardView } from "./DashboardView";
+import { DiscoveryView } from "./DiscoveryView";
 import { DocumentsView } from "./DocumentsView";
 import { JobDetailView } from "./JobDetailView";
 import { OpportunityDetailView } from "./OpportunityDetailView";
-import { DiscoveryView } from "./DiscoveryView";
 import { ShortlistBoardView } from "./ShortlistBoardView";
 
 // Mirrors theme.breakpoints.narrow — inlined because matchMedia runs outside

@@ -19,12 +19,17 @@ export type ResumeCompanyResult =
   | { ok: false; reason: "not_watchlisted" | "closed" | "unreadable_board" };
 
 // Direct, in-walkthrough switch to a different company on the user's watchlist
-// ("let's do mistral"). Bumps a non-terminal status to APPLYING so the picker
-// wouldn't pull the user back to the prior company.
+// ("let's do mistral"). Bumps an idle company to READY — the walkthrough writes
+// every status after that as it works, so this only has to make the row look
+// like something being worked rather than something waiting.
+//
+// A company already mid-work keeps its status: overwriting SHORTLISTING with
+// READY would throw away "the board is open and it's your turn" for a company
+// the user just asked to look at.
 //
 // Refuses CLOSED (terminal — the user hard-skipped it) and BLOCKED (needs the
-// revive path to re-hunt the board; a plain switch would set APPLYING with no
-// readable source). The caller routes those to reviveCompany.
+// revive path to re-hunt the board; a plain switch would leave it walkable with
+// no readable source). The caller routes those to reviveCompany.
 export async function switchToCompany(args: {
   userId: string;
   companyId: string;
@@ -41,12 +46,18 @@ export async function switchToCompany(args: {
   if (ci.status === CompanyStatus.BLOCKED) {
     return { ok: false, reason: "unreadable_board" };
   }
-  if (ci.status !== CompanyStatus.SCANNING) {
+  // PAUSED is here rather than refused: switching to a paused company IS the
+  // revive, and routing through companyStatusFields clears its pause reason.
+  const idle =
+    ci.status === CompanyStatus.NEW ||
+    ci.status === CompanyStatus.PAUSED ||
+    ci.status === CompanyStatus.CAUGHT_UP;
+  if (idle) {
     await prisma.companyInteraction.update({
       where: {
         userId_companyId: { userId: args.userId, companyId: args.companyId },
       },
-      data: companyStatusFields({ status: CompanyStatus.SCANNING }),
+      data: companyStatusFields({ status: CompanyStatus.READY }),
     });
   }
   return { ok: true };
@@ -76,7 +87,9 @@ export async function reviveCompany(args: {
       userId_companyId: { userId: args.userId, companyId: args.companyId },
     },
     data: {
-      ...companyStatusFields({ status: CompanyStatus.SCANNING }),
+      // Unconditional, unlike switchToCompany: a revive means "start this one
+      // over", which is also why it clears the scrape stamp below.
+      ...companyStatusFields({ status: CompanyStatus.READY }),
       // Force the walkthrough's on-entry scrape to fire (isScrapeStale(null) ===
       // true) so a revive looks for genuinely-new postings. Deliberately does
       // NOT mass-flip the company's CLOSED roles back to NEW: on a long-worked

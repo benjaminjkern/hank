@@ -19,6 +19,7 @@ import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {
   shortlistJobsSubAgent,
+  type ShortlistCandidate,
   type ShortlistJobsOutput,
 } from "@/server/subagents/registry/shortlistJobs";
 import type { ShortlistBoardView } from "@/server/views/shortlistBoard";
@@ -86,6 +87,39 @@ function describeSeed(
   return parts.join("\n\n");
 }
 
+// Roles whose application was started and abandoned, called out by name.
+//
+// Deterministic rather than left to the ranker's prose: WHICH roles those are is
+// a fact the pool already carries, and a round that quietly re-ranked one the
+// user had committed to — possibly down into the closing pile — is the thing
+// this exists to prevent. The ranker's own opinion for each is already on its
+// board row; this only guarantees the user is told the history is in play, and
+// invites the correction only they can make ("I actually did apply to that").
+function describeUnfinished(
+  candidates: ShortlistCandidate[],
+  picks: ShortlistJobsOutput,
+): string | null {
+  const started = candidates.filter((c) => c.unfinishedApplication);
+  if (started.length === 0) return null;
+  const picked = new Set(picks.pickedJobIds);
+  const passed = new Set(picks.passedJobIds);
+  const lines = started.map((c) => {
+    const where = picked.has(c.id)
+      ? "still near the top"
+      : passed.has(c.id)
+        ? "in the closing pile now"
+        : "held rather than picked";
+    return `- **${c.title}** — ${where}.`;
+  });
+  return [
+    started.length === 1
+      ? "One thing before you mark it up: you'd started an application here and never sent it."
+      : `One thing before you mark it up: you'd started ${started.length} applications here and never sent them.`,
+    ...lines,
+    "If you actually applied to any of these, say so and I'll record it — otherwise they're yours to re-decide like anything else on the board.",
+  ].join("\n");
+}
+
 function describeReshow(board: ShortlistBoardView): string {
   const picked = tierCount(board, "picks");
   const borderline = tierCount(board, "borderline");
@@ -109,6 +143,10 @@ export async function* runShortlist(
       where: { userId, job: { companyId }, ...onBoardWhere() },
     });
     if (openCount > 0) {
+      // Also on the re-show, not just the fresh seed: an open board IS the
+      // status, however the company got here, and a board that outlives the run
+      // that seeded it would otherwise never pick it up.
+      await markCompanyShortlisting(companyId, userId);
       const { events, board } = await buildShortlistBoardEvents(
         userId,
         companyId,
@@ -154,15 +192,13 @@ export async function* runShortlist(
 
   const { events } = await buildShortlistBoardEvents(userId, companyId);
   yield* yieldUiEvents(events);
+  const body =
+    tallies.picked === 0 && tallies.borderline === 0
+      ? describeAllPassed(picks, context.input.candidates, context.companyName)
+      : describeSeed(picks.proposalNote, tallies);
+  const unfinished = describeUnfinished(context.input.candidates, picks);
   yield {
     type: "text",
-    text:
-      tallies.picked === 0 && tallies.borderline === 0
-        ? describeAllPassed(
-            picks,
-            context.input.candidates,
-            context.companyName,
-          )
-        : describeSeed(picks.proposalNote, tallies),
+    text: unfinished ? `${body}\n\n${unfinished}` : body,
   };
 }

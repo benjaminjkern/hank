@@ -132,7 +132,6 @@ export type DashboardCompany = {
   status:
     | "NEW"
     | "READY"
-    | "SCANNING"
     | "SHORTLISTING"
     | "APPLYING"
     | "IN_FLIGHT"
@@ -476,6 +475,14 @@ const initial: State = {
 // Map of tempId → AbortController for in-flight uploads. Kept outside state
 // because AbortController isn't serializable and shouldn't drive renders.
 const uploadAborts = new Map<string, AbortController>();
+
+// The board's wire vocabulary (what a mark POSTs) → the stored ProposedVerdict
+// the payloads carry back, so an optimistic patch speaks the payload's language.
+const VERDICT_OF_STANCE: Record<"pick" | "borderline" | "pass", string> = {
+  pick: "PICK",
+  borderline: "BORDERLINE",
+  pass: "PASS",
+};
 
 // Monotonic counter of turn starts (sends) and session resets. refetchSession
 // captures it before fetching and DISCARDS its response if the counter moved
@@ -1099,6 +1106,21 @@ export const useChatStore = create<State & Actions>((set, get) => ({
         pendingBoardEditCount: data.pendingEdits,
         ...(s.viewedBoard?.companyId === companyId
           ? { viewedBoard: data }
+          : {}),
+        // The mark can come from the role's own page, where the board payload
+        // isn't what's on screen. The user just chose this verdict and the
+        // server took it, so it IS the live stance — no need to dig it back out
+        // of the board response.
+        ...(s.viewedJob?.id === jobId && s.viewedJob.board
+          ? {
+              viewedJob: {
+                ...s.viewedJob,
+                board: {
+                  ...s.viewedJob.board,
+                  verdict: VERDICT_OF_STANCE[verdict],
+                },
+              },
+            }
           : {}),
       }));
     } catch {

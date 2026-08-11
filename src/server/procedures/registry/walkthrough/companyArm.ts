@@ -21,6 +21,7 @@ import { caughtUpCompany } from "@/server/entities/companies/setCompanyAside";
 import { roundStartedAt } from "@/server/entities/jobs/boardStance";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
 import { runPreScan } from "@/server/procedures/registry/preScan";
+import { preScanPoolWhere } from "@/server/procedures/registry/preScan/pool";
 import { runScan } from "@/server/procedures/registry/scan";
 import { runShortlist } from "@/server/procedures/registry/shortlist";
 
@@ -130,6 +131,15 @@ export async function* runCompanyArm(
   // full posting, enriches the global Job, and decides SCANNED-vs-CLOSED per
   // job. Together they drain the NEW bucket; whatever's left SCANNED goes to
   // the shortlist rollup in step 2.
+  //
+  // The two phases gate on different counts because NEW is where a role waits
+  // for BOTH of them: `unjudged` is what the metadata pass hasn't seen, and the
+  // scan reads every NEW row regardless of which entry stamped it. Gating both
+  // on the same count is what made a half-finished scan re-run the metadata pass
+  // over roles it had already kept.
+  const unjudgedCount = await prisma.jobInteraction.count({
+    where: { userId: args.userId, job: { companyId }, ...preScanPoolWhere() },
+  });
   const newCount = await prisma.jobInteraction.count({
     where: {
       userId: args.userId,
@@ -143,22 +153,25 @@ export async function* runCompanyArm(
     // and so have no chip to trace into: these lines are the only way the
     // two-stage flow is visible in the chat at all.
     //
-    // Don't call the whole NEW pool "new" — only `scrapeDelta` of these came in
+    // Don't call the whole pool "new" — only `scrapeDelta` of these came in
     // this entry; the rest are postings pulled in earlier that nothing has
     // reviewed yet. Conflating the two reads as a contradiction ("Found 4 new…
     // first pass over 75 new").
-    const backlogCount = newCount - scrapeDelta;
-    const firstPassLine =
-      scrapeDelta > 0 && backlogCount > 0
-        ? `Doing a first pass over ${newCount} postings — the ${scrapeDelta} new plus ${backlogCount} I hadn't reviewed yet…`
-        : scrapeDelta > 0 && backlogCount === 0
-          ? `Doing a first pass over ${newCount} new posting${newCount === 1 ? "" : "s"}…`
-          : `Doing a first pass over ${newCount} posting${newCount === 1 ? "" : "s"} I haven't reviewed yet…`;
-    yield statusEvent(firstPassLine);
-    await runPreScan({ ...args, companyId });
+    if (unjudgedCount > 0) {
+      const backlogCount = unjudgedCount - scrapeDelta;
+      const firstPassLine =
+        scrapeDelta > 0 && backlogCount > 0
+          ? `Doing a first pass over ${unjudgedCount} postings — the ${scrapeDelta} new plus ${backlogCount} I hadn't reviewed yet…`
+          : scrapeDelta > 0 && backlogCount === 0
+            ? `Doing a first pass over ${unjudgedCount} new posting${unjudgedCount === 1 ? "" : "s"}…`
+            : `Doing a first pass over ${unjudgedCount} posting${unjudgedCount === 1 ? "" : "s"} I haven't reviewed yet…`;
+      yield statusEvent(firstPassLine);
+      await runPreScan({ ...args, companyId });
+    }
 
-    // Phase B — the scan step proper. Count the PRE_SCAN survivors (the jobs
-    // still NEW) so the funnel is visible: "first pass over 218 → reading 17 in
+    // Phase B — the scan step proper. Count what's still NEW (the metadata
+    // pass's survivors, plus anything an earlier entry stamped and never got to
+    // read) so the funnel is visible: "first pass over 218 → reading 17 in
     // full". Skip the scan + its narration when nothing survived the metadata
     // filter (the company wraps to caught-up in step 3).
     const survivorCount = await prisma.jobInteraction.count({
@@ -170,7 +183,7 @@ export async function* runCompanyArm(
     });
     if (survivorCount === 0) {
       yield statusEvent(
-        `None of the ${newCount} new posting${newCount === 1 ? "" : "s"} looked like a fit on a first pass.`,
+        `None of the ${unjudgedCount} new posting${unjudgedCount === 1 ? "" : "s"} looked like a fit on a first pass.`,
       );
       // Deliberately no company-status write here. PRE_SCAN doesn't land one,
       // and an empty metadata pass mid-walkthrough doesn't mean "caught up" —

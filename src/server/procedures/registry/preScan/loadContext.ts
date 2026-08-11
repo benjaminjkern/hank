@@ -1,14 +1,13 @@
 // Everything the pre-scan job-batch sub-agent needs to bucket a company's board:
 // the candidate's profile + resume summary, what the company is (its one-line
 // description + the user's companies/{slug}.md note — the evidence the domain
-// skip reads), and the company's NEW-status job pool as lean metadata rows.
+// skip reads), and the company's not-yet-judged job pool as lean metadata rows.
 // Two hops, not one: the company row is fetched first because its slug is what
 // addresses the note.
 //
 // Split out from the procedure so the sub-agent never reads the DB itself — its
 // input IS this context, which is what lets a fixture stand alone.
 
-import { JobInteractionStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import {
   ROLE_ATTR_SELECT,
@@ -17,6 +16,8 @@ import {
 import { readResumeBackground } from "@/server/entities/resume/store";
 import { readMemory } from "@/server/memory/store";
 import type { PreScanLeanJob } from "@/server/subagents/registry/preScanJobBatch";
+
+import { preScanPoolWhere } from "./pool";
 
 // A lean row plus the jobId the caller maps verdicts back onto. The jobId is
 // deliberately NOT part of `PreScanLeanJob` — the model never sees it.
@@ -55,7 +56,7 @@ export async function loadPreScanContext(args: {
         where: {
           companyId: args.companyId,
           jobInteractions: {
-            some: { userId: args.userId, status: JobInteractionStatus.NEW },
+            some: { userId: args.userId, ...preScanPoolWhere() },
           },
         },
         select: {

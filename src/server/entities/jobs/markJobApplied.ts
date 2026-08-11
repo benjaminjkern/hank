@@ -64,7 +64,19 @@ export async function markJobApplied(
       type: JobEventType.APPLIED,
       occurredAt: appliedAt,
       notes: args.notes,
-      jobInteractionUpdate: { status: JobInteractionStatus.APPLIED },
+      // Applying settles the role, so any board stance on it is answered — it
+      // leaves an open round rather than sitting there un-markable. Clearing is
+      // a no-op on the ordinary row (no stance to clear) and matters on exactly
+      // one path: a round that surfaced an unfinished application, and the user
+      // saying "I actually sent that one".
+      jobInteractionUpdate: {
+        status: JobInteractionStatus.APPLIED,
+        agentVerdict: null,
+        agentReason: null,
+        userVerdict: null,
+        placementVerdict: null,
+        stanceAt: null,
+      },
       computeExtraUpdate: (jobInteraction) => {
         channel =
           args.applyChannel ??

@@ -10,6 +10,7 @@
 // next. A board demotion is not a rejection signal here either — it arrives as
 // the candidate's own `priorDeferNote` at commit, not as a separate input.
 
+import { JobInteractionStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import {
   ROLE_ATTR_SELECT,
@@ -77,6 +78,7 @@ export async function loadShortlistJobsInput(args: {
       jobInteractions: {
         where: { userId: args.userId },
         select: {
+          status: true,
           matchBucket: true,
           matchScore: true,
           matchReason: true,
@@ -134,6 +136,8 @@ export async function loadShortlistJobsInput(args: {
     matchReason: j.jobInteractions[0]?.matchReason ?? null,
     jobNote: jobNoteByJobId.get(j.id) ?? null,
     priorDeferNote: j.jobInteractions[0]?.deferNote ?? null,
+    unfinishedApplication:
+      j.jobInteractions[0]?.status === JobInteractionStatus.APPLYING,
   }));
 
   return {

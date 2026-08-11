@@ -24,13 +24,18 @@ import { useState } from "react";
 import styled from "styled-components";
 
 import { useChatStore } from "@/lib/chatStore";
-
-import { PanelRowCard, PanelSendChangesButton } from "./shared/PanelRowCard";
 import type {
   ShortlistBoardView as ShortlistBoardData,
   ShortlistBoardRow,
   ShortlistBoardTier,
 } from "@/server/views/shortlistBoard";
+
+import { PanelRowCard, PanelSendChangesButton } from "./shared/PanelRowCard";
+import {
+  StanceMarks,
+  STANCE_OF_VERDICT,
+  type StanceValue,
+} from "./shared/StanceMarks";
 
 const Root = styled.div`
   display: flex;
@@ -127,34 +132,6 @@ const StanceRow = styled.div`
   flex-wrap: wrap;
 `;
 
-const StanceButton = styled.button<{ $active?: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  /* Square rather than the old text pill's 2px/10px — an icon has no width of
-     its own to shape the target, and 28px keeps it tappable. */
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  border: 1px solid
-    ${({ theme, $active }) =>
-      $active ? theme.colors.accent : theme.colors.border};
-  color: ${({ theme, $active }) =>
-    $active ? theme.colors.accent : theme.colors.textMuted};
-  background: ${({ theme, $active }) =>
-    $active ? theme.colors.bgMuted : "transparent"};
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    border-color: ${({ theme }) => theme.colors.accent};
-    color: ${({ theme }) => theme.colors.accent};
-  }
-  &:disabled {
-    cursor: default;
-    opacity: 0.5;
-  }
-`;
-
 // Sits at the end of the stance row: same height as the marks, text rather than
 // an icon, so "open this" reads as a different kind of action from "mark this".
 const ViewRoleButton = styled.button`
@@ -203,77 +180,14 @@ const DISCARD_LABEL = "Closing these";
 const DISCARD_HINT =
   "Marked pass, or ruled out before the shortlist. Committing closes them — mark one Shortlist or Defer to pull it back.";
 
-// 16px, stroke-only, inheriting the button's color so the $active accent
-// applies for free — same convention as ThemeToggle's icons. `aria-hidden`
-// because the accessible name comes from the button's aria-label.
-function iconProps() {
-  return {
-    width: 16,
-    height: 16,
-    viewBox: "0 0 16 16",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.75,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    "aria-hidden": true,
-  };
-}
-
-function ShortlistIcon() {
-  return (
-    <svg {...iconProps()}>
-      <path d="M3 8.5 6.5 12 13 4.5" />
-    </svg>
-  );
-}
-
-function DeferIcon() {
-  return (
-    <svg {...iconProps()}>
-      <path d="M2.5 9.5c1.4-2.8 2.8-2.8 4.2 0s2.8 2.8 4.2 0" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg {...iconProps()}>
-      <path d="M4 4l8 8M12 4l-8 8" />
-    </svg>
-  );
-}
-
-// The three marks, in board order. Every row that can still be decided offers
-// all three — there is no separate "reconsider" affordance, and the one already
-// set is pre-selected, so agreeing with Hank is doing nothing at all.
-//
-// `value` is the wire vocabulary (pick / borderline / pass, what the board and
-// the agent speak); `label` is the LIFECYCLE word the mark lands the role on,
-// which is what the rest of the app shows on the status pill. They differ on
-// purpose — naming the button "Pick" left no way to tell which status it sets.
-const STANCES = [
-  { value: "pick", label: "Shortlist", Icon: ShortlistIcon },
-  { value: "borderline", label: "Defer", Icon: DeferIcon },
-  { value: "pass", label: "Close", Icon: CloseIcon },
-] as const;
-
-type StanceValue = (typeof STANCES)[number]["value"];
-
-const STANCE_OF_VERDICT: Record<string, StanceValue> = {
-  PICK: "pick",
-  BORDERLINE: "borderline",
-  PASS: "pass",
-};
-
 function rowMeta(row: ShortlistBoardRow): string {
   return [row.location, row.compensation, row.employmentType]
     .filter(Boolean)
     .join(" · ");
 }
 
-// What the row is marked as right now. A row placed by an earlier commit
-// carries no stance, so fall back to the group it sits in.
+// What the row is marked as right now. A row placed by an earlier commit carries
+// no stance, so fall back to the group it sits in.
 function stanceOf(
   row: ShortlistBoardRow,
   tier: ShortlistBoardTier,
@@ -287,16 +201,6 @@ function stanceOf(
   // there's no separate revive button: the other two marks un-close it.
   if (tier === "filteredThisRound") return "pass";
   return null;
-}
-
-// What the mark does from here, said in the row's own terms.
-function markTitle(label: string, active: boolean, filtered: boolean): string {
-  if (!active) {
-    return filtered ? `${label} — this puts it back on the table` : label;
-  }
-  // The set mark states where the row stands rather than offering an action:
-  // re-clicking it does nothing.
-  return filtered ? "Ruled out before the shortlist" : `${label} — current`;
 }
 
 type PlacedRow = { tier: ShortlistBoardTier; row: ShortlistBoardRow };
@@ -345,26 +249,20 @@ function BoardRow({
           {row.overriddenAgentReason ? ` — ${row.overriddenAgentReason}` : ""}
         </ScanTag>
       )}
+      {row.unfinishedApplication && (
+        <ScanTag>✎ You started an application here and never sent it.</ScanTag>
+      )}
       {row.scanDissent && <ScanTag>⚠ {row.scanDissent}</ScanTag>}
       <StanceRow>
-        {!readOnly &&
-          row.markable &&
-          STANCES.map((s) => (
-            <StanceButton
-              key={s.value}
-              $active={stance === s.value}
-              disabled={busy}
-              // The icon carries no text, so the button needs its own
-              // accessible name — and the tooltip has to say what the
-              // mark does now that the label isn't on screen.
-              aria-label={s.label}
-              aria-pressed={stance === s.value}
-              title={markTitle(s.label, stance === s.value, filtered)}
-              onClick={() => void mark(s.value)}
-            >
-              <s.Icon />
-            </StanceButton>
-          ))}
+        {!readOnly && row.markable && (
+          <StanceMarks
+            stance={stance}
+            onMark={(next) => void mark(next)}
+            disabled={busy}
+            filtered={filtered}
+            label={`Your call on ${row.title}`}
+          />
+        )}
         {busy && <ScanTag>saving…</ScanTag>}
         <ViewRoleButton onClick={() => void viewJob(row.jobId)}>
           View role →

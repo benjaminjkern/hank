@@ -11,15 +11,27 @@ import { prisma } from "@/server/db/prisma";
 
 // The status subset of "what's in the shortlist pool" — the rows a seed ranks
 // and a commit decides: read-and-ready (SCANNED), committed picks
-// (SHORTLISTED), and committed passovers (DEFERRED + OUTRANKED). Intentional
-// user defers (other reasons) are deliberately excluded — a fresh round must
-// not yank those back.
+// (SHORTLISTED), roles whose application was started and never finished
+// (APPLYING), and committed passovers (DEFERRED + OUTRANKED). Intentional user
+// defers (other reasons) are deliberately excluded — a fresh round must not yank
+// those back.
+//
+// APPLYING is here because leaving it out made a half-written application
+// INVISIBLE to the next round: not ranked, not on the board, so the user
+// compared this company's roles against a picture missing the one they'd already
+// committed to. It is ranked in place and never demoted on the way in — the
+// status changes at commit like every other row's, so nothing about a started
+// draft moves before the user has seen it on the board.
 export function shortlistPoolStatusWhere(): Prisma.JobInteractionWhereInput {
   return {
     OR: [
       {
         status: {
-          in: [JobInteractionStatus.SCANNED, JobInteractionStatus.SHORTLISTED],
+          in: [
+            JobInteractionStatus.SCANNED,
+            JobInteractionStatus.SHORTLISTED,
+            JobInteractionStatus.APPLYING,
+          ],
         },
       },
       {
@@ -51,6 +63,7 @@ export const CONSIDERED_STATUSES: JobInteractionStatus[] = [
   JobInteractionStatus.NEW,
   JobInteractionStatus.SCANNED,
   JobInteractionStatus.SHORTLISTED,
+  JobInteractionStatus.APPLYING,
   JobInteractionStatus.DEFERRED,
 ];
 

@@ -71,6 +71,11 @@ export type ShortlistBoardRow = {
   // The one-line rationale for the row: the stance reason while a negotiation
   // is open, otherwise the deferNote a commit left on a set-aside role.
   reason: string | null;
+  // The user began writing this application and stopped. Shown on the row
+  // because the commit happens HERE: the chat callout that names these scrolls
+  // away, and a `pass` that closes a role with real work in it should be made in
+  // front of that fact rather than beside it.
+  unfinishedApplication: boolean;
   // The scan pass's read, ONLY when it contradicts where the row ended up.
   // Null on the ordinary agreeing row — the shortlist reason is written later
   // and with more context, so repeating the earlier one just doubles the row.
@@ -262,6 +267,7 @@ export async function loadShortlistBoard(
       status: r.status,
       // Only when the first read CONTRADICTS where the row ended up. Agreement
       // is the boring case and repeating it doubles every row.
+      unfinishedApplication: r.status === JobInteractionStatus.APPLYING,
       scanDissent: scanDissent(r.matchBucket, liveVerdict(r)),
       reason,
       verdict: liveVerdict(r),

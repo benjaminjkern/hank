@@ -3,9 +3,9 @@
 // deterministically before the runner is invoked). The parser lives in ./parse.
 //
 // Per kind:
-//   - "company" → show the company + bump READY/NEW/PAUSED → APPLYING (a PAUSED
-//     pick is a revive). If the user already had a different APPLYING company,
-//     the prior one stays APPLYING (concurrent APPLYING is allowed).
+//   - "company" → show the company + bump NEW/PAUSED → READY (a PAUSED pick is a
+//     revive). Picking is not itself progress, so it writes the walkable state
+//     and lets the walkthrough own every status after it.
 //   - "opportunity" → show the opportunity.
 //   - "job" → show the role; a DEFERRED pick revives to SHORTLISTED.
 //   - "add_companies" → back to the dashboard with a conversational opener
@@ -57,25 +57,18 @@ export async function dispatchNextCompanyPicker(args: {
         statusText: "That company isn't available anymore — let me re-check.",
       };
     }
-    // Bump READY/NEW/PAUSED → APPLYING. Mirrors pre-overhaul rung 3 semantics;
-    // the walkthrough pipeline assumes APPLYING means "in flight." A PAUSED
-    // pick is a revive (the picker surfaces paused companies as their own
-    // section now) — clear the pause fields in the same write so the row
-    // doesn't resurface as paused, matching the deferred-job revive-on-pick.
-    // Clearing is a no-op for READY/NEW (already null). For an already-APPLYING
-    // pick (user resuming or jumping between concurrent APPLYING rows) we leave
-    // status alone.
-    if (
-      ci.status === CompanyStatus.READY ||
-      ci.status === CompanyStatus.NEW ||
-      ci.status === CompanyStatus.PAUSED
-    ) {
+    // NEW/PAUSED → READY. A PAUSED pick is a revive (the picker surfaces paused
+    // companies as their own section) — routing through companyStatusFields
+    // clears the pause fields in the same write, so the row doesn't resurface as
+    // paused. Every other status is left alone: picking a company is the user
+    // saying where to look, not progress through it, so it must not knock a
+    // SHORTLISTING or APPLYING row back to the start of the ladder.
+    if (ci.status === CompanyStatus.NEW || ci.status === CompanyStatus.PAUSED) {
       await prisma.companyInteraction.update({
         where: {
           userId_companyId: { userId, companyId: submission.companyId },
         },
-        // Entering means reading the board, not applying -- see markCompanyScanning.
-        data: companyStatusFields({ status: CompanyStatus.SCANNING }),
+        data: companyStatusFields({ status: CompanyStatus.READY }),
       });
     }
     return {

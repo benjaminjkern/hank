@@ -160,7 +160,6 @@ type CommitCandidatesInput = {
 type WatchlistBucket = "pursuing" | "watching" | "setAside";
 function bucketForStatus(status: CompanyStatus): WatchlistBucket {
   switch (status) {
-    case CompanyStatus.SCANNING:
     case CompanyStatus.SHORTLISTING:
     case CompanyStatus.APPLYING:
     case CompanyStatus.READY:

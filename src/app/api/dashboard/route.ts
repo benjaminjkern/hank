@@ -39,10 +39,11 @@ const ACTIVE = [
 
 // Sort buckets for the non-closed, non-paused, non-blocked list: SHORTLISTING
 // first (the board is open and it is the user's move), then APPLYING
-// (shortlist committed, roles being worked), then IN_PROCESS (employer engaged) / IN_FLIGHT
-// (apps out) — the live-pipeline tail — then READY (scanned, waiting on the
-// user), NEW (no scan yet), CAUGHT_UP (resting). CLOSED + PAUSED + BLOCKED are
-// split into their own lists below.
+// (shortlist committed, roles being worked), then IN_PROCESS (employer engaged)
+// / IN_FLIGHT (apps out) — the live-pipeline tail — then READY (scanned,
+// waiting on the user, and where a company sits while its board is being read),
+// NEW (no scan yet), CAUGHT_UP (resting). CLOSED + PAUSED + BLOCKED are split
+// into their own lists below.
 const STATUS_RANK: Record<
   Exclude<CompanyStatus, "CLOSED" | "PAUSED" | "BLOCKED">,
   number
@@ -51,10 +52,9 @@ const STATUS_RANK: Record<
   APPLYING: 1,
   IN_PROCESS: 2,
   IN_FLIGHT: 3,
-  SCANNING: 4,
-  READY: 5,
-  NEW: 6,
-  CAUGHT_UP: 7,
+  READY: 4,
+  NEW: 5,
+  CAUGHT_UP: 6,
 };
 
 // Opportunities the dashboard surfaces by default (OPEN / SCREENING / AWAITING).
