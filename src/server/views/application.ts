@@ -113,15 +113,6 @@ export type ApplicationView = {
   openFindingCount: number;
 };
 
-// A form field nobody needs to draft and nobody has written in — a dropdown,
-// a LinkedIn URL. Blank on purpose, so every surface that lists items has to
-// treat it differently from a question still waiting on work: the page tucks
-// these in a collapsed tail, and Hank gets them as one line rather than as a
-// column of empty answers he reads as unfinished.
-export function isStockItem(item: ApplicationItem): boolean {
-  return item.verdict === "skip" && !item.text?.trim();
-}
-
 export async function loadApplicationView(
   userId: string,
   jobId: string,

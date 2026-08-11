@@ -17,12 +17,12 @@ import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 
 import { buildWidgetSubmissionMessage } from "@/components/Chat/widgets/types";
+import { isStockItem } from "@/lib/applicationItem";
 import { useChatStore } from "@/lib/chatStore";
-import {
-  isStockItem,
-  type ApplicationItem,
-  type ApplicationItemStatus,
-  type ApplicationView as ApplicationViewPayload,
+import type {
+  ApplicationItem,
+  ApplicationItemStatus,
+  ApplicationView as ApplicationViewPayload,
 } from "@/server/views/application";
 
 import { AuthorMark } from "./shared/AuthorMark";

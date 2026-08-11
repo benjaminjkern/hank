@@ -1,7 +1,7 @@
 import { z } from "zod";
 
+import { isStockItem } from "@/lib/applicationItem";
 import {
-  isStockItem,
   loadApplicationView,
   type ApplicationItemStatus,
 } from "@/server/views/application";

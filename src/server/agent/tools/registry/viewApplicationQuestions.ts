@@ -1,10 +1,10 @@
 import { z } from "zod";
 
+import { isStockItem } from "@/lib/applicationItem";
 import { loadMergedQuestions } from "@/server/entities/jobs/applicationQuestions";
 import { needsQuestionsRefresh } from "@/server/entities/jobs/questionsRefresh";
 import { ensureApplicationForm } from "@/server/procedures/registry/draftApplication/ensureApplicationForm";
 import {
-  isStockItem,
   loadApplicationView,
   type ApplicationItemStatus,
 } from "@/server/views/application";
