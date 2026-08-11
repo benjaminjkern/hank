@@ -77,6 +77,18 @@ type BasicInfoFound = {
 type BasicInfoCannotScrape = {
   outcome: "cannot_scrape";
   reason: string;
+  // The careers page the hunt got furthest with, even though nothing scrapeable
+  // came out of it. NOT a working board — it's the starting point recon needs,
+  // and without it a company on an unrecognized board is unreachable: it never
+  // gets a sourceUrl, so no later scrape (and therefore no later recon) can
+  // ever run against it.
+  bestCandidateUrl: string | null;
+  // What the hunt learned about the company regardless of the board. Carried so
+  // that a recon success can commit a real name + blurb instead of leaving the
+  // stub named whatever the user typed.
+  canonicalName: string | null;
+  shortDescription: string | null;
+  longNotes: string | null;
 };
 
 // One real company the queried name could refer to. Each is a
@@ -115,7 +127,7 @@ const REPORT_BASIC_INFO_SCHEMA: SubAgentOutputSchema = {
       canonicalName: {
         type: "string",
         description:
-          "Required when outcome='found'. The company's actual brand name as you'd display it on a page (\"Cognition Labs\", not \"cognition-ai\"). Don't slug-derive — use what web_search shows you, or what the ATS board's header says.",
+          "Required when outcome='found', and worth filling on 'cannot_scrape' too if you worked out who they are. The company's actual brand name as you'd display it on a page (\"Cognition Labs\", not \"cognition-ai\"). Don't slug-derive — use what web_search shows you, or what the ATS board's header says.",
       },
       shortDescription: {
         type: "string",
@@ -131,6 +143,11 @@ const REPORT_BASIC_INFO_SCHEMA: SubAgentOutputSchema = {
         type: "string",
         description:
           "Required when outcome='cannot_scrape'. One sentence on what you tried and why nothing worked. Be specific — e.g. \"No matching greenhouse/lever/ashby/workable slug; web_search returned only third-party aggregators; homepage has no careers link.\" The user will see this if they ask why.",
+      },
+      bestCandidateUrl: {
+        type: "string",
+        description:
+          "STRONGLY ENCOURAGED when outcome='cannot_scrape'. The careers/jobs page you got FURTHEST with — the one that looked most like it lists their openings, even though test_scrape couldn't read it. It does NOT have to work; a page that clearly shows roles but wouldn't scrape is exactly what's wanted. Omit only if you never found any plausible careers page at all. This is the single most useful thing you can leave behind on a give-up: it's the starting point for working out how to read an unusual board later, and without it there is nothing to come back to.",
       },
       candidates: {
         type: "array",
@@ -166,6 +183,7 @@ const REPORT_BASIC_INFO_SCHEMA: SubAgentOutputSchema = {
 type BasicInfoFinalInput = {
   outcome?: string;
   sourceUrl?: string;
+  bestCandidateUrl?: string;
   canonicalName?: string;
   shortDescription?: string;
   longNotes?: string;
@@ -270,6 +288,10 @@ function validateOutput(input: BasicInfoFinalInput): CompanyBasicInfoOutput {
     return {
       outcome: "cannot_scrape",
       reason: input.reason ?? "(no reason given)",
+      bestCandidateUrl: input.bestCandidateUrl?.trim() || null,
+      canonicalName: input.canonicalName?.trim() || null,
+      shortDescription: input.shortDescription?.trim() || null,
+      longNotes: input.longNotes?.trim() || null,
     };
   }
   throw new Error(
@@ -331,7 +353,7 @@ Only do this for a TRUE collision (different companies). If the context or candi
 3. Fetched the homepage at least once looking for ATS links, AND
 4. Ran **test_scrape on the company's careers page itself** (homepage / "Life at {Company}" / \`careers.{company}.com\`) — that's what resolves an enterprise Workday or iCIMS board, and it's the step most often skipped. Do this for any company big enough to plausibly be on one, and ALWAYS when you saw a Workday or iCIMS hint.
 
-If all strategies fail, emit report_basic_info with outcome="cannot_scrape" and a one-sentence reason that names what you tried. (Exception: the sub-brand-with-no-own-board case above is a deliberate cannot_scrape that names the parent — not a give-up.)
+If all strategies fail, emit report_basic_info with outcome="cannot_scrape", a one-sentence reason that names what you tried, and — importantly — **bestCandidateUrl: the careers page you got furthest with**, even though it wouldn't scrape. A page that visibly lists their roles but that test_scrape couldn't read is exactly what to put there; it's what makes the board reachable later. Fill canonicalName / shortDescription too if you worked out who the company is. (Exception: the sub-brand-with-no-own-board case above is a deliberate cannot_scrape that names the parent — not a give-up.)
 
 # iCIMS boards
 

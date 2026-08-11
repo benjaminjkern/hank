@@ -43,9 +43,21 @@ type Outcome =
   | { kind: "skipped"; why: string };
 
 async function main() {
-  // Only companies with a URL on file: those are the ones where a better READER
-  // is the missing piece. A company with no URL at all needs the hunter re-run
-  // (enrich_companies with force), which is a different operation.
+  // Split deliberately. A company WITH a url on file is missing a better
+  // READER, which is what this script supplies. A company with no url never got
+  // one — the hunter gave up before recon existed — and what it needs is the
+  // hunt re-run, which now escalates to recon on its own. Different operation,
+  // so it's reported rather than silently skipped.
+  const urlless = await prisma.companyInteraction.count({
+    where: {
+      status: CompanyStatus.BLOCKED,
+      blockReason: {
+        in: [CompanyBlockReason.CANNOT_SCRAPE, CompanyBlockReason.AUTH_WALLED],
+      },
+      company: { sourceUrl: null },
+    },
+  });
+
   const blocked = await prisma.companyInteraction.findMany({
     where: {
       status: CompanyStatus.BLOCKED,
@@ -66,6 +78,12 @@ async function main() {
     `\n${blocked.length} blocked compan${blocked.length === 1 ? "y" : "ies"} with a URL on file` +
       `\nmode: ${APPLY ? "APPLY (writes)" : "dry run"}${WITH_RECON ? " + recon" : " (probe only)"}\n`,
   );
+  if (urlless > 0) {
+    console.log(
+      `NOTE: ${urlless} more blocked compan${urlless === 1 ? "y has" : "ies have"} no URL on file at all — this script can't reach ${urlless === 1 ? "it" : "them"}.\n` +
+        `      They need the hunt re-run (enrich_companies with force), which now escalates to recon itself.\n`,
+    );
+  }
 
   let readable = 0;
   for (const row of blocked) {

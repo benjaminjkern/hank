@@ -146,6 +146,14 @@ const AUDIT_SCRIPTS: Array<{
     subAgent: "companyBasicInfoSubAgent",
     class: "judgement",
   },
+  // Last: every case does live fetches through the sub-agent's test_recipe loop
+  // on top of the probe run that establishes the precondition.
+  {
+    name: "board-recipe",
+    script: "board-recipe.ts",
+    subAgent: "boardRecipeSubAgent",
+    class: "judgement",
+  },
 ];
 
 // LLM callsites intentionally WITHOUT an audit here, with the reason:

@@ -14,6 +14,7 @@
 import { companyLogoUrl } from "@/lib/companyLogo";
 import type { RunContext } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
+import { runReconBoard } from "@/server/procedures/registry/reconBoard";
 import { runVerifyCompanyLogo } from "@/server/procedures/registry/verifyCompanyLogo";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import { companyBasicInfoSubAgent } from "@/server/subagents/registry/companyBasicInfo";
@@ -201,12 +202,41 @@ async function hunt(
   if (!hunter.ok) return stop({ kind: "hunter_failed", error: hunter.error });
 
   if (hunter.output.outcome === "cannot_scrape") {
+    const gaveUp = hunter.output;
+    // Last chance before the company is set aside. This is the ONLY moment
+    // recon can reach a company whose board nothing recognizes: giving up here
+    // writes no sourceUrl, and every later escalation (the scrape paths, the
+    // backfill script) is keyed on having one — so without this branch such a
+    // company is BLOCKED permanently, unreachable by anything downstream.
+    if (gaveUp.bestCandidateUrl) {
+      const recon = await runReconBoard({
+        ...args,
+        companyId: company.companyId,
+        companyName: gaveUp.canonicalName ?? row.name,
+        sourceUrl: gaveUp.bestCandidateUrl,
+      });
+      if (recon.kind === "learned") {
+        // Recon proved the board readable, so the page the hunter gave up on IS
+        // this company's board — commit it exactly as a found one. The hunter's
+        // own identity findings ride along; a blank description is honest when
+        // it never worked out who they are, and enrichment can fill it later.
+        return {
+          ok: true,
+          found: {
+            sourceUrl: gaveUp.bestCandidateUrl,
+            canonicalName: gaveUp.canonicalName ?? row.name,
+            shortDescription: gaveUp.shortDescription ?? "",
+            longNotes: gaveUp.longNotes,
+          },
+        };
+      }
+    }
     await markCannotScrape({
       companyId: company.companyId,
       userId: args.userId,
-      reason: hunter.output.reason,
+      reason: gaveUp.reason,
     });
-    return stop({ kind: "cannot_scrape", reason: hunter.output.reason });
+    return stop({ kind: "cannot_scrape", reason: gaveUp.reason });
   }
 
   // Needs a human: guessing which of several real companies was meant is the
