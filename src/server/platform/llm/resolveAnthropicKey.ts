@@ -1,4 +1,5 @@
 import { prisma } from "@/server/db/prisma";
+import { hasServerKeyAccess } from "@/server/platform/deployment";
 
 import { decryptApiKey } from "./keyCrypto";
 
@@ -9,7 +10,9 @@ import { decryptApiKey } from "./keyCrypto";
 //
 // Precedence:
 //   1. User's own decrypted key, if set
-//   2. process.env.ANTHROPIC_API_KEY, only when canUseServerKey=true
+//   2. process.env.ANTHROPIC_API_KEY, only when hasServerKeyAccess() says so —
+//      the user's canUseServerKey grant OR the instance-wide
+//      SERVER_KEY_BY_DEFAULT
 //   3. NoAnthropicKeyError (route handlers translate this into a structured
 //      user-visible response)
 
@@ -49,11 +52,11 @@ export async function resolveAnthropicApiKeyWithSource(
     };
   }
 
-  if (user.canUseServerKey) {
+  if (hasServerKeyAccess(user.canUseServerKey)) {
     const serverKey = process.env.ANTHROPIC_API_KEY;
     if (!serverKey) {
       throw new NoAnthropicKeyError(
-        "Server fallback key is enabled for this user, but ANTHROPIC_API_KEY is not set",
+        "Server key access is granted, but ANTHROPIC_API_KEY is not set",
       );
     }
     return { key: serverKey, billedToServer: true };

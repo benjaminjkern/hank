@@ -1,5 +1,9 @@
 import { getCurrentUser } from "@/server/auth/currentUser";
 import { prisma } from "@/server/db/prisma";
+import {
+  allowUserApiKeys,
+  hasServerKeyAccess,
+} from "@/server/platform/deployment";
 
 import { SettingsView } from "./SettingsView";
 
@@ -17,6 +21,10 @@ export default async function SettingsPage() {
       deepseekKeyUpdatedAt: true,
     },
   });
+  // The effective answer, matching what the key resolvers will actually do —
+  // the raw column alone would tell a user they have no access on an instance
+  // that shares its key with everyone.
+  const serverKey = hasServerKeyAccess(row.canUseServerKey);
   return (
     <SettingsView
       identity={{
@@ -29,15 +37,16 @@ export default async function SettingsPage() {
         updatedAt: row.anthropicKeyUpdatedAt
           ? row.anthropicKeyUpdatedAt.toISOString()
           : null,
-        canUseServerKey: row.canUseServerKey,
+        canUseServerKey: serverKey,
       }}
       deepseekKey={{
         hint: row.deepseekKeyHint,
         updatedAt: row.deepseekKeyUpdatedAt
           ? row.deepseekKeyUpdatedAt.toISOString()
           : null,
-        canUseServerKey: row.canUseServerKey,
+        canUseServerKey: serverKey,
       }}
+      allowUserApiKeys={allowUserApiKeys}
     />
   );
 }

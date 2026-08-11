@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 
 import { HankLogo } from "@/components/HankLogo";
@@ -105,6 +105,44 @@ const Error = styled.div`
   font-size: 13px;
 `;
 
+const EmailInput = styled.input`
+  width: 100%;
+  height: 40px;
+  padding: 0 ${({ theme }) => theme.space.md};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  border-radius: ${({ theme }) => theme.radius.md};
+  background: ${({ theme }) => theme.colors.bgMuted};
+  color: ${({ theme }) => theme.colors.text};
+  font-family: inherit;
+  font-size: 14px;
+
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.borderStrong};
+  }
+`;
+
+const PrimaryButton = styled(Button)`
+  background: ${({ theme }) => theme.colors.accent};
+  color: ${({ theme }) => theme.colors.onAccent};
+  border-color: transparent;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.accent};
+    filter: brightness(1.08);
+  }
+`;
+
+const Notice = styled.div`
+  color: ${({ theme }) => theme.colors.textMuted};
+  background: ${({ theme }) => theme.colors.bgMuted};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+  padding: ${({ theme }) => theme.space.sm} ${({ theme }) => theme.space.md};
+  border-radius: ${({ theme }) => theme.radius.sm};
+  font-size: 12px;
+  line-height: 1.5;
+`;
+
 const ChuteButton = styled.button`
   position: fixed;
   bottom: ${({ theme }) => theme.space.lg};
@@ -172,16 +210,28 @@ function GitHubMark() {
 
 export function SignInPanel({
   error,
+  mode,
+  providers,
   googleAction,
   githubAction,
+  localAction,
 }: {
   error?: string;
+  mode: "local" | "oauth";
+  providers: { google: boolean; github: boolean };
   googleAction: () => Promise<void>;
   githubAction: () => Promise<void>;
+  localAction: (formData: FormData) => Promise<string | null>;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [groundDisabled, setGroundDisabled] = useState(false);
   const restoreTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // localAction redirects on success, so a returned value is always a message
+  // to show.
+  const [localError, submitLocal] = useActionState<string | null, FormData>(
+    (_previous, formData) => localAction(formData),
+    null,
+  );
 
   useEffect(
     () => () => {
@@ -218,22 +268,61 @@ export function SignInPanel({
         {error ? (
           <Error>{errorMessages[error] || "Sign-in failed. Try again."}</Error>
         ) : null}
-        <form action={googleAction}>
-          <Button type="submit">
-            <ProviderIcon>
-              <GoogleMark />
-            </ProviderIcon>
-            Continue with Google
-          </Button>
-        </form>
-        <form action={githubAction}>
-          <Button type="submit">
-            <ProviderIcon>
-              <GitHubMark />
-            </ProviderIcon>
-            Continue with GitHub
-          </Button>
-        </form>
+        {localError ? <Error>{localError}</Error> : null}
+        {mode === "local" ? (
+          <>
+            <form action={submitLocal}>
+              <EmailInput
+                name="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                aria-label="Email address"
+                required
+                autoFocus
+              />
+              <PrimaryButton type="submit" style={{ marginTop: 8 }}>
+                Continue
+              </PrimaryButton>
+            </form>
+            <Notice>
+              This instance has sign-in verification turned off — any email
+              works, and no password is asked for. Fine on a machine only you
+              can reach; if other people can load this page, they can sign in as
+              anyone, including an admin.
+            </Notice>
+          </>
+        ) : (
+          <>
+            {providers.google ? (
+              <form action={googleAction}>
+                <Button type="submit">
+                  <ProviderIcon>
+                    <GoogleMark />
+                  </ProviderIcon>
+                  Continue with Google
+                </Button>
+              </form>
+            ) : null}
+            {providers.github ? (
+              <form action={githubAction}>
+                <Button type="submit">
+                  <ProviderIcon>
+                    <GitHubMark />
+                  </ProviderIcon>
+                  Continue with GitHub
+                </Button>
+              </form>
+            ) : null}
+            {!providers.google && !providers.github ? (
+              <Notice>
+                No sign-in provider is configured. Set an OAuth app&apos;s
+                credentials, or set <code>AUTH_MODE=local</code> to sign in with
+                just an email.
+              </Notice>
+            ) : null}
+          </>
+        )}
       </Card>
       <ChuteButton type="button" onClick={openChute} disabled={groundDisabled}>
         {groundDisabled ? "chute open…" : "open chute"}

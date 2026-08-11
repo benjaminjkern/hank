@@ -28,7 +28,14 @@ model User {
   // /settings UI. DeepSeek is the sole runtime provider (main agent + every
   // sub-agent); Anthropic is kept only for the vision carve-out (resume-parse +
   // logo-verify). canUseServerKey gates BOTH server keys with one flag.
+  // Grants THIS user the server key. The instance-wide default lives in
+  // SERVER_KEY_BY_DEFAULT (platform/deployment.ts) — when that's on, this column
+  // is moot and everyone can spend it. When it's off, this column is the invite
+  // gate, flipped per user at /admin/users.
   canUseServerKey          Boolean  @default(false)
+  // Set when a blocked user asks an admin for that grant; null = never asked.
+  // Overwritten on re-request, so it reads as "waiting since".
+  accessRequestedAt        DateTime?
   anthropicKeyEncrypted    String?
   anthropicKeyHint         String?
   anthropicKeyUpdatedAt    DateTime?

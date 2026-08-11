@@ -4,6 +4,7 @@ import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
 
 import { prisma } from "../db/prisma";
+import { hasServerKeyAccess, oauthProviders } from "../platform/deployment";
 import { notifyAdmin } from "../platform/notifications/pushAdmin";
 
 declare module "next-auth" {
@@ -30,12 +31,18 @@ declare module "next-auth" {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  // allowDangerousEmailAccountLinking lets a first-time OAuth sign-in attach
-  // to an existing User row by matching email — useful for migrating seeded
-  // users into the auth flow and for users who add a second OAuth provider.
+  // Only providers whose credentials are actually set — registering one without
+  // them yields a button that always errors. allowDangerousEmailAccountLinking
+  // lets a first-time OAuth sign-in attach to an existing User row by matching
+  // email, which is how a seeded user and a second provider both land on one
+  // account.
   providers: [
-    Google({ allowDangerousEmailAccountLinking: true }),
-    GitHub({ allowDangerousEmailAccountLinking: true }),
+    ...(oauthProviders.google
+      ? [Google({ allowDangerousEmailAccountLinking: true })]
+      : []),
+    ...(oauthProviders.github
+      ? [GitHub({ allowDangerousEmailAccountLinking: true })]
+      : []),
   ],
   pages: {
     signIn: "/signin",
@@ -53,7 +60,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.isAdmin = Boolean(user.isAdmin);
       session.user.hasAnthropicKey = Boolean(user.anthropicKeyEncrypted);
       session.user.hasDeepseekKey = Boolean(user.deepseekKeyEncrypted);
-      session.user.canUseServerKey = Boolean(user.canUseServerKey);
+      // The EFFECTIVE answer, not the raw column — the key resolvers gate on
+      // the same function, so a UI that read the column alone would show a
+      // blocked state to a user the server will happily serve.
+      session.user.canUseServerKey = hasServerKeyAccess(
+        Boolean(user.canUseServerKey),
+      );
       return session;
     },
   },

@@ -15,6 +15,7 @@ export default async function AdminUsersPage() {
       name: true,
       isAdmin: true,
       canUseServerKey: true,
+      accessRequestedAt: true,
       anthropicKeyHint: true,
       anthropicKeyUpdatedAt: true,
       createdAt: true,
@@ -35,6 +36,9 @@ export default async function AdminUsersPage() {
     name: r.name,
     isAdmin: r.isAdmin,
     canUseServerKey: r.canUseServerKey,
+    accessRequestedAt: r.accessRequestedAt
+      ? r.accessRequestedAt.toISOString()
+      : null,
     keyHint: r.anthropicKeyHint,
     keyUpdatedAt: r.anthropicKeyUpdatedAt
       ? r.anthropicKeyUpdatedAt.toISOString()

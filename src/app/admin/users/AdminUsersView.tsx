@@ -3,7 +3,7 @@
 import Link from "next/link";
 import styled from "styled-components";
 
-import { shortDate } from "@/utils/date";
+import { fullDateTime, relativeTime, shortDate } from "@/utils/date";
 
 import { setCanUseServerKey } from "./actions";
 
@@ -13,6 +13,7 @@ export type AdminUserRow = {
   name: string | null;
   isAdmin: boolean;
   canUseServerKey: boolean;
+  accessRequestedAt: string | null;
   keyHint: string | null;
   keyUpdatedAt: string | null;
   createdAt: string;
@@ -176,6 +177,14 @@ export function AdminUsersView({ users }: { users: AdminUserRow[] }) {
                       {u.canUseServerKey ? "Enabled" : "Disabled"}
                     </ToggleButton>
                   </form>
+                  {!u.canUseServerKey && u.accessRequestedAt ? (
+                    <Pill
+                      $tone="warn"
+                      title={`Requested ${fullDateTime(u.accessRequestedAt)}`}
+                    >
+                      asked {relativeTime(u.accessRequestedAt)}
+                    </Pill>
+                  ) : null}
                 </Td>
                 <Td>
                   {u.isAdmin ? <Pill $tone="ok">admin</Pill> : <Muted>—</Muted>}

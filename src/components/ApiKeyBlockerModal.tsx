@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import styled from "styled-components";
 
 import { saveApiKey, saveDeepseekKey } from "@/app/settings/actions";
+import { requestAccessAction } from "@/app/settings/requestAccess";
 import { useChatStore, type ApiKeyBlockerReason } from "@/lib/chatStore";
 
 // Full-viewport hard-blocking modal. Six trigger reasons across two providers
@@ -12,6 +13,11 @@ import { useChatStore, type ApiKeyBlockerReason } from "@/lib/chatStore";
 // key — Anthropic for the three vision reasons that arrive via the résumé
 // route). On a successful save the chat session is refetched (so the server-side
 // hasKey flags flip too) and the blocker is cleared, which unmounts this overlay.
+//
+// When the instance disallows own keys (`allowUserApiKeys=false`), pasting is
+// not a way out of this modal, so the form is replaced by a request-access
+// button. That is the ONLY route in on an invite-gated deployment — a modal
+// that just says "add a key" there is a dead end the user can't act on.
 const Backdrop = styled.div`
   position: fixed;
   inset: 0;
@@ -223,13 +229,20 @@ function copyFor(reason: ApiKeyBlockerReason): Copy {
   }
 }
 
-export function ApiKeyBlockerModal() {
+export function ApiKeyBlockerModal({
+  allowUserApiKeys,
+}: {
+  allowUserApiKeys: boolean;
+}) {
   const reason = useChatStore((s) => s.apiKeyBlocker);
   const setApiKeyBlocker = useChatStore((s) => s.setApiKeyBlocker);
   const refetchSession = useChatStore((s) => s.refetchSession);
 
   const [pasted, setPasted] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [requestState, setRequestState] = useState<"idle" | "sent" | "pending">(
+    "idle",
+  );
   const [pending, startTransition] = useTransition();
 
   if (!reason) return null;
@@ -243,6 +256,25 @@ export function ApiKeyBlockerModal() {
     reason === "invalid_deepseek" ||
     reason === "deepseek_no_credit";
   const providerLabel = isDeepseek ? "DeepSeek" : "Anthropic";
+
+  // With own keys disallowed there is no key to paste, so the modal splits by
+  // WHOSE key is at fault. "Missing" means this account was never granted the
+  // server key — the user can ask for it. Invalid / no-credit means the
+  // server's own key is broken, which no user action fixes.
+  const notGranted =
+    !allowUserApiKeys &&
+    (reason === "missing" || reason === "missing_deepseek");
+  const serverKeyFaulty = !allowUserApiKeys && !notGranted;
+
+  async function onRequestAccess() {
+    setError(null);
+    const result = await requestAccessAction();
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    setRequestState(result.alreadyPending ? "pending" : "sent");
+  }
 
   async function onSubmit(formData: FormData) {
     setError(null);
@@ -268,33 +300,78 @@ export function ApiKeyBlockerModal() {
       aria-labelledby="api-key-modal-title"
     >
       <Card>
-        <Title id="api-key-modal-title">{title}</Title>
-        <Body>{body}</Body>
-        <Form action={(fd) => startTransition(() => void onSubmit(fd))}>
-          <Label htmlFor="api-key-modal-input">{providerLabel} API key</Label>
-          <Input
-            id="api-key-modal-input"
-            name="apiKey"
-            type="password"
-            autoComplete="off"
-            spellCheck={false}
-            placeholder={isDeepseek ? "sk-..." : "sk-ant-..."}
-            value={pasted}
-            onChange={(e) => setPasted(e.target.value)}
-            disabled={pending}
-            autoFocus
-          />
-          <Hint>Validated against {providerLabel} before saving.</Hint>
-          <Actions>
-            <Submit type="submit" disabled={pending || !pasted.trim()}>
-              {pending ? "Validating…" : "Save and continue"}
-            </Submit>
-          </Actions>
-          {error && <ErrorText>{error}</ErrorText>}
-          <SecondaryLink href="/settings">
-            Manage keys in Settings
-          </SecondaryLink>
-        </Form>
+        <Title id="api-key-modal-title">
+          {notGranted
+            ? "Your account needs access"
+            : serverKeyFaulty
+              ? "Hank is temporarily unavailable"
+              : title}
+        </Title>
+        <Body>
+          {notGranted ? (
+            <>
+              This instance runs on its own API key, and your account
+              hasn&apos;t been given access to it yet. Send a request and
+              you&apos;ll be able to start once it&apos;s approved.
+            </>
+          ) : serverKeyFaulty ? (
+            <>
+              The API key this instance runs on isn&apos;t working right now —
+              it may have been revoked or run out of credit. Nothing to do on
+              your end; the person running this instance needs to sort it out.
+            </>
+          ) : (
+            body
+          )}
+        </Body>
+        {notGranted ? (
+          <>
+            {requestState === "idle" ? (
+              <Actions>
+                <Submit
+                  type="button"
+                  disabled={pending}
+                  onClick={() => startTransition(() => void onRequestAccess())}
+                >
+                  {pending ? "Sending…" : "Request access"}
+                </Submit>
+              </Actions>
+            ) : (
+              <Hint>
+                {requestState === "sent"
+                  ? "Request sent. You'll be able to chat once it's approved — no need to ask again."
+                  : "Your earlier request is still waiting. You'll be able to chat once it's approved."}
+              </Hint>
+            )}
+            {error && <ErrorText>{error}</ErrorText>}
+          </>
+        ) : serverKeyFaulty ? null : (
+          <Form action={(fd) => startTransition(() => void onSubmit(fd))}>
+            <Label htmlFor="api-key-modal-input">{providerLabel} API key</Label>
+            <Input
+              id="api-key-modal-input"
+              name="apiKey"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={isDeepseek ? "sk-..." : "sk-ant-..."}
+              value={pasted}
+              onChange={(e) => setPasted(e.target.value)}
+              disabled={pending}
+              autoFocus
+            />
+            <Hint>Validated against {providerLabel} before saving.</Hint>
+            <Actions>
+              <Submit type="submit" disabled={pending || !pasted.trim()}>
+                {pending ? "Validating…" : "Save and continue"}
+              </Submit>
+            </Actions>
+            {error && <ErrorText>{error}</ErrorText>}
+            <SecondaryLink href="/settings">
+              Manage keys in Settings
+            </SecondaryLink>
+          </Form>
+        )}
       </Card>
     </Backdrop>
   );

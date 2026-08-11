@@ -31,7 +31,7 @@ Whichever one serves the model the call site named — a lookup in [`MODELS`](..
 `resolveAnthropicApiKey` / `resolveDeepseekApiKey` share identical precedence:
 
 1. the user's **own** decrypted key for that provider, if set — **always wins when present; the `canUseServerKey` flag does NOT gate it**;
-2. else the **server** key — only if `User.canUseServerKey` is true (**one flag gates BOTH** server keys, `DEEPSEEK_API_KEY` + `ANTHROPIC_API_KEY` — no separate per-provider flag; renamed from the legacy `canUseServerAnthropicKey`);
+2. else the **server** key — only if `hasServerKeyAccess(user.canUseServerKey)` is true, i.e. the per-user grant OR the instance-wide `SERVER_KEY_BY_DEFAULT` (**one gate covers BOTH** server keys, `DEEPSEEK_API_KEY` + `ANTHROPIC_API_KEY` — no separate per-provider flag);
 3. else throw `NoAnthropicKeyError` / `NoDeepseekKeyError` (code `NO_ANTHROPIC_KEY` / `NO_DEEPSEEK_KEY`).
 
 There is **no DeepSeek→Anthropic provider fallback**: a user missing a DeepSeek key gets a hard `NO_DEEPSEEK_KEY`, not a silent Anthropic call. That code flows through `runUserMessage` → the chat route → `apiKeyBlocker` in [chatStore.ts](../src/lib/chatStore.ts) → the blocker modal.
@@ -47,7 +47,7 @@ There is **no DeepSeek→Anthropic provider fallback**: a user missing a DeepSee
 
 **Chat needs a DeepSeek credential; the two vision features need an Anthropic one.** Both degrade gracefully, so onboarding is never hard-blocked past chat:
 
-- Chat runs on DeepSeek. The chat pre-flight ([runUserMessage.ts](../src/server/agent/runtime/runUserMessage.ts)) resolves the DeepSeek key and yields `NO_DEEPSEEK_KEY` if it's absent — this is the **authoritative** first-turn gate. The first-load gate in [page.tsx](../src/app/page.tsx) keys on `hasDeepseekKey || canUseServerKey` (best-effort; it can't see whether `DEEPSEEK_API_KEY` is set in the env, so the runtime gate is the real one).
+- Chat runs on DeepSeek. The chat pre-flight ([runUserMessage.ts](../src/server/agent/runtime/runUserMessage.ts)) resolves the DeepSeek key and yields `NO_DEEPSEEK_KEY` if it's absent — this is the **authoritative** first-turn gate. The first-load gate in [page.tsx](../src/app/page.tsx) keys on `hasDeepseekKey || hasServerKeyAccess(...)` (best-effort; it can't see whether `DEEPSEEK_API_KEY` is set in the env, so the runtime gate is the real one).
 - Résumé upload without Anthropic → structured `{ ok:false, error }` from the [résumé route](../src/app/api/documents/resume/route.ts); the user just types their background (résumé is optional).
 - Logo verify without Anthropic → [logoVerifier.ts](../src/server/subagents/registry/logoVerifier.ts) returns `uncertain` / no write; the UI falls back to the monogram. A vision failure **never** reaches the chat key-blocker (its throws are swallowed / converted to `is_error` tool_results inside the agent loop).
 

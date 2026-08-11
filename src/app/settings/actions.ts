@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { getCurrentUser } from "@/server/auth/currentUser";
 import { prisma } from "@/server/db/prisma";
+import { allowUserApiKeys } from "@/server/platform/deployment";
 import { DEEPSEEK_ANTHROPIC_BASE_URL } from "@/server/platform/llm/deepseek";
 import { encryptApiKey, keyHint } from "@/server/platform/llm/keyCrypto";
 import type { LlmModel } from "@/server/platform/llm/models";
@@ -13,6 +14,13 @@ import type { LlmModel } from "@/server/platform/llm/models";
 const DEEPSEEK_VALIDATION_MODEL: LlmModel = "deepseek-v4-flash";
 
 export type SaveApiKeyResult = { ok: true } | { ok: false; error: string };
+
+// Both save paths check this first. The settings UI and the blocker modal
+// already hide their paste forms when the instance disallows own keys, but a
+// hidden form is not a check — an instance that means "server key only" has to
+// refuse the write, not just decline to offer it.
+const BYOK_DISABLED_MESSAGE =
+  "This instance doesn't accept personal API keys. Ask an admin for access instead.";
 
 // Validates the user-submitted Anthropic API key with a one-token ping before
 // storing it. Catches typos at save time rather than letting them surface on
@@ -53,6 +61,7 @@ async function validateAnthropicKey(
 export async function saveApiKey(
   formData: FormData,
 ): Promise<SaveApiKeyResult> {
+  if (!allowUserApiKeys) return { ok: false, error: BYOK_DISABLED_MESSAGE };
   const user = await getCurrentUser();
   const raw = formData.get("apiKey");
   const apiKey = typeof raw === "string" ? raw.trim() : "";
@@ -137,6 +146,7 @@ async function validateDeepseekKey(
 export async function saveDeepseekKey(
   formData: FormData,
 ): Promise<SaveApiKeyResult> {
+  if (!allowUserApiKeys) return { ok: false, error: BYOK_DISABLED_MESSAGE };
   const user = await getCurrentUser();
   const raw = formData.get("apiKey");
   const apiKey = typeof raw === "string" ? raw.trim() : "";
