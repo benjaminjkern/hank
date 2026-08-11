@@ -15,6 +15,7 @@ import {
 } from "@/server/entities/resolveBySlug";
 
 import { loadApplicationView, type ApplicationView } from "./application";
+import { loadDiscoveryList, type DiscoveryListView } from "./discoveryList";
 import {
   getFocusedCompanyView,
   type FocusedCompanyView,
@@ -33,6 +34,7 @@ export type PanelView = {
   opportunity: FocusedOpportunityView | null;
   board: ShortlistBoardView | null;
   application: ApplicationView | null;
+  discovery: DiscoveryListView | null;
   documentsSubPage: DocumentsSubPage;
   // Whether this address wants the panel showing. Only the dashboard has both
   // answers (`/` stows it, `/dashboard` opens it); naming any other view IS
@@ -46,6 +48,7 @@ const EMPTY = {
   opportunity: null,
   board: null,
   application: null,
+  discovery: null,
   documentsSubPage: "index",
 } as const;
 
@@ -78,6 +81,13 @@ export async function loadPanelView(
 
     case "analytics":
       return { panelMode: "analytics", ...EMPTY, panelOpen: true };
+
+    // Agent-opened in practice, but addressable so a refresh mid-marking lands
+    // back on the list rather than the dashboard.
+    case "discovery": {
+      const discovery = await loadDiscoveryList(userId);
+      return { panelMode: "discovery", ...EMPTY, panelOpen: true, discovery };
+    }
 
     // A bare segment is a company or a lead; companies win, so a slug that
     // collides across the two makes the lead unreachable by URL.

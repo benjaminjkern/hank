@@ -8,17 +8,19 @@ export const addMoreCompaniesDef = defineWidget<AddMoreCompaniesPayload>({
     const added = p.addedThisBatch.length
       ? p.addedThisBatch.join(", ")
       : "(none)";
-    return `[Added to your watchlist: ${added}.\n  Add more companies? "yes" / "no"]`;
+    return `[Added to your watchlist: ${added}.\n  Done adding, or find more companies? "done" / "more"]`;
   },
   harness: {
     actionHint:
-      'widget_action with optionRef = "yes" or "no". Or send_message.',
+      'widget_action with optionRef = "done" (move on) or "more" (keep looking). Or send_message.',
     multiSelect: false,
-    translate: (_p, action) => {
+    translate: (p, action) => {
       const r = normRef(action.optionRef);
-      const answer = r.startsWith("y")
+      // "yes" = keep hunting, matching the submission's answer field; the
+      // labels the user sees are Done / Find more.
+      const answer = r.startsWith("m")
         ? "yes"
-        : r.startsWith("n")
+        : r.startsWith("d") || r.startsWith("n")
           ? "no"
           : null;
       if (!answer)
@@ -26,8 +28,12 @@ export const addMoreCompaniesDef = defineWidget<AddMoreCompaniesPayload>({
           error: `unrecognized add_more_companies optionRef: ${action.optionRef}`,
         };
       return widgetMarker(
-        { kind: "add_more_companies", answer },
-        answer === "yes" ? "[Add more]" : "[Done adding]",
+        {
+          kind: "add_more_companies",
+          answer,
+          settled: p.addedThisBatch.length + (p.passedCount ?? 0),
+        },
+        answer === "yes" ? "[Find more]" : "[Done adding]",
       );
     },
   },

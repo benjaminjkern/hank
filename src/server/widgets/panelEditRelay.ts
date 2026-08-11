@@ -18,6 +18,11 @@
 // what marks them unrelayed, so they simply ride the next message instead.
 
 import {
+  listUnrelayedSuggestionMarks,
+  renderSuggestionMarkRelayText,
+  settleRelayedSuggestionMarks,
+} from "@/server/entities/companies/suggestionMark";
+import {
   listUnrelayedApplicationEdits,
   renderApplicationEditRelayText,
   settleRelayedApplicationEdits,
@@ -41,12 +46,28 @@ const CHIP_WORD: Record<ApplicationEdit["change"], string> = {
 export async function buildPanelEditBlocks(
   userId: string,
 ): Promise<Anthropic.ContentBlockParam[]> {
-  const [boardEdits, applicationEdits] = await Promise.all([
+  const [boardEdits, applicationEdits, suggestionMarks] = await Promise.all([
     listUnrelayedBoardEdits(userId),
     listUnrelayedApplicationEdits(userId),
+    listUnrelayedSuggestionMarks(userId),
   ]);
 
   const blocks: Anthropic.ContentBlockParam[] = [];
+
+  if (suggestionMarks.length > 0) {
+    await settleRelayedSuggestionMarks(userId, suggestionMarks);
+    blocks.push({
+      type: "panel_edits",
+      text: renderSuggestionMarkRelayText(suggestionMarks),
+      // One chip per marked company, in the same {title, companyName, verdict}
+      // shape the board's chips use.
+      edits: suggestionMarks.map((m) => ({
+        title: m.name,
+        companyName: null,
+        verdict: m.mark ? m.mark.toLowerCase() : "undecided",
+      })),
+    } as unknown as Anthropic.ContentBlockParam);
+  }
 
   if (boardEdits.length > 0) {
     await settleRelayedBoardEdits(userId, boardEdits);

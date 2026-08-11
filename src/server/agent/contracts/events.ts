@@ -161,7 +161,7 @@ export type ChatTurnRunner = (
     // First user message of this turn. "" on silent entry.
     userMessage: string;
     attachmentIds: string[];
-    // The user sent with no text because their shortlist-board marks ARE the
+    // The user sent with no text because their panel marks ARE the
     // message. Empty text alone means silent entry (the deterministic layer
     // drives); with this set the turn opens a real user row — the panel-edit
     // blocks are its content — and Hank answers it.

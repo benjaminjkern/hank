@@ -9,7 +9,7 @@
 // `logCompanyEvent`.
 //
 // None of these wraps the segment. Ending a company only REPORTS that it ended;
-// consolidate + compact is procedures/registry/wrapCompanySegment.ts, which the
+// consolidate + compact is procedures/registry/wrapSegment.ts, which the
 // chat runner invokes once per message.
 
 import {

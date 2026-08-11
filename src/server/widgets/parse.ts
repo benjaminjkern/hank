@@ -4,8 +4,8 @@
 // are PURE — no DB, no side-effects — which is what lets the pipeline runners
 // import their parser without dragging prisma or risking an import cycle.
 //
-// The top-level submissions (next_company_picker, company_checklist,
-// company_disambiguation) are dispatched by dispatchTopLevelSubmission; the
+// The top-level submissions (next_company_picker, company_disambiguation,
+// add_more_companies) are dispatched by dispatchTopLevelSubmission; the
 // per-widget dispatch bodies live in the sibling dispatch*.ts files. The
 // walkthrough submissions are dispatched inside the walkthrough state machine —
 // only their parser lives here.
@@ -79,24 +79,19 @@ export function parseWidgetSubmission(
 }
 
 // ---------------------------------------------------------------------------
-// Grow-the-watchlist widgets: company_checklist (pick from the find_companies
-// suggestion set), company_disambiguation (resolve a name collision the URL
-// hunter flagged), and add_more_companies (keep hunting or wrap up). All three
+// Grow-the-watchlist widgets: company_disambiguation (resolve a name collision
+// the URL hunter flagged) and add_more_companies (done, or keep hunting). Both
 // are dispatched at the TOP LEVEL (dispatchTopLevelSubmission), before Hank runs
-// at all, so a checklist emitted by the find_companies tool from ANY
-// conversation commits its picks the same way — growing the watchlist is
-// conversational, not a flow of its own.
+// at all, so either one commits the same way from ANY conversation — growing the
+// watchlist is conversational, not a flow of its own. (Picking WHICH companies
+// is not a widget at all: it's marks on the discovery panel, relayed as
+// panel_edits and settled by Hank's commit_discovery.)
 // ---------------------------------------------------------------------------
 
-// A company kept from the checklist. `context` (the suggestion reasoning) and
-// `url` (the captured board URL) ride back so the URL hunter resolves the right
-// company on a name collision. Both optional.
+// A company on its way onto the watchlist. `context` (the search's own case for
+// it) and `url` (the board URL the search captured) travel with the name so the
+// URL hunter resolves the right company on a name collision. Both optional.
 export type PickedCompany = { name: string; context?: string; url?: string };
-
-// A candidate the user unchecked. The name is the whole payload: what was
-// wrong with a batch is a sentence they type in chat, which reaches the next
-// search as its direction — a per-name reason code was a lossy version of it.
-export type DeclinedCompany = { name: string };
 
 // One resolved branch of a flagged name collision: the user picked
 // which real company the ambiguous name maps to, identified by the verified
@@ -108,52 +103,19 @@ export type DisambiguationResolution = {
   shortDescription: string;
 };
 
-// company_checklist submission — the user's picks from a find_companies
-// checklist. `picked` can be empty (they unchecked everything / "none of
-// these"); the dispatcher handles the empty batch. Returns null when the
-// message isn't a company_checklist marker.
-export function parseCompanyChecklistSubmission(
-  userMessage: string,
-): { picked: PickedCompany[]; declined: DeclinedCompany[] } | null {
-  const obj = extractWidgetMarker(userMessage);
-  if (!obj || obj.kind !== "company_checklist") return null;
-  // `declined` is absent on markers persisted before the checklist captured it;
-  // an empty list there means "nothing recorded", not "nothing declined".
-  return {
-    picked: asPickedCompanies(obj.picked),
-    declined: asDeclinedCompanies(obj.declined),
-  };
-}
-
-// Accepts both the bare-string and the object form: markers persisted while the
-// checklist captured a per-name reason carry `{name, reason?, note?}`, and the
-// extra keys are simply ignored.
-function asDeclinedCompanies(v: unknown): DeclinedCompany[] {
-  if (!Array.isArray(v)) return [];
-  const out: DeclinedCompany[] = [];
-  for (const item of v) {
-    if (typeof item === "string") {
-      if (item.trim()) out.push({ name: item.trim() });
-      continue;
-    }
-    if (!item || typeof item !== "object") continue;
-    const o = item as Record<string, unknown>;
-    if (typeof o.name !== "string" || !o.name.trim()) continue;
-    out.push({ name: o.name.trim() });
-  }
-  return out;
-}
-
 // add_more_companies submission — the yes/no that follows a completed add.
 // "yes" re-enters discovery; "no" hands off to what's next. Returns null when
 // the message isn't an add_more_companies marker.
 export function parseAddMoreCompaniesSubmission(
   userMessage: string,
-): { answer: "yes" | "no" } | null {
+): { answer: "yes" | "no"; settled: number } | null {
   const obj = extractWidgetMarker(userMessage);
   if (!obj || obj.kind !== "add_more_companies") return null;
   if (obj.answer !== "yes" && obj.answer !== "no") return null;
-  return { answer: obj.answer };
+  // Absent on markers persisted before the count rode along — treat as "we
+  // don't know", which errs toward wrapping rather than skipping it.
+  const settled = typeof obj.settled === "number" ? obj.settled : 1;
+  return { answer: obj.answer, settled };
 }
 
 // company_disambiguation submission — the user resolved one or more flagged name
@@ -167,37 +129,6 @@ export function parseCompanyDisambiguationSubmission(
   const resolved = asResolutions(obj.resolved);
   if (resolved.length === 0) return null;
   return { resolved };
-}
-
-// Parse the `picked` array. Current shape is objects {name, context?, url?};
-// legacy markers (already in chat history) carried a bare string[] — accept
-// both so an old persisted marker still round-trips to a name list.
-function asPickedCompanies(v: unknown): PickedCompany[] {
-  if (!Array.isArray(v)) return [];
-  const out: PickedCompany[] = [];
-  for (const item of v) {
-    if (typeof item === "string") {
-      if (item.trim()) out.push({ name: item.trim() });
-      continue;
-    }
-    if (item && typeof item === "object") {
-      const o = item as Record<string, unknown>;
-      if (typeof o.name === "string" && o.name.trim()) {
-        out.push({
-          name: o.name.trim(),
-          context:
-            typeof o.context === "string" && o.context.trim()
-              ? o.context.trim()
-              : undefined,
-          url:
-            typeof o.url === "string" && o.url.trim()
-              ? o.url.trim()
-              : undefined,
-        });
-      }
-    }
-  }
-  return out;
 }
 
 function asResolutions(v: unknown): DisambiguationResolution[] {

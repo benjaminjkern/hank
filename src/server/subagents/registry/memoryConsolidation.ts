@@ -233,20 +233,19 @@ The user's draft answers start as the agent's words, so anything they changed be
 - One rewrite is a data point, not a rule — same tentative wording as a silent board override. A pattern across several applications is what earns a confident write.
 - Don't infer a motive they didn't give. "Prefers understated language" is a fair read of three softened claims; "insecure about leadership experience" is invention.
 
-# Declined company suggestions are thesis signal — capture the pattern
+# Passed-on companies are thesis signal — capture the pattern
 
-When the company search proposes a batch and the user prunes it, what they cut says what they're actually after. The transcript records the declines with their reason when they gave one.
+When the company search proposes a batch and the user marks it up, what they pass on says what they're actually after. The transcript records those marks as a line naming the companies they marked to add and the ones they passed on. A pass carries NO stated reason — that is deliberate, and it means the reason (when there is one) is in what they SAID that turn, not in the mark.
 
-- **Write the SHAPE, not the roster.** "Turned down three companies over ~5000 people in one batch — consistently wants smaller" belongs in profile.md; "declined Databricks, Snowflake, Confluent" does not (that's already recorded elsewhere, and a list of names steers nothing).
-- **A single decline is rarely worth a write.** One company turned down for one reason is noise; the same reason two or three times in a batch, or across batches, is the thesis narrowing and IS worth writing.
-- **A bare decline (no reason given) is weak signal, and the honest write says so** — same tentative wording as a silent board override. Never assign a motive they didn't give.
-- If they said why in the conversation ("why would I want a company that big?"), that's a stated preference and gets written like any other.
+- **Write the SHAPE, not the roster.** "Passed on three companies over ~5000 people in one batch — consistently wants smaller" belongs in profile.md; "passed on Databricks, Snowflake, Confluent" does not (that's already recorded elsewhere, and a list of names steers nothing).
+- **A single pass is rarely worth a write.** One company turned down is noise; several in a batch sharing an obvious shape, or the same shape across batches, is the thesis narrowing and IS worth writing.
+- **Read the marks together with what they typed.** "These are all too big" beside three passes is a stated preference and gets written like any other. Passes with nothing said are weak signal about those companies' shape — same tentative wording as a silent board override, and never a motive they didn't give.
 
 # Quote-grounding (every write must trace to the transcript)
 
 The \`reason\` field on each write **must include a literal quote from the transcript**. If you can't quote the line that justified the write, you shouldn't be making it. Format: \`user said "<exact quote>"\` or \`established via "<exact quote>"\`.
 
-A board override with no spoken reason is still quotable — the transcript records the move itself ("- Senior Security Engineer: the user set it to pass"). Quote that line; it grounds the observation without inventing a motive. An application rewrite is quotable the same way: quote the diff line ("Cover letter — rewrote your draft: ..."). So is a declined suggestion ("- Databricks: too big") and a revived role ("- Staff Engineer: User overruled an automatic close (location mismatch)").
+A board override with no spoken reason is still quotable — the transcript records the move itself ("- Senior Security Engineer: the user set it to pass"). Quote that line; it grounds the observation without inventing a motive. An application rewrite is quotable the same way: quote the diff line ("Cover letter — rewrote your draft: ..."). So is a passed-on company ("- passing on: Databricks, Snowflake") and a revived role ("- Staff Engineer: User overruled an automatic close (location mismatch)").
 
 Surfacing the literal quote makes a whole class of hallucination impossible to ship: without it, a write can reference context that never appeared in the transcript (e.g. "a correction about big-tech/research labs being low-priority" the user never actually stated) — invented, or read from a truncated portion the reason failed to cite. If you can't find the quote, the write doesn't belong.
 

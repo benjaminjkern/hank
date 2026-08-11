@@ -11,6 +11,10 @@ export type PanelMode =
   // while a negotiation is open. Driven by the agent's board show events and
   // user navigation (dashboard / company page links).
   | "shortlist-board"
+  // Companies the search has proposed and the user is marking up. Non-entity
+  // scoped (like documents/analytics) but agent-opened: find_companies puts it
+  // on screen, and marks relay to Hank on the next message.
+  | "discovery"
   // One job's application: every item the form asks for, editable, with the
   // submit action. Reached from the job page, a chat link, or Hank surfacing it
   // when he finishes drafting.

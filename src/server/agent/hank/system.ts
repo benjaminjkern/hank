@@ -20,6 +20,11 @@ type BuildHankSystemArgs = {
   // what lets Hank negotiate the board in chat without re-reading the roles:
   // conclusions pushed here, evidence pulled via tools.
   shortlistBoards?: string;
+  // Compact rendering of the companies the search has proposed and the user is
+  // marking up. Built per turn by loadHankDiscoveryContext(); undefined when the
+  // list is empty. Same pull/push split as the board: the names + marks are
+  // pushed here, and acting on them is `commit_discovery`.
+  discoveryList?: string;
   // Derived per turn (never persisted): the user's profile is still too thin to
   // match roles against, so this turn runs the intake body instead of the main
   // one. Computed by the chat runner via isProfileObviouslyEnriched.
@@ -464,6 +469,11 @@ export function buildHankSystem(args: BuildHankSystemArgs): HankSystemPrompt {
       "shortlistBoards",
       `# Open shortlist board${args.shortlistBoards.includes("\n\nShortlist board") ? "s" : ""}\nA shortlist negotiation is open — the user sees this board on their panel, and their edits arrive attached to their messages. A row they have just re-marked is still listed under its OLD group with the new mark named: that is the pending state, and it settles when their message lands. Engage with it per "The shortlist is a conversation over the board".\n\n${args.shortlistBoards}`,
     );
+  }
+  // The open discovery list, when the search has proposed companies the user
+  // hasn't settled. Same placement logic as the board above it.
+  if (args.discoveryList) {
+    V("discoveryList", args.discoveryList);
   }
 
   // The one branch left. profileIntake is DERIVED per turn (not a stored mode):

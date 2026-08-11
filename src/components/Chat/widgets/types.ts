@@ -31,6 +31,10 @@ export type CompanyChecklistPayload = {
 // landed and asks the only question left: keep hunting, or move on.
 export type AddMoreCompaniesPayload = {
   addedThisBatch: string[];
+  // How many the user passed on this round. With `addedThisBatch` it answers
+  // "did this round decide anything", which is what tells the server whether
+  // "Done" is a real topic boundary worth wrapping the session on.
+  passedCount: number;
 };
 
 // company_disambiguation — emitted by the watchlist-add runner when the URL
@@ -220,8 +224,10 @@ export type WidgetSubmission =
     }
   | { kind: "company_disambiguation"; resolved: DisambiguationResolution[] }
   // Keep hunting after an add landed ("yes" re-runs the search) or move on
-  // ("no" hands off to what's next).
-  | { kind: "add_more_companies"; answer: "yes" | "no" }
+  // ("no" hands off to what's next). `settled` is how many companies this round
+  // decided, so the server can skip the session wrap on a round that changed
+  // nothing.
+  | { kind: "add_more_companies"; answer: "yes" | "no"; settled: number }
   | { kind: "confirm_revive_company"; companyId: string; answer: "yes" | "no" }
   | { kind: "confirm_application_submit"; jobId: string }
   // Three branches for the next-company picker:

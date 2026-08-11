@@ -40,6 +40,7 @@ import { showOpportunityTool } from "@/server/agent/tools/registry/showOpportuni
 import { showShortlistBoardTool } from "@/server/agent/tools/registry/showShortlistBoard";
 import { showApplicationTool } from "@/server/agent/tools/registry/showApplication";
 import { updateShortlistProposalTool } from "@/server/agent/tools/registry/updateShortlistProposal";
+import { commitDiscoveryTool } from "@/server/agent/tools/registry/commitDiscovery";
 import { commitShortlistTool } from "@/server/agent/tools/registry/commitShortlist";
 import { untrackJobTool } from "@/server/agent/tools/registry/untrackJob";
 import { untrackCompanyTool } from "@/server/agent/tools/registry/untrackCompany";
@@ -123,6 +124,10 @@ const HANK_TOOLS: AnyToolDef[] = [
   showApplicationTool as AnyToolDef,
   updateShortlistProposalTool as AnyToolDef,
   commitShortlistTool as AnyToolDef,
+  // Discovery's equivalent: the user marks companies on the discovery panel and
+  // this settles the marks. Same shape as commit_shortlist — a handoff that
+  // writes, because settling the list IS entering the continuation.
+  commitDiscoveryTool as AnyToolDef,
   // Additive CRUD — the reason for the merge. Captures spontaneous info
   // (past applications, recruiter pitches, contacts) without dead-ending.
   createCompaniesTool as AnyToolDef,

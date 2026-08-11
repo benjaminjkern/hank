@@ -7,7 +7,6 @@
 import {
   parseAddMoreCompaniesSubmission,
   parseNextCompanyPickerSubmission,
-  parseCompanyChecklistSubmission,
   parseWidgetSubmission,
 } from "@/server/widgets/parse";
 
@@ -26,38 +25,36 @@ type Case = {
 
 const CASES: Case[] = [
   {
-    name: "company_checklist",
-    kind: "company_checklist",
-    payload: {
-      kind: "company_checklist",
-      suggestions: [
-        { name: "Vercel", reasoning: "Frontend infra" },
-        { name: "Cloudflare", reasoning: "Edge platform" },
-      ],
-    },
-    action: { selection: [1] },
-    parse: parseCompanyChecklistSubmission,
-    // Everything not picked is a decline, carrying the name and nothing else.
-    assert: (p) =>
-      p &&
-      p.picked.length === 1 &&
-      p.picked[0].name === "Vercel" &&
-      p.declined.length === 1 &&
-      p.declined[0].name === "Cloudflare"
-        ? null
-        : `bad checklist: ${JSON.stringify(p)}`,
-  },
-  {
-    name: "add_more_companies",
+    name: "add_more_companies:done",
     kind: "add_more_companies",
     payload: {
       kind: "add_more_companies",
       addedThisBatch: ["Vercel"],
+      passedCount: 2,
     },
-    action: { optionRef: "yes" },
+    action: { optionRef: "done" },
+    // "Done adding" is the primary action, and `settled` (added + passed) is
+    // what tells the server this round is a real topic boundary.
     parse: parseAddMoreCompaniesSubmission,
     assert: (p) =>
-      p && p.answer === "yes" ? null : `bad add_more: ${JSON.stringify(p)}`,
+      p && p.answer === "no" && p.settled === 3
+        ? null
+        : `bad add_more done: ${JSON.stringify(p)}`,
+  },
+  {
+    name: "add_more_companies:more",
+    kind: "add_more_companies",
+    payload: {
+      kind: "add_more_companies",
+      addedThisBatch: ["Vercel"],
+      passedCount: 0,
+    },
+    action: { optionRef: "more" },
+    parse: parseAddMoreCompaniesSubmission,
+    assert: (p) =>
+      p && p.answer === "yes"
+        ? null
+        : `bad add_more more: ${JSON.stringify(p)}`,
   },
   {
     name: "confirm_revive_company",

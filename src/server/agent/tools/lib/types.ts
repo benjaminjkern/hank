@@ -71,7 +71,7 @@ export type ToolResult = {
   entryTarget?: EntryTarget;
   // This tool ENDED a company (close / pause / block / caught-up). The runner
   // reads it twice: to run the segment wrap once for the message (see
-  // procedures/registry/wrapCompanySegment.ts) and to report a wrap so
+  // procedures/registry/wrapSegment.ts) and to report a wrap so
   // runUserMessage brings up what's-next. It rides the RESULT rather than the
   // static `handoff` flag because whether a company ended is an outcome, not a
   // property of the tool: caught_up_company bails to a confirmation prompt when

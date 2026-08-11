@@ -348,9 +348,20 @@ model CompanySuggestion {
   // The search's own one-line case for this candidate.
   reason  String
   url     String?
-  // Null until the user answers the checklist. An unanswered batch is neither
-  // added nor declined — it's still on screen.
+  // What the commit SETTLED. Null while the candidate is still on the table —
+  // an unmarked row, or a marked one Hank hasn't committed yet.
   verdict CompanySuggestionVerdict?
+  // The user's mark on the discovery panel, written the moment they click.
+  // Null = unmarked, which is a real state: still on the table, and what the
+  // next search carries forward.
+  userMark    CompanySuggestionMark?
+  // What Hank has already been told. Divergence from `userMark` is what makes a
+  // mark unrelayed — the same two-column test the board runs on
+  // userVerdict vs placementVerdict, so re-marking a row back to where it
+  // already sat reports nothing.
+  relayedMark CompanySuggestionMark?
+  // When the mark last moved. Orders the relay.
+  markedAt    DateTime?
   // The run that produced this batch, so "the previous run" is answerable.
   runId     String?
   sessionId String?
@@ -366,6 +377,15 @@ model CompanySuggestion {
 enum CompanySuggestionVerdict {
   ADDED
   DECLINED
+}
+
+// What the user marked a candidate as on the discovery panel, before Hank
+// commits it. Two marks, not three: whether to track a company is not a
+// decision anyone needs a "maybe" for — and an unmarked row already means
+// "leave it on the table", so the third state costs no button.
+enum CompanySuggestionMark {
+  ADD
+  PASS
 }
 
 // -- Jobs (global) --------------------------------------------------------

@@ -18,7 +18,7 @@
 import type { WidgetKind } from "@/lib/widgetKinds";
 
 import { addMoreCompaniesDef } from "./addMoreCompanies/def";
-import { companyChecklistDef } from "./companyChecklist/def";
+import { defineWidget } from "./defineWidget";
 import { companyDisambiguationDef } from "./companyDisambiguation/def";
 import { confirmApplicationSubmitDef } from "./confirmApplicationSubmit/def";
 import { confirmReviveCompanyDef } from "./confirmReviveCompany/def";
@@ -30,9 +30,25 @@ import { shortlistScanGateDef } from "./shortlistScanGate/def";
 
 import type { ErasedWidgetDef } from "./defineWidget";
 
+// REPLAY-ONLY: the discovery panel replaced the checklist, so nothing emits or
+// submits this kind — but persisted `pipeline_widget` blocks in old sessions
+// carry it, and renderWidgetText is what turns those into Hank's grounding note.
+const companyChecklistReplayDef = defineWidget<{
+  suggestions?: Array<{ name?: string; reasoning?: string }>;
+}>({
+  kind: "company_checklist",
+  toText: (p) => {
+    const lines = (p.suggestions ?? []).map(
+      (s, i) =>
+        `  ${i + 1}. ${s.name ?? "?"}${s.reasoning ? `\n      \u21b3 ${s.reasoning}` : ""}`,
+    );
+    return `[Companies to add — the user picked which to add to their watchlist:\n${lines.join("\n")}]`;
+  },
+});
+
 const WIDGET_DEFS = {
   shortlist_proposal: shortlistProposalDef,
-  company_checklist: companyChecklistDef,
+  company_checklist: companyChecklistReplayDef,
   add_more_companies: addMoreCompaniesDef,
   company_disambiguation: companyDisambiguationDef,
   confirm_revive_company: confirmReviveCompanyDef,

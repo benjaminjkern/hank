@@ -24,17 +24,16 @@ import type {
   TurnEvent,
 } from "@/server/agent/contracts";
 import { appendUserMessage, narrateStatus } from "@/server/agent/session";
-import { runCommitSuggestions } from "@/server/procedures/registry/commitSuggestions";
 import {
   promptAddMoreCompanies,
   runDisambiguationResolution,
 } from "@/server/procedures/registry/enrichCompanies";
+import { runWrapSegment } from "@/server/procedures/registry/wrapSegment";
 import { showTargetFor, buildShowEvents } from "@/server/views/showEvents";
 import { dispatchNextCompanyPicker } from "@/server/widgets/dispatchNextCompanyPicker";
 import {
   parseNextCompanyPickerSubmission,
   parseAddMoreCompaniesSubmission,
-  parseCompanyChecklistSubmission,
   parseCompanyDisambiguationSubmission,
 } from "@/server/widgets/parse";
 
@@ -68,24 +67,6 @@ export async function* dispatchTopLevelSubmission(
 ): AsyncGenerator<TurnEvent, TopLevelSubmissionOutcome> {
   const { userId, sessionId, userMessage, attachmentIds, runId } = args;
 
-  // The find_companies checklist submission: record every verdict, enrich the
-  // kept ones (URL hunt + scrape + prescan) narrating ✓ per company, and learn
-  // from what was turned down. Terminal either way — it ends on a question the
-  // user owes an answer to (add more, or which company a collided name meant).
-  const checklistSubmission = parseCompanyChecklistSubmission(userMessage);
-  if (checklistSubmission) {
-    await appendUserMessage(sessionId, userMessage, attachmentIds, {
-      runId,
-      leadingBlocks: await buildPanelEditBlocks(userId),
-    });
-    yield* runCommitSuggestions({
-      ...args,
-      picked: checklistSubmission.picked,
-      declined: checklistSubmission.declined,
-    });
-    return { kind: "terminal" };
-  }
-
   // The user resolved a name collision the URL hunter flagged during a checklist
   // add. Commit each chosen board + scrape + prescan, narrate ✓ — then the same
   // add-more question, since this is the tail of the same add.
@@ -100,22 +81,30 @@ export async function* dispatchTopLevelSubmission(
       disambiguationSubmission.resolved,
       args,
     );
-    yield* promptAddMoreCompanies(added, args);
+    yield* promptAddMoreCompanies(added, 0, args);
     return { kind: "terminal" };
   }
 
-  // "Add more" / "Done" after a finished add. More re-enters the search with no
-  // direction (the watchlist just grew, so a fresh run reads differently);
-  // done falls through to what's next.
+  // "Find more" / "Done adding" after a finished add. More re-enters the search
+  // with no direction (the watchlist just grew, so a fresh run reads
+  // differently); done falls through to what's next.
   const addMoreSubmission = parseAddMoreCompaniesSubmission(userMessage);
   if (addMoreSubmission) {
     await appendUserMessage(sessionId, userMessage, attachmentIds, {
       runId,
       leadingBlocks: await buildPanelEditBlocks(userId),
     });
-    return addMoreSubmission.answer === "yes"
-      ? { kind: "enter", entryTarget: { kind: "discovery" } }
-      : { kind: "consumed" };
+    if (addMoreSubmission.answer === "yes") {
+      return { kind: "enter", entryTarget: { kind: "discovery" } };
+    }
+    // Done adding is a topic boundary — the same event the end of a company is,
+    // so it gets the same wrap. Gated on the round having decided something:
+    // opening discovery and backing straight out is not a boundary, and the
+    // wrap costs two LLM calls.
+    if (addMoreSubmission.settled > 0) {
+      await runWrapSegment({ ...args, subject: "discovery" });
+    }
+    return { kind: "consumed" };
   }
 
   // The between-things "what's next" picker. The submission already encodes the

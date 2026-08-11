@@ -50,8 +50,24 @@ export function serializeTranscript(
   return lines.join("\n");
 }
 
+// What the user "said" this turn, including what they said by CLICKING.
+//
+// `panel_edits` is load-bearing here, not an extra: a board mark, an
+// application rewrite and a discovery mark are all the user stating a
+// preference without typing, and each one carries pre-rendered prose saying so.
+// Dropping the block is what silently starved memory consolidation of its three
+// richest signals while its prompt told it to quote them.
+//
+// `pipeline_activity` stays OUT on purpose — that channel is the machine's own
+// bookkeeping ("condensed the earlier part of this conversation"), and feeding
+// it to the pass that wrote it is circular.
 function extractText(blocks: unknown[]): string {
   let out = "";
+  for (const b of blocks) {
+    if (isRecord(b) && b.type === "panel_edits" && typeof b.text === "string") {
+      out += `${out ? "\n" : ""}${b.text}\n`;
+    }
+  }
   for (const b of blocks) {
     if (isRecord(b) && b.type === "text" && typeof b.text === "string")
       out += b.text;

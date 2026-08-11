@@ -5,6 +5,7 @@
 
 import type { PanelMode } from "@/lib/panelMode";
 import type { ApplicationView } from "@/server/views/application";
+import type { DiscoveryListView } from "@/server/views/discoveryList";
 import type { FocusedCompanyView } from "@/server/views/getFocusedCompany";
 import type { FocusedJobView } from "@/server/views/getFocusedJob";
 import type { FocusedOpportunityView } from "@/server/views/getFocusedOpportunity";
@@ -22,6 +23,7 @@ export type UiEvent =
       opportunity: FocusedOpportunityView | null;
       board: ShortlistBoardView | null;
       application: ApplicationView | null;
+      discovery: DiscoveryListView | null;
     }
   // Documents / analytics are excluded because nothing server-side can put
   // them on screen — they carry no entity, so no show event resolves to one.
