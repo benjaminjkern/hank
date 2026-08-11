@@ -75,6 +75,10 @@ export type ShortlistCandidate = RoleAttrs & {
   // committed set-aside). Present only on a re-rank; a downgrade signal, never
   // grounds for `pass` — see "A role they already passed on".
   priorDeferNote?: string | null;
+  // The user started writing this application and never sent it. The mirror of
+  // priorDeferNote and points the other way: they committed to this role once
+  // already, so it takes a real reason to rank it below roles they haven't.
+  unfinishedApplication?: boolean;
 };
 
 export type ShortlistJobsInput = {
@@ -190,6 +194,11 @@ Some roles carry a "Passed over earlier" note — the user saw this exact role i
 
 **A prior set-aside is never grounds for \`pass\`.** They set it aside, which is not the same as "would never apply" — the round is being re-run precisely because something changed. Keep it \`borderline\` and name the history in the reason ("You set this one aside last time — still here if the remote policy is workable"), and let them decide.
 
+# A role they started applying to
+Some roles are marked "Application started and never finished" — the user committed to this one in an earlier round and began writing, then stopped. That is the strongest interest signal in the pool, and it points the OPPOSITE way from a prior set-aside: rank it as you would a role they'd told you they wanted.
+
+You may still rank it anywhere, including \`pass\` — an abandoned draft often means they went off it, and a stale half-application is worth clearing out. But it takes a reason you can state: something in the pool now beats it, or the role itself doesn't hold up on a re-read. Never rank one down silently, and never treat "they didn't finish" as evidence on its own — a draft stops for a hundred reasons that say nothing about the role. Whatever you land on, **say in the \`reason\` that they'd started this one**, so they can tell you if they actually applied.
+
 # Reasons render to the user
 Write every \`reason\` and the \`proposalNote\` in natural English — no stance labels ("pick"/"pass"/"borderline" as jargon), no scan jargon ("STRONG"), no status vocabulary, no tool names. They appear next to each role on the board.
 
@@ -217,10 +226,13 @@ function renderCandidates(candidates: ShortlistCandidate[]): string {
       const priorLine = c.priorDeferNote?.trim()
         ? `\nPassed over earlier: ${c.priorDeferNote.trim()}`
         : "";
+      const unfinishedLine = c.unfinishedApplication
+        ? "\nApplication started and never finished."
+        : "";
       const noteLine = c.jobNote?.trim()
         ? `\nYour notes on this role:\n${c.jobNote.trim()}`
         : "";
-      return `${header}\n${matchLine}${priorLine}${noteLine}\n\n${renderCandidateBody(c)}`;
+      return `${header}\n${matchLine}${priorLine}${unfinishedLine}${noteLine}\n\n${renderCandidateBody(c)}`;
     })
     .join("\n\n---\n\n");
 }

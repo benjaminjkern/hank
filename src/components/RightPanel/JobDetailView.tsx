@@ -28,6 +28,11 @@ import {
   RecentActivity,
   type RecentActivityItem,
 } from "./shared/RecentActivity";
+import {
+  StanceMarks,
+  STANCE_OF_VERDICT,
+  type StanceValue,
+} from "./shared/StanceMarks";
 import { useExpandable } from "./shared/useExpandable";
 // Cover-letter / short-answer editor + reuse switch + the three section chrome
 // primitives now live in the shared module (reused by DocumentsView).
@@ -73,12 +78,12 @@ const Title = styled.h2`
   margin: 0;
 `;
 
-// Back-link chip that surfaces above the company line when the JobInteraction
-// is attached to an inbound Opportunity. Visually similar to a breadcrumb
-// crumb (mono font, subtle color) so it reads as navigation rather than a
-// pill. Clicking jumps to the parent lead — answers "how did this enter my
-// pipeline?" without requiring the user to navigate back to the dashboard.
-const LeadLink = styled.button`
+// Back-link chip above the company line, styled like a breadcrumb crumb (mono
+// font, subtle color) so it reads as navigation rather than a pill. Two of them
+// can show: the lead this role was pitched through, and the open shortlist round
+// it belongs to. Both answer "where did I come from / where do I go back to"
+// without a trip through the dashboard.
+const BackLink = styled.button`
   display: inline-flex;
   align-items: center;
   gap: ${({ theme }) => theme.space.xs};
@@ -95,6 +100,23 @@ const LeadLink = styled.button`
     color: ${({ theme }) => theme.colors.text};
     background: ${({ theme }) => theme.colors.bgHover};
   }
+`;
+
+// The three marks under the header while a shortlist round is open here. Set
+// apart from the meta line by a rule rather than a card, so it reads as part of
+// the header rather than as another section of the page.
+const StanceBar = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.space.sm};
+  margin-top: ${({ theme }) => theme.space.sm};
+  padding-top: ${({ theme }) => theme.space.sm};
+  border-top: 1px solid ${({ theme }) => theme.colors.border};
+`;
+
+const StanceLabel = styled.span`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.textMuted};
 `;
 
 const CompanyLine = styled.div`
@@ -349,12 +371,27 @@ export function JobDetailView({ job }: { job: NonNullable<FocusedJobView> }) {
   const streaming = useChatStore((s) => s.streaming);
   const viewOpportunity = useChatStore((s) => s.viewOpportunity);
   const viewCompany = useChatStore((s) => s.viewCompany);
+  const viewShortlistBoard = useChatStore((s) => s.viewShortlistBoard);
+  const editShortlistBoard = useChatStore((s) => s.editShortlistBoard);
   const readOnly = useChatStore((s) => s.impersonateSessionId !== null);
   const submitted = TERMINAL.has(job.jobInteraction.status);
+  const [marking, setMarking] = useState(false);
 
   const companyLabel =
     job.company?.name ?? job.companyNameFallback ?? "(no company yet)";
   const lead = job.jobInteraction.opportunity;
+
+  // Same write the board row makes, so a mark from either surface is the same
+  // proposal and neither can drift into its own semantics.
+  async function mark(next: StanceValue) {
+    if (marking || !job.company) return;
+    setMarking(true);
+    try {
+      await editShortlistBoard(job.company.id, job.id, next);
+    } finally {
+      setMarking(false);
+    }
+  }
 
   function markSubmitted() {
     if (streaming || submitted) return;
@@ -376,9 +413,16 @@ export function JobDetailView({ job }: { job: NonNullable<FocusedJobView> }) {
           <HeaderMain>
             <Title>{job.title}</Title>
             {lead && (
-              <LeadLink onClick={() => void viewOpportunity(lead.id)}>
+              <BackLink onClick={() => void viewOpportunity(lead.id)}>
                 ← Pitched via {lead.label}
-              </LeadLink>
+              </BackLink>
+            )}
+            {job.board && job.company && (
+              <BackLink
+                onClick={() => void viewShortlistBoard(job.company!.id)}
+              >
+                ← Back to the {job.company.name} shortlist
+              </BackLink>
             )}
             {job.company ? (
               <CompanyLineButton
@@ -436,6 +480,23 @@ export function JobDetailView({ job }: { job: NonNullable<FocusedJobView> }) {
               </span>
             ))}
           </MetaLine>
+        )}
+        {job.board?.markable && job.company && !readOnly && (
+          <StanceBar>
+            <StanceLabel>Your call</StanceLabel>
+            <StanceMarks
+              stance={
+                job.board.verdict
+                  ? (STANCE_OF_VERDICT[job.board.verdict] ?? null)
+                  : null
+              }
+              onMark={(next) => void mark(next)}
+              disabled={marking}
+              filtered={job.board.filtered}
+              label={`Your call on ${job.title}`}
+            />
+            {marking && <ChannelCaption>saving…</ChannelCaption>}
+          </StanceBar>
         )}
       </Header>
       {job.jobInteraction.status === "CLOSED" && (

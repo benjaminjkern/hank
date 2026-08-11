@@ -295,7 +295,6 @@ model CompanyInteraction {
 enum CompanyStatus {
   NEW // on the watchlist, no scan yet
   READY // scanned, has survivors, awaiting walkthrough ("Not started" bucket with NEW)
-  SCANNING // entered: reading the board and triaging roles. Nothing asked of the user yet.
   SHORTLISTING // the board is open and waiting on the user's marks — their turn
   APPLYING // shortlist committed; working the roles that survived it
   IN_FLIGHT // auto-derived: an application submitted and live, awaiting reply
@@ -471,6 +470,14 @@ model JobInteraction {
   // surfaced nothing. Distinct from closeNote, which is the full per-role message
   // (role + contrast); this is just the group label ("sales roles", "in Europe").
   closeSummaryLabel String?
+  // When the cheap metadata pass last kept this role. NEW means two different
+  // things without it — "nothing has looked at this" and "the metadata pass kept
+  // it, the full read hasn't reached it yet" — so a scan that dies partway
+  // (rate limit, Stop, run cap) left survivors indistinguishable from arrivals
+  // and the next entry re-ran the whole pass over them, paying for it twice and
+  // sometimes closing a role it had just kept. Set on survivors only: a role the
+  // pass closes is CLOSED, and a role it never reached must be reachable again.
+  preScannedAt DateTime?
   // Per-user match verdict from the scan match pass, written on NEW → SCANNED.
   // matchBucket is the coarse calibration-safe signal (shortlist ranks by bucket,
   // not raw score); matchScore optional tie-break; matchReason the user-facing

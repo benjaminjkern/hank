@@ -17,12 +17,10 @@ import { logCompanyEvent } from "@/server/entities/companies/logCompanyEvent";
 
 // Statuses these helpers are allowed to overwrite — the pre-walkthrough /
 // re-check states. Won't touch SHORTLISTING / APPLYING / IN_FLIGHT / IN_PROCESS
-// / PAUSED (live work or a user-driven set-aside) rows. SCANNING is overwritable
-// because these helpers ARE what a scan lands on when it finishes.
+// / PAUSED (live work or a user-driven set-aside) rows.
 const OVERWRITABLE = [
   CompanyStatus.NEW,
   CompanyStatus.READY,
-  CompanyStatus.SCANNING,
   CompanyStatus.CAUGHT_UP,
   CompanyStatus.BLOCKED,
   CompanyStatus.CLOSED,
@@ -60,22 +58,9 @@ async function markCompanyCaughtUp(
   }
 }
 
-// Entered and reading the board. Distinct from APPLYING, which now means the
-// shortlist has been committed — a company mid-scrape is not one the user is
-// applying to, and the dashboard was saying it was.
-export async function markCompanyScanning(
-  companyId: string,
-  userId: string,
-): Promise<void> {
-  await prisma.companyInteraction.updateMany({
-    where: { userId, companyId, status: { in: [...OVERWRITABLE] } },
-    data: companyStatusFields({ status: CompanyStatus.SCANNING }),
-  });
-}
-
-// The board is seeded and waiting on the user's marks — their turn, which is
-// what makes this worth its own status rather than a phase of SCANNING. Set from
-// the seed regardless of the current status: a company reaches it by being
+// The board is up and waiting on the user's marks — the one stretch of a
+// company's life where the next move is theirs, which is what earns it a status.
+// Set regardless of the current one: a company only reaches this by being
 // worked, so there is nothing to protect it from.
 export async function markCompanyShortlisting(
   companyId: string,

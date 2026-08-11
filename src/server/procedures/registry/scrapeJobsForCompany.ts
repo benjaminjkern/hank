@@ -276,9 +276,10 @@ async function drive(
     };
   }
 
-  // Delta exists — run PRE_SCAN pt1 on just the new (NEW-status) JobInteractions.
-  // PRE_SCAN's own job query filters by status=NEW so this is naturally
-  // delta-scoped (existing scanned/skipped/applied JobInteractions are untouched).
+  // Delta exists — run PRE_SCAN pt1 on just the arrivals. PRE_SCAN's own query
+  // is scoped to what it hasn't judged yet, so this is naturally delta-scoped:
+  // rows it kept on an earlier pass carry a `preScannedAt` stamp and are skipped
+  // along with everything already scanned / applied to.
   // PRE_SCAN writes no company status, so the flip is this seam's: survivors in
   // the delta revive a CAUGHT_UP company to READY, a delta that all skipped puts
   // it back to CAUGHT_UP. Neither demotes a company that's past those states

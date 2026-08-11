@@ -1,14 +1,20 @@
 // The job detail page — the payload the right panel and chat store render, plus
 // the loader that builds it.
 
+import { JobInteractionStatus } from "@/generated/prisma/client";
 import { companyLogoUrl } from "@/lib/companyLogo";
 import { prisma } from "@/server/db/prisma";
 import { loadMergedQuestions } from "@/server/entities/jobs/applicationQuestions";
+import { liveVerdict, placedVerdict } from "@/server/entities/jobs/boardStance";
 import { flipDueInterviewsToDebrief } from "@/server/entities/jobs/flipDueInterviews";
 import {
   ROLE_ATTR_SELECT,
   toRoleAttrs,
 } from "@/server/entities/jobs/roleAttrs";
+import {
+  canHoldStance,
+  onBoardWhere,
+} from "@/server/entities/jobs/shortlistPool";
 import type { ShortAnswer } from "@/server/entities/jobs/types";
 import type {
   ApplicationQuestion,
@@ -50,6 +56,25 @@ export type FocusedJobView = {
   // readable name the agent captured from the recruiter.
   company: { id: string; slug: string; name: string; logoUrl: string } | null;
   companyNameFallback: string | null;
+  // The role's place in an open shortlist round at its company, so the page can
+  // offer the same three marks the board does and a way back to the rest of it.
+  // Null when no round is open — reading a role between rounds is just reading.
+  //
+  // It exists because the page is where the deciding actually happens: the board
+  // is a summary, and the user clicks in precisely when the summary isn't enough
+  // to mark on. Sending them back to the board to record what they just decided
+  // is the round trip this removes.
+  board: {
+    // PICK / BORDERLINE / PASS — the live stance (the user's if they've moved
+    // it, else Hank's), matching what the board row shows.
+    verdict: string | null;
+    // False for a row the round can't move — the same `canHoldStance` gate the
+    // board applies, so the two surfaces can't disagree about what's editable.
+    markable: boolean;
+    // Whether the automatic filtering closed it rather than anyone judging it,
+    // which changes what the two unset marks mean.
+    filtered: boolean;
+  } | null;
   jobInteraction: {
     status: string;
     // Populated only when status=CLOSED. Mirrors the company-page
@@ -130,6 +155,10 @@ export async function getFocusedJobView(
           closeNote: true,
           deferReason: true,
           deferNote: true,
+          agentVerdict: true,
+          agentReason: true,
+          userVerdict: true,
+          placementVerdict: true,
           applyChannel: true,
           coverLetter: true,
           shortAnswers: true,
@@ -147,6 +176,29 @@ export async function getFocusedJobView(
   });
   if (!job?.jobInteractions[0]) return null;
   const i = job.jobInteractions[0];
+
+  // Is a round open at this company? Same predicate the board uses, so a role
+  // opened from the board is markable here for exactly as long as it is there.
+  // An unaffiliated role (no company) can't be in a round at all.
+  const boardOpenCount = job.company
+    ? await prisma.jobInteraction.count({
+        where: {
+          userId,
+          job: { companyId: job.company.id },
+          ...onBoardWhere(),
+        },
+      })
+    : 0;
+  const board =
+    boardOpenCount > 0
+      ? {
+          // What the board would show selected: the live stance, or the group
+          // the row's own status places it in.
+          verdict: liveVerdict(i) ?? placedVerdict(i),
+          markable: canHoldStance(i.status),
+          filtered: i.status === JobInteractionStatus.CLOSED,
+        }
+      : null;
 
   // Expose the scraped form MERGED with any user-added questions (Job.userAdded
   // Questions), each tagged with its source so the panel can badge the hand-added
@@ -192,6 +244,7 @@ export async function getFocusedJobView(
         }
       : null,
     companyNameFallback: job.companyName,
+    board,
     jobInteraction: {
       status: i.status,
       closeReason: i.closeReason ?? null,

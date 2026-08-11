@@ -55,12 +55,9 @@ export function statusTone(status: string): StatusTone {
     case "OFFERED": // offer letter in hand; user owes a decision
       return "focusNow";
 
-    // Surfaced but not yet triaged. SCANNING sits here rather than with the
-    // focus states because nothing is being asked of the user while it reads —
-    // it's work in progress, not their turn.
+    // Surfaced but not yet triaged.
     case "NEW": // newly added (job or company); user hasn't looked yet
     case "READY": // company scanned + prescanned, awaiting walkthrough start
-    case "SCANNING": // CompanyStatus — entered, reading the board
       return "notStarted";
 
     // Applied / scheduled — the ball's in their court ("In flight" bucket).
@@ -107,7 +104,6 @@ export function statusTone(status: string): StatusTone {
 // match").
 const STATUS_LABELS: Record<string, string> = {
   DELISTED: "No longer listed",
-  SCANNING: "Reading their board", // CompanyStatus — entered, triaging roles
   SHORTLISTING: "Your call", // CompanyStatus — board open, waiting on the user
   APPLYING: "Applying", // CompanyStatus — shortlist committed, working the survivors
   IN_FLIGHT: "In flight", // CompanyStatus — application(s) submitted, awaiting reply

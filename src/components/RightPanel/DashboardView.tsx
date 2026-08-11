@@ -78,9 +78,7 @@ function bucketForCompany(c: DashboardCompany): LiveBucket {
   // regardless of its engagement status.
   if (c.jobInteractions.some((i) => userOwes(i.status))) return "now";
   // SHORTLISTING (board open, their marks owed) and APPLYING (working the
-  // committed picks) are both live work → Now. SCANNING is not: nothing is
-  // asked of the user while a board is being read, so it stays with the
-  // not-yet-started tail below.
+  // committed picks) are both live work → Now.
   if (c.status === "SHORTLISTING" || c.status === "APPLYING") return "now";
   // IN_PROCESS = an employer engaged (recruiter reply / interview) → its own
   // promising bucket.
@@ -90,12 +88,10 @@ function bucketForCompany(c: DashboardCompany): LiveBucket {
   // Defensive fallback: any live in-pipeline JobInteraction ⇒ ball's in their court
   // (covers legacy rows whose engagement status hasn't been re-derived).
   if (c.jobInteractions.length > 0) return "awaitingReply";
-  // Truly idle / not-yet-started: NEW (no scan yet), READY (scanned +
-  // prescanned, walkthrough not started), and SCANNING (mid-read, nothing owed
-  // by the user yet) belong in "Not started".
-  if (c.status === "NEW" || c.status === "READY" || c.status === "SCANNING") {
-    return "next";
-  }
+  // Truly idle / not-yet-started: NEW (no scan yet) and READY (scanned +
+  // prescanned, walkthrough not started — also where a company sits while its
+  // board is being read, since nothing is owed by the user yet).
+  if (c.status === "NEW" || c.status === "READY") return "next";
   // CAUGHT_UP with nothing live: scanned, nothing actionable, just watching
   // for new postings — no work required.
   return "watching";
