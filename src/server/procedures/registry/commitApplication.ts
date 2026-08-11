@@ -24,7 +24,7 @@ import { prisma } from "@/server/db/prisma";
 import {
   applicationEditsFor,
   DRAFTED_ROW_SELECT,
-  proposedDraftsPatch,
+  draftsSnapshot,
   readShortAnswers,
   type ApplicationEdit,
 } from "@/server/entities/jobs/applicationDrafts";
@@ -116,7 +116,7 @@ export async function runCommitApplication(
     // user's next message.
     await prisma.jobInteraction.update({
       where: { userId_jobId: { userId: args.userId, jobId: args.jobId } },
-      data: { proposedDrafts: proposedDraftsPatch(row) },
+      data: { relayedDrafts: draftsSnapshot(row) },
       select: { id: true },
     });
     // Hank-only channel: the user already knows what they typed, and this is

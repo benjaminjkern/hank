@@ -27,10 +27,7 @@ import { nowDate } from "@/utils/now";
 import { normalizeForCompare } from "@/utils/text";
 
 import {
-  draftAuthorsPatch,
-  forgetDraftAuthor,
-  proposedDraftsPatch,
-  readDraftAuthors,
+  setDraftEntry,
   readProposedDrafts,
   readReuseFlags,
   readShortAnswers,
@@ -38,10 +35,7 @@ import {
   type DraftAuthor,
 } from "./applicationDrafts";
 import { COVER_LETTER_ID, questionId } from "./applicationItemId";
-import {
-  clearFindingsForItem,
-  readApplicationReview,
-} from "./applicationReview";
+import { readApplicationReview } from "./applicationReview";
 import {
   readStoredUserQuestions,
   writeStoredUserQuestions,
@@ -81,12 +75,15 @@ type MergedQuestions = {
 
 // Parse Job.userAddedQuestions JSON into ApplicationQuestion[], preserving
 // provenance and tagging source:"user".
+// A removed entry is still stored until the relay reports it, so every read of
+// the FORM has to skip it — it isn't a question any more.
 function readUserAddedQuestions(raw: unknown): ApplicationQuestion[] {
   if (!Array.isArray(raw)) return [];
   return raw.flatMap((q) => {
     if (!q || typeof q !== "object") return [];
     const o = q as Record<string, unknown>;
     if (typeof o.question !== "string" || !o.question.trim()) return [];
+    if (typeof o.removedAt === "string") return [];
     return [
       {
         question: o.question,
@@ -279,19 +276,28 @@ export async function removeUserQuestion(
       shortAnswers: true,
       shortAnswersReuse: true,
       proposedDrafts: true,
+      relayedDrafts: true,
       draftDecision: true,
-      draftAuthors: true,
       applicationReview: true,
     },
   });
+
+  // A question Hank has been told about leaves a tombstone rather than vanishing:
+  // he's holding a form item that no longer exists, and the relay derives what
+  // to report from state, so a hard delete would leave nothing to derive from.
+  // One he never heard about just goes.
+  const wasRelayed = !!stored[idx].relayedAt;
+  const nextStored = wasRelayed
+    ? stored.map((q, i) =>
+        i === idx ? { ...q, removedAt: nowDate().toISOString() } : q,
+      )
+    : stored.filter((_, i) => i !== idx);
 
   await prisma.$transaction([
     prisma.job.update({
       where: { id: jobId },
       data: {
-        userAddedQuestions: stored.filter(
-          (_, i) => i !== idx,
-        ) as unknown as Prisma.InputJsonValue,
+        userAddedQuestions: nextStored as unknown as Prisma.InputJsonValue,
       },
     }),
     ...(interaction
@@ -313,8 +319,8 @@ function dropQuestion(
     shortAnswers: Prisma.JsonValue | null;
     shortAnswersReuse: Prisma.JsonValue | null;
     proposedDrafts: Prisma.JsonValue | null;
+    relayedDrafts: Prisma.JsonValue | null;
     draftDecision: Prisma.JsonValue | null;
-    draftAuthors: Prisma.JsonValue | null;
     applicationReview: Prisma.JsonValue | null;
   },
   norm: string,
@@ -336,17 +342,14 @@ function dropQuestion(
     data.shortAnswersReuse = flags.filter((_, i) => i !== at);
   }
 
-  const drafts = readProposedDrafts(row.proposedDrafts);
-  if (drafts?.answers.some(isIt)) {
-    data.proposedDrafts = {
-      ...drafts,
-      answers: drafts.answers.filter((a) => !isIt(a)),
-    } as unknown as Prisma.InputJsonValue;
-  }
-
-  const authors = readDraftAuthors(row.draftAuthors);
-  if (authors.answers.some(isIt)) {
-    data.draftAuthors = forgetDraftAuthor(row, { kind: "question", question });
+  for (const col of ["proposedDrafts", "relayedDrafts"] as const) {
+    const drafts = readProposedDrafts(row[col]);
+    if (drafts?.answers.some(isIt)) {
+      data[col] = {
+        ...drafts,
+        answers: drafts.answers.filter((a) => !isIt(a)),
+      } as unknown as Prisma.InputJsonValue;
+    }
   }
 
   const decision = row.draftDecision as {
@@ -359,11 +362,17 @@ function dropQuestion(
     } as unknown as Prisma.InputJsonValue;
   }
 
-  const cleared = clearFindingsForItem(
-    readApplicationReview(row.applicationReview),
-    questionId(question),
-  );
-  if (cleared) data.applicationReview = cleared;
+  // Removing the question removes its answer, so any finding against it is an
+  // objection to text that no longer exists anywhere. Nothing else drops a
+  // finding by hand — settling is derived from whether the words are still
+  // there — but this one has no words left to compare against.
+  const review = readApplicationReview(row.applicationReview);
+  if (review?.open.some((f) => f.itemId === questionId(question))) {
+    data.applicationReview = {
+      ...review,
+      open: review.open.filter((f) => f.itemId !== questionId(question)),
+    } as unknown as Prisma.InputJsonValue;
+  }
 
   return data;
 }
@@ -429,8 +438,8 @@ export async function renameUserQuestion(
     select: {
       shortAnswers: true,
       proposedDrafts: true,
+      relayedDrafts: true,
       draftDecision: true,
-      draftAuthors: true,
     },
   });
 
@@ -458,8 +467,8 @@ function rekeyQuestion(
   row: {
     shortAnswers: Prisma.JsonValue | null;
     proposedDrafts: Prisma.JsonValue | null;
+    relayedDrafts: Prisma.JsonValue | null;
     draftDecision: Prisma.JsonValue | null;
-    draftAuthors: Prisma.JsonValue | null;
   },
   currentNorm: string,
   nextQuestion: string,
@@ -476,24 +485,20 @@ function rekeyQuestion(
     data.shortAnswers = answers.map(rename);
   }
 
-  const drafts = readProposedDrafts(row.proposedDrafts);
-  if (
-    drafts?.answers.some((a) => normalizeForCompare(a.question) === currentNorm)
-  ) {
-    data.proposedDrafts = {
-      ...drafts,
-      answers: drafts.answers.map(rename),
-    } as unknown as Prisma.InputJsonValue;
-  }
-
-  const authors = readDraftAuthors(row.draftAuthors);
-  if (
-    authors.answers.some((a) => normalizeForCompare(a.question) === currentNorm)
-  ) {
-    data.draftAuthors = {
-      ...authors,
-      answers: authors.answers.map(rename),
-    } as unknown as Prisma.InputJsonValue;
+  // Both baselines are keyed by wording, so both move or the rename splits the
+  // answer from what it's compared against.
+  for (const col of ["proposedDrafts", "relayedDrafts"] as const) {
+    const drafts = readProposedDrafts(row[col]);
+    if (
+      drafts?.answers.some(
+        (a) => normalizeForCompare(a.question) === currentNorm,
+      )
+    ) {
+      data[col] = {
+        ...drafts,
+        answers: drafts.answers.map(rename),
+      } as unknown as Prisma.InputJsonValue;
+    }
   }
 
   const decision = row.draftDecision as {
@@ -541,7 +546,8 @@ export async function persistApplicationAnswer(
       coverLetter: true,
       shortAnswers: true,
       shortAnswersReuse: true,
-      draftAuthors: true,
+      proposedDrafts: true,
+      relayedDrafts: true,
       applicationReview: true,
       job: { select: { slug: true } },
     },
@@ -549,7 +555,21 @@ export async function persistApplicationAnswer(
   if (!jobInteraction) return { ok: false, reason: "no_job_interaction" };
   const jobSlug = jobInteraction.job?.slug ?? jobId;
 
-  const byUser = input.author === "user";
+  // Hank's own writing moves the "whose words" baseline; the user's dictated
+  // words must not, or their text would read back as his. Both move the "seen"
+  // baseline — he wrote one and just transcribed the other, so neither is an
+  // unsent change for him to be told about.
+  const byHank = input.author === "hank";
+  let written: Prisma.JsonValue = jobInteraction.proposedDrafts;
+  let seen: Prisma.JsonValue = jobInteraction.relayedDrafts;
+  const recordDraft = (item: ApplicationItemRef, text: string) => {
+    if (byHank) {
+      written = setDraftEntry(written, item, text) as Prisma.JsonValue;
+      data.proposedDrafts = written as Prisma.InputJsonValue;
+    }
+    seen = setDraftEntry(seen, item, text) as Prisma.JsonValue;
+    data.relayedDrafts = seen as Prisma.InputJsonValue;
+  };
   const applied: string[] = [];
   const data: {
     coverLetter?: string;
@@ -557,38 +577,17 @@ export async function persistApplicationAnswer(
     shortAnswers?: Prisma.InputJsonValue;
     shortAnswersReuse?: Prisma.InputJsonValue;
     proposedDrafts?: Prisma.InputJsonValue;
-    draftAuthors?: Prisma.InputJsonValue;
-    applicationReview?: Prisma.InputJsonValue;
+    relayedDrafts?: Prisma.InputJsonValue;
   } = {};
-
-  // Each stamp is folded onto the last, so writing the cover letter and an
-  // answer in one call leaves both recorded.
-  let authors: Prisma.JsonValue = jobInteraction.draftAuthors;
-  const stampAuthor = (item: ApplicationItemRef) => {
-    authors = draftAuthorsPatch(
-      { draftAuthors: authors },
-      item,
-      input.author,
-    ) as Prisma.JsonValue;
-    data.draftAuthors = authors as Prisma.InputJsonValue;
-  };
-
-  // Rewriting an item settles what the review had open against it, same as a
-  // user edit — the text it objected to is gone. A revision round clears here
-  // and the loop writes its fresh verdict afterwards, so the two don't race.
-  let review = readApplicationReview(jobInteraction.applicationReview);
-  const settleFindings = (itemId: string) => {
-    const cleared = clearFindingsForItem(review, itemId);
-    if (!cleared) return;
-    review = cleared;
-    data.applicationReview = cleared;
-  };
 
   if (input.coverLetter?.trim()) {
     data.coverLetter = input.coverLetter;
-    data.coverLetterReuse = byUser;
-    stampAuthor({ kind: "cover_letter" });
-    settleFindings(COVER_LETTER_ID);
+    // Only Hank's own drafting touches the flag, and only to clear it: nothing
+    // he writes feeds his next draft until the user opts in. A verbatim save
+    // leaves it exactly as it was — the switch lives on the page, and flipping
+    // it from a chat message would be a change nobody could see happen.
+    if (byHank) data.coverLetterReuse = false;
+    recordDraft({ kind: "cover_letter" }, input.coverLetter);
     applied.push("cover letter");
   }
 
@@ -626,26 +625,16 @@ export async function persistApplicationAnswer(
     );
     if (idx >= 0) {
       existing[idx] = { question: canonical, answer: input.answer };
-      reuse[idx] = byUser;
+      if (byHank) reuse[idx] = false;
     } else {
       existing.push({ question: canonical, answer: input.answer });
-      reuse.push(byUser);
+      reuse.push(byHank ? false : null);
     }
     data.shortAnswers = existing;
     data.shortAnswersReuse = reuse;
-    stampAuthor({ kind: "question", question: canonical });
-    settleFindings(questionId(canonical));
+    recordDraft({ kind: "question", question: canonical }, input.answer);
     applied.push("short answer");
   }
-
-  // Re-baseline: this text is now what Hank has written and seen, so a later
-  // panel edit diverges from THIS rather than from a stale draft.
-  data.proposedDrafts = proposedDraftsPatch({
-    coverLetter: data.coverLetter ?? jobInteraction.coverLetter,
-    shortAnswers:
-      (data.shortAnswers as Prisma.JsonValue | undefined) ??
-      jobInteraction.shortAnswers,
-  });
 
   await prisma.jobInteraction.update({
     where: { userId_jobId: { userId, jobId } },

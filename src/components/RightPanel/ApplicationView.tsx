@@ -18,13 +18,14 @@ import styled from "styled-components";
 
 import { buildWidgetSubmissionMessage } from "@/components/Chat/widgets/types";
 import { useChatStore } from "@/lib/chatStore";
-import type { DraftAuthor } from "@/server/entities/jobs/applicationDrafts";
-import type {
-  ApplicationItem,
-  ApplicationItemStatus,
-  ApplicationView as ApplicationViewPayload,
+import {
+  isStockItem,
+  type ApplicationItem,
+  type ApplicationItemStatus,
+  type ApplicationView as ApplicationViewPayload,
 } from "@/server/views/application";
 
+import { AuthorMark } from "./shared/AuthorMark";
 import {
   ConfirmRemoveButton,
   ReuseSwitch,
@@ -110,6 +111,13 @@ const Item = styled.section<{ $pending: boolean }>`
     $pending ? `0 0 0 3px ${theme.colors.accent}22` : "none"};
   border-radius: ${({ theme }) => theme.radius.md};
   background: ${({ theme }) => theme.colors.bgPanel};
+`;
+
+const HeadMarks = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.space.sm};
+  flex-shrink: 0;
 `;
 
 const ItemHead = styled.div`
@@ -240,6 +248,18 @@ const StockRow = styled.div`
   overflow-wrap: anywhere;
 `;
 
+// A question someone described by hand is edited where it sits — clicking the
+// words is the affordance, so there's no second control competing with the
+// question itself. Only ever offered on a hand-added one: a scraped question is
+// what the form actually says.
+const EditableLabel = styled.span`
+  cursor: text;
+  border-bottom: 1px dashed transparent;
+  &:hover {
+    border-bottom-color: ${({ theme }) => theme.colors.border};
+  }
+`;
+
 const RenameRow = styled.div`
   display: flex;
   align-items: center;
@@ -299,11 +319,13 @@ const Empty = styled.div`
 // One unresolved finding, sitting against the text it's about. Two rewrites
 // couldn't settle it, because settling it means knowing something about the
 // user that isn't on the page.
-const Finding = styled.div`
+const Finding = styled.div<{ $register: "question" | "note" }>`
   display: flex;
   gap: ${({ theme }) => theme.space.sm};
   padding: ${({ theme }) => `${theme.space.sm} ${theme.space.md}`};
-  border-left: 2px solid ${({ theme }) => theme.colors.danger};
+  border-left: 2px solid
+    ${({ theme, $register }) =>
+      $register === "question" ? theme.colors.border : theme.colors.danger};
   background: ${({ theme }) => theme.colors.bgMuted};
   border-radius: ${({ theme }) => theme.radius.sm};
   font-size: 12px;
@@ -311,22 +333,15 @@ const Finding = styled.div`
   color: ${({ theme }) => theme.colors.textMuted};
 `;
 
-const FindingMark = styled.span`
-  color: ${({ theme }) => theme.colors.danger};
+const FindingMark = styled.span<{ $register: "question" | "note" }>`
+  color: ${({ theme, $register }) =>
+    $register === "question" ? theme.colors.textSubtle : theme.colors.danger};
   flex-shrink: 0;
 `;
 
 function countThings(n: number): string {
   return n === 1 ? "one thing" : `${n} things`;
 }
-
-// Who wrote what's in the box. A byline, deliberately — it sits under the
-// question in ordinary prose rather than competing with the accent chip above,
-// which answers the different question of whether Hank has seen it yet.
-const BYLINE: Record<DraftAuthor, string> = {
-  hank: "Hank drafted this — change anything that doesn't sound like you.",
-  user: "Your words.",
-};
 
 const PLACEHOLDER: Record<ApplicationItemStatus, string> = {
   written_by_you: "",
@@ -362,8 +377,7 @@ export function ApplicationView({
   const toWrite: ApplicationItem[] = [];
   const fillInYourself: ApplicationItem[] = [];
   for (const item of application.items) {
-    const isStock = item.verdict === "skip" && !item.text?.trim();
-    (isStock ? fillInYourself : toWrite).push(item);
+    (isStockItem(item) ? fillInYourself : toWrite).push(item);
   }
 
   return (
@@ -740,46 +754,53 @@ function ApplicationItemCard({
                 Cancel
               </AddButton>
             </RenameRow>
+          ) : item.addedByYou && !readOnly ? (
+            <EditableLabel
+              onClick={() => setRenamingLabel(true)}
+              title="Edit this question"
+            >
+              {item.label}
+            </EditableLabel>
           ) : (
             item.label
           )}
           {item.required && <SubLabel>Required</SubLabel>}
         </ItemLabel>
-        {pending && (
-          <Tag $tone="accent">
-            {item.edited ? "edited" : "added"} · not sent yet
-          </Tag>
-        )}
+        <HeadMarks>
+          {item.addedByYou && !readOnly && !renamingLabel && (
+            <ConfirmRemoveButton
+              hasText={!!item.text?.trim()}
+              onRemove={() => void remove()}
+              label="✕"
+              title="Remove this question"
+              prompt="Remove it and its answer?"
+            />
+          )}
+          {pending && (
+            <Tag $tone="accent">
+              {item.edited ? "edited" : "added"} · not sent yet
+            </Tag>
+          )}
+          {item.author && <AuthorMark author={item.author} />}
+        </HeadMarks>
       </ItemHead>
 
       {item.source === "user" && (
         <SubLabel>
           Added by hand — Hank couldn&apos;t read this one off the form.
-          {item.addedByYou && !readOnly && !renamingLabel && (
-            <>
-              {" "}
-              <AddButton onClick={() => setRenamingLabel(true)}>
-                Reword it
-              </AddButton>{" "}
-              <ConfirmRemoveButton
-                hasText={!!item.text?.trim()}
-                onRemove={() => void remove()}
-                label="Remove it"
-                prompt="Remove the question and its answer?"
-              />
-            </>
-          )}
         </SubLabel>
       )}
-      {item.author && <SubLabel>{BYLINE[item.author]}</SubLabel>}
       {item.note && <SubLabel>{item.note}</SubLabel>}
 
-      {/* Above the editor, not below it: the point is to be read before the
-          text is, and it clears the moment this item is rewritten. */}
+      {/* Above the editor: the point is to be read before the text is. A
+          `question` is Hank asking about his own draft — it must not look like
+          a fault, because the user didn't write the words it's about. */}
       {item.findings.map((finding) => (
-        <Finding key={finding}>
-          <FindingMark>!</FindingMark>
-          <span>{finding}</span>
+        <Finding key={finding.note} $register={finding.register}>
+          <FindingMark $register={finding.register}>
+            {finding.register === "question" ? "?" : "!"}
+          </FindingMark>
+          <span>{finding.note}</span>
         </Finding>
       ))}
 

@@ -17,26 +17,35 @@ import {
   questionId,
 } from "@/server/entities/jobs/applicationItemId";
 import {
+  findingAnchor,
   readApplicationReview,
   type ApplicationReview,
   type ReviewFinding,
 } from "@/server/entities/jobs/applicationReview";
+import { readShortAnswers } from "@/server/entities/jobs/applicationDrafts";
 import type { CritiqueIssue } from "@/server/subagents/registry/applicationCritic";
 
 import type { CritiqueLoopResult } from "./critiqueAndRevise";
 
 // One finding per (item, issue): an issue naming two items is two entries, so
 // editing one of them clears that half and leaves the other standing.
-function findingsFrom(issues: CritiqueIssue[]): ReviewFinding[] {
+function findingsFrom(
+  issues: CritiqueIssue[],
+  textForItem: (itemId: string) => string | null,
+): ReviewFinding[] {
   const out: ReviewFinding[] = [];
   for (const issue of issues) {
     if (issue.severity !== "blocking" || !issue.userNote) continue;
     for (const target of issue.targets) {
       const isCover = isCoverLetterTarget(target);
+      const itemId = isCover ? COVER_LETTER_ID : questionId(target);
       out.push({
-        itemId: isCover ? COVER_LETTER_ID : questionId(target),
+        itemId,
         label: isCover ? "Cover letter" : target,
         note: issue.userNote,
+        // Anchored to the words as they stand at the end of this pass, which
+        // is what the objection is actually about.
+        atHash: findingAnchor(textForItem(itemId)),
       });
     }
   }
@@ -56,13 +65,20 @@ export async function persistApplicationReview(
   // re-review: they're owed to the relay, and this pass says nothing about them.
   const prior = await prisma.jobInteraction.findUnique({
     where: { userId_jobId: { userId, jobId } },
-    select: { applicationReview: true },
+    select: { applicationReview: true, coverLetter: true, shortAnswers: true },
   });
+
+  const answers = readShortAnswers(prior?.shortAnswers ?? null);
+  const textForItem = (itemId: string): string | null =>
+    itemId === COVER_LETTER_ID
+      ? (prior?.coverLetter ?? null)
+      : (answers.find((a) => questionId(a.question) === itemId)?.answer ??
+        null);
 
   const open =
     result.finalVerdict === "error"
       ? []
-      : findingsFrom(result.unresolvedIssues);
+      : findingsFrom(result.unresolvedIssues, textForItem);
   const review: ApplicationReview = {
     outcome:
       result.finalVerdict === "error"

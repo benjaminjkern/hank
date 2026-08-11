@@ -2,18 +2,21 @@
 // drafting an application's answers (via runApplicationDrafting).
 //
 // Flow: load the current persisted form (cover letter + short answers) →
-// The critic sub-agent reviews the WHOLE form as a recruiter would → for every
-// item the critic flags, re-call runApplicationDrafting with the critique so it
-// revises that item → persist → re-critique. Loop until the critic returns
-// clean or we hit MAX_REVISION_ROUNDS (whichever first). "Cap 2" = at most two
-// revision rounds; a confirming critique runs after each round, so a form that
-// goes clean is reported clean and one that doesn't files an admin note.
+// the critic sub-agent reviews the WHOLE form as a recruiter would → every
+// issue it can act on is redrafted with the critique attached → persist →
+// re-critique. It normally stops because a round changed nothing, not because
+// it ran out of rounds.
 //
-// The critic reviews the whole form but only REVISES what Hank still owns:
-// anything the user has written or reworked (isUserOwned) is reported and left
-// alone. Rewriting a person's own sentences because a reviewer disliked them is
-// the one thing this loop must never do. Any revision it does make is a Hank
-// overwrite, so it flips that item's reuse flag to false and re-baselines it.
+// TWO filters decide what it acts on, and everything it declines lands in
+// `unresolvedIssues` rather than disappearing:
+//   - whose words are these — anything the user wrote or reworked (isUserOwned)
+//     is reported and left alone. Rewriting a person's own sentences because a
+//     reviewer disliked them is the one thing this loop must never do.
+//   - could a rewrite settle it — an `ask_user` issue turns on a fact only the
+//     candidate has, so redrafting hands back the same objection next round.
+//
+// Any revision it does make is a Hank overwrite, so it clears that item's reuse
+// flag and moves his baseline.
 
 import type { RunContext } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
@@ -37,7 +40,10 @@ import { normalizeForCompare } from "@/utils/text";
 import { draftSingleApplicationItem } from "./draftSingleApplicationItem";
 import { loadApplicationCriticInput } from "./loadApplicationCriticInput";
 
-const MAX_REVISION_ROUNDS = 2;
+// The loop stops on its own as soon as a round fixes nothing new, so this is a
+// runaway backstop rather than the usual exit. It was 2, which is why problems a
+// rewrite could have fixed ended up in front of the user.
+const MAX_REVISION_ROUNDS = 5;
 
 type CritiqueLoopEvent =
   { type: "progress"; label: string } | { type: "revised"; target: string };
@@ -170,6 +176,11 @@ async function* critiqueAndRevise(
         // stands and still surfaces in `unresolvedIssues` — it just isn't
         // acted on by rewriting their words for them.
         if (isUserOwned(form.row, itemRef(item))) continue;
+        // And anything a rewrite can't settle: the answer turns on something
+        // only the user knows, so redrafting produces the same objection next
+        // round. Spending a round on it is how the loop used to hit its cap
+        // with fixable problems still untouched.
+        if (issue.resolution === "ask_user") continue;
         const key = item.kind === "cover" ? "cover" : `sa:${item.index}`;
         const entry = byItem.get(key) ?? { item, notes: [] };
         entry.notes.push(issue.writerNote);
@@ -243,7 +254,7 @@ async function loadForm(userId: string, jobId: string): Promise<FormState> {
     shortAnswers: null,
     shortAnswersReuse: null,
     proposedDrafts: null,
-    draftAuthors: null,
+    relayedDrafts: null,
   };
   return {
     coverLetter: row.coverLetter,

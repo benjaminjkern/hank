@@ -4,6 +4,7 @@ import { loadMergedQuestions } from "@/server/entities/jobs/applicationQuestions
 import { needsQuestionsRefresh } from "@/server/entities/jobs/questionsRefresh";
 import { ensureApplicationForm } from "@/server/procedures/registry/draftApplication/ensureApplicationForm";
 import {
+  isStockItem,
   loadApplicationView,
   type ApplicationItemStatus,
 } from "@/server/views/application";
@@ -12,12 +13,14 @@ import { resolveJobArg } from "../lib/resolveEntityArg";
 
 import type { ToolDef } from "../lib/types";
 
-// The human phrasing for each item status — presentation for the enum the
-// application view derives.
+// What each item's state means FOR HANK — phrased as what it asks of him, not
+// as a fact about the user. "The user hasn't touched it" is true of every draft
+// the moment it's written, and reads as a complaint waiting to be relayed; he
+// reported it back as though it were news.
 const STATUS_LABEL: Record<ApplicationItemStatus, string> = {
-  written_by_you: "the user wrote or reworked this",
-  drafted: "drafted by you; the user hasn't touched it",
-  needs_you: "needs the user's own input",
+  written_by_you: "their own words — don't rewrite these",
+  drafted: "your draft, as written",
+  needs_you: "waiting on something only they can tell you",
   empty: "nothing written yet",
 };
 
@@ -97,6 +100,10 @@ export const viewApplicationQuestionsTool: ToolDef<{ job?: string }> = {
       );
     } else {
       for (const item of view.items) {
+        // Stock fields are named in one line at the end, not listed as items.
+        // Rendered the same as the rest, a form's dropdowns and URL boxes read
+        // as a wall of unfinished work and get reported to the user that way.
+        if (isStockItem(item)) continue;
         const label =
           item.kind === "cover_letter" ? "Cover letter" : `"${item.label}"`;
         const req = item.required ? " (required)" : "";
@@ -112,6 +119,15 @@ export const viewApplicationQuestionsTool: ToolDef<{ job?: string }> = {
           lines.push(`    ⚠ unresolved, needs the user: ${finding}`);
         }
       }
+    }
+
+    const stock = view.items.filter(isStockItem);
+    if (stock.length > 0) {
+      lines.push(
+        `Plus ${stock.length} stock field${stock.length === 1 ? "" : "s"} the user fills in directly on the posting — nothing to draft, and NOT unfinished work: ${stock
+          .map((i) => i.label)
+          .join(", ")}.`,
+      );
     }
 
     lines.push(

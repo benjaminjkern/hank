@@ -7,11 +7,15 @@
 // something to show. Only BLOCKING findings survive: a polish note that outlived
 // two rewrites is a matter of taste, not a thing to hold a submit on.
 //
-// A finding is attached to the item it's about, so editing that item drops it —
-// the objection was to text that no longer exists. That's also why nothing here
-// is a "resolved" flag: the finding is gone or it isn't.
+// A finding is attached to the exact WORDS it objects to, by a hash of them
+// (`atHash`). Nothing marks one resolved and no write clears one: it stands
+// while those words are on the page and settles when they aren't. Anchoring to
+// the item instead — clear-on-edit — settled a finding the moment the item was
+// touched, so editing and undoing reported two live objections as answered.
 
 import type { Prisma } from "@/generated/prisma/client";
+import { fnv1a } from "@/utils/hash";
+import { normalizeForCompare } from "@/utils/text";
 
 // What the last review pass concluded. "clean" is a real verdict from a real
 // pass, distinct from a null review (nothing has looked at this yet) and from
@@ -27,7 +31,16 @@ export type ReviewFinding = {
   label: string;
   // The critic's user-facing wording (its `userNote`), shown verbatim.
   note: string;
+  // The item's text when this was raised, hashed. Compare it to what's there
+  // now: equal ⇒ the objection is still about what's on the page.
+  atHash: string;
 };
+
+// One item's text, as the hash is taken over it. Whitespace-insensitive so a
+// reflow doesn't read as a rewrite.
+export function findingAnchor(text: string | null | undefined): string {
+  return fnv1a(normalizeForCompare(text ?? ""));
+}
 
 // There is deliberately no timestamp here. "Is this finding still about the text
 // on the page?" is answered by whether the item has been rewritten since — a
@@ -67,41 +80,51 @@ function readFindings(raw: unknown): ReviewFinding[] {
     const rec = e as Record<string, unknown>;
     return typeof rec.itemId === "string" &&
       typeof rec.label === "string" &&
-      typeof rec.note === "string"
-      ? [{ itemId: rec.itemId, label: rec.label, note: rec.note }]
+      typeof rec.note === "string" &&
+      typeof rec.atHash === "string"
+      ? [
+          {
+            itemId: rec.itemId,
+            label: rec.label,
+            note: rec.note,
+            atHash: rec.atHash,
+          },
+        ]
       : [];
   });
 }
 
-export function findingsForItem(
+// Split the stored findings by whether the words they objected to are still on
+// the page. Nothing persists this: it's re-derived from the current text every
+// time, which is what makes an edit-then-undo a no-op rather than a settlement.
+export function partitionFindings(
   review: ApplicationReview | null,
-  itemId: string,
-): ReviewFinding[] {
-  return (review?.open ?? []).filter((f) => f.itemId === itemId);
+  textForItem: (itemId: string) => string | null,
+): { open: ReviewFinding[]; settled: ReviewFinding[] } {
+  const open: ReviewFinding[] = [];
+  const settled: ReviewFinding[] = [];
+  for (const f of review?.open ?? []) {
+    (findingAnchor(textForItem(f.itemId)) === f.atHash ? open : settled).push(
+      f,
+    );
+  }
+  // Anything already banked as settled by an earlier pass stays settled.
+  settled.push(...(review?.settled ?? []));
+  return { open, settled };
 }
 
-// Settle one item's findings: the text they objected to is gone, so they leave
-// `open` — but they move to `settled` rather than vanishing, because "you asked
-// about this and here's how I answered it" is the useful half. Returns the
-// review to persist, or `undefined` when nothing changed.
-export function clearFindingsForItem(
-  review: ApplicationReview | null,
-  itemId: string,
-): ApplicationReview | undefined {
-  if (!review || review.open.length === 0) return undefined;
-  const settling = review.open.filter((f) => f.itemId === itemId);
-  if (settling.length === 0) return undefined;
-  return {
-    ...review,
-    open: review.open.filter((f) => f.itemId !== itemId),
-    settled: [...review.settled, ...settling],
-  };
-}
-
-// Drop the settled findings the relay just carried, so they report once.
+// Drop the findings the relay just carried, so they report once. Settling is
+// derived, so this takes the split rather than recomputing it: the entries whose
+// words are gone leave `open` for good, and anything banked earlier clears.
 export function drainSettledFindings(
   review: ApplicationReview | null,
+  settled: ReviewFinding[],
 ): ApplicationReview | undefined {
-  if (!review || review.settled.length === 0) return undefined;
-  return { ...review, settled: [] };
+  if (!review || settled.length === 0) return undefined;
+  const spent = new Set(settled.map((f) => `${f.itemId}\u0000${f.atHash}`));
+  return {
+    ...review,
+    open: review.open.filter((f) => !spent.has(`${f.itemId}\u0000${f.atHash}`)),
+    settled: [],
+  };
 }

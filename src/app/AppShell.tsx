@@ -9,6 +9,7 @@ import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { PanelUrlSync } from "@/components/PanelUrlSync";
 import { RightPanel } from "@/components/RightPanel/RightPanel";
 import { parsePanelUrl } from "@/lib/panelUrl";
+import { initial } from "@/utils/text";
 import { auth } from "@/server/auth/config";
 import { allowUserApiKeys } from "@/server/platform/deployment";
 import { loadPanelView } from "@/server/views/panelView";
@@ -45,6 +46,10 @@ export async function AppShell({ path }: { path: string }) {
       <ChatHydrator
         initialApiKeyBlocker={canChat ? null : "missing_deepseek"}
         initialPanel={initialPanel}
+        viewer={{
+          initial: initial(user.name || user.email || "?"),
+          image: user.image,
+        }}
       />
       <PanelUrlSync />
       <SplitLayout

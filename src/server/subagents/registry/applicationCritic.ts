@@ -71,6 +71,12 @@ export type CritiqueKind =
   | "quality"
   | "other";
 
+// Whether rewriting the item could settle this. `rewrite` = the words are the
+// problem, so another pass can fix it. `ask_user` = it turns on a fact only the
+// candidate has, so redrafting produces the same objection again — the loop must
+// not spend a round on it.
+export type CritiqueResolution = "rewrite" | "ask_user";
+
 export type CritiqueIssue = {
   // Which drafted item(s) this issue is about, so the caller knows what to
   // re-draft. Each entry is either the literal "cover_letter" or the exact
@@ -86,6 +92,7 @@ export type CritiqueIssue = {
   // findings turn on a fact only the person knows ("is that venture still
   // running?"), so the loop giving up has to leave something a human can settle.
   userNote: string;
+  resolution: CritiqueResolution;
 };
 
 // The whole review. There is no verdict field: "clean" IS an empty issues list,
@@ -197,8 +204,21 @@ const REPORT_CRITIQUE_SCHEMA: SubAgentOutputSchema = {
               description:
                 "The SAME finding addressed to the CANDIDATE — shown to them verbatim if no revision resolves it, so it must read as a finished sentence from a careful reader, not as your thinking. One or two sentences, second person, naming what you saw and what they'd need to confirm or change: 'Your letter says you're based in New York; the resume gives Los Angeles.' or 'The letter describes Savvy in the past tense, but the resume lists it as current — which is right?'. Plain language: no field names, no severity/kind words, no 'the critic', no scratchpad.",
             },
+            resolution: {
+              type: "string",
+              enum: ["rewrite", "ask_user"],
+              description:
+                "Could a rewrite settle this? `rewrite` = the wording is the problem and another drafting pass can fix it (vague, generic, repetitive, misreads the question, a claim that should simply be dropped). `ask_user` = settling it needs a fact only the candidate has — which of two conflicting durations is right, whether a venture is still running, where they actually live. The test: handed this note and no new information, could the writer act on it? If not, it's `ask_user`. It matters in both directions — a mislabelled `rewrite` gets redrafted and comes back identical every round, and a mislabelled `ask_user` puts a question to the candidate the writer could have handled.",
+            },
           },
-          required: ["targets", "severity", "kind", "writerNote", "userNote"],
+          required: [
+            "targets",
+            "severity",
+            "kind",
+            "writerNote",
+            "userNote",
+            "resolution",
+          ],
         },
       },
     },
@@ -214,6 +234,7 @@ type ReportCritiqueInput = {
     kind?: string;
     writerNote?: string;
     userNote?: string;
+    resolution?: string;
   }>;
 };
 
@@ -408,6 +429,10 @@ export const applicationCriticSubAgent: SubAgentDef<
         targets,
         severity: coerceSeverity(raw.severity),
         kind: coerceKind(raw.kind),
+        // Default to ask_user: a mislabelled rewrite spends a whole round
+        // re-deriving the same objection, while a mislabelled ask_user costs one
+        // question the user can wave off.
+        resolution: raw.resolution === "rewrite" ? "rewrite" : "ask_user",
         writerNote,
         // A missing userNote can't be invented here, and showing the writer's
         // instruction to the applicant reads as a stray directive — so an issue

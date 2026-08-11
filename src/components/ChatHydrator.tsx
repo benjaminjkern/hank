@@ -13,6 +13,7 @@ export function ChatHydrator({
   initialApiKeyBlocker,
   initialPanel,
   impersonateSessionId,
+  viewer,
 }: {
   initialApiKeyBlocker: ApiKeyBlockerReason | null;
   // The panel the URL names, loaded server-side. Absent on the impersonation
@@ -22,6 +23,9 @@ export function ChatHydrator({
   // in chatStore carries `?impersonate={id}` so the server returns the
   // target session's owner's data instead of the caller's.
   impersonateSessionId?: string;
+  // Who "you" is wherever a surface marks authorship. Omitted on the
+  // impersonation shell — the admin looking isn't the person who wrote it.
+  viewer?: { initial: string; image: string | null };
 }) {
   const hydrate = useChatStore((s) => s.hydrate);
   const setApiKeyBlocker = useChatStore((s) => s.setApiKeyBlocker);
@@ -29,6 +33,7 @@ export function ChatHydrator({
   const setImpersonateSessionId = useChatStore(
     (s) => s.setImpersonateSessionId,
   );
+  const setViewer = useChatStore((s) => s.setViewer);
   useEffect(() => {
     // Identity first: it RESETS the store when it changes, which would wipe a
     // blocker seeded before it. Called unconditionally, including the `null`
@@ -36,6 +41,7 @@ export function ChatHydrator({
     // mounting page wants, and both directions are client-side navigations
     // that leave the previous identity's data in place. No-op when unchanged.
     setImpersonateSessionId(impersonateSessionId ?? null);
+    setViewer(viewer ?? null);
     // Seed before hydrate so the modal renders on the first paint when no
     // key is on file — waiting for /api/session would let the chat surface
     // flash in unblocked for a tick.
@@ -61,6 +67,8 @@ export function ChatHydrator({
     setApiKeyBlocker,
     showPanelView,
     setImpersonateSessionId,
+    setViewer,
+    viewer,
     initialApiKeyBlocker,
     initialPanel,
     impersonateSessionId,

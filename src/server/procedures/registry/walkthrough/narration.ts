@@ -105,10 +105,12 @@ export function narrateApplicationReady(args: {
   const parts: string[] = [];
   if (args.note?.trim()) parts.push(args.note.trim());
   if (args.openFindings.length > 0) {
+    // Deliberately NOT "things I need from you" — that phrasing belongs to the
+    // items the decider couldn't draft at all, and using it here made a
+    // finished draft read as a request for more information. This is the
+    // opposite situation: the writing is done and these are what to watch.
     parts.push(
-      args.openFindings.length === 1
-        ? "One thing I couldn't settle on my own — it's yours to call:"
-        : "A few things I couldn't settle on my own — they're yours to call:",
+      "I've taken this as far as I can on my own. I'd keep an eye on these before you send it:",
     );
     parts.push(args.openFindings.map((f) => `- ${f}`).join("\n"));
   }
