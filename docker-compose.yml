@@ -1,0 +1,38 @@
+# Optional local Postgres for development.
+#
+#   docker compose up -d      # start
+#   docker compose down       # stop (data survives)
+#   docker compose down -v    # stop and delete the data
+#
+# Nothing in the app reads this file and it does not touch your .env — it's
+# inert unless you run the command above. It only exists so you don't have to
+# install and configure Postgres by hand to try Hank.
+#
+# The credentials below match the DATABASE_URL in .env.example, so a fresh
+# `cp .env.example .env` works against this container with no edits.
+#
+# If you already run Postgres locally on 5432, this will fail to start with a
+# port-binding error. Change the host side of the port mapping (e.g. "5433:5432")
+# and update DATABASE_URL to match.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: hank-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hank
+      POSTGRES_PASSWORD: hank
+      POSTGRES_DB: hank_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - hank-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hank -d hank_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  hank-pgdata:

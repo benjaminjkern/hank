@@ -1,0 +1,68 @@
+name: Bug report
+description: Something behaves differently than it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing. If this is a **security** issue, please don't use this
+        form — report it privately via
+        [security advisories](https://github.com/benjaminjkern/hank/security/advisories/new).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Signed in, asked Hank to ...
+        2. Clicked ...
+        3. The right panel showed ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part
+      description: Best guess is fine.
+      options:
+        - Chat / the agent's behavior
+        - Right panel (dashboard, company, job, opportunity)
+        - Job scraping / a specific ATS board
+        - Application drafting
+        - Setup, install, or migrations
+        - Auth / API keys
+        - Something else / not sure
+    validations:
+      required: true
+
+  - type: input
+    id: ats
+    attributes:
+      label: If it's a scraping bug, which company or board URL?
+      description: The careers page or posting URL that misbehaved.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Server logs, the browser console, or an error message. Redact API keys.
+      render: shell
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      placeholder: |
+        - Running: local dev / self-hosted deploy
+        - Node version:
+        - Postgres version:
+        - Browser:

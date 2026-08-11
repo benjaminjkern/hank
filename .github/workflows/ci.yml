@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Format, lint, typecheck
+    runs-on: ubuntu-latest
+    env:
+      # Prisma's generator reads `env("DATABASE_URL")` from the datasource
+      # block, so it must be set — but codegen never opens a connection, so a
+      # placeholder is enough. No CI job here talks to a real database.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      # postinstall runs `prisma generate`, which writes the client to
+      # src/generated/prisma (gitignored) — every later step needs it to
+      # resolve `@/generated/prisma/client`.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      # Zero errors is the merge bar; warnings are advisory and don't fail CI
+      # (eslint only exits non-zero on errors).
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
