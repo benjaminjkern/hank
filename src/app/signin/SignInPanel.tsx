@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import styled from "styled-components";
+import styled, { css } from "styled-components";
 
 import { GitHubMark } from "@/components/GitHubMark";
 import { HankLogo } from "@/components/HankLogo";
@@ -144,34 +144,11 @@ const Notice = styled.div`
   line-height: 1.5;
 `;
 
-// Sits below the sign-in controls in both auth modes — it's about the project,
-// not about getting in. Deliberately no GitHub mark: in oauth mode it would sit
-// directly under "Continue with GitHub" and read as a second way to sign in.
-// Points at the upstream repo; a fork that modifies Hank and serves it owes its
-// own users ITS source, not this one (see docs/self-hosting.md).
-const SourceLink = styled.a`
-  display: inline-flex;
-  align-items: center;
-  align-self: center;
-  gap: ${({ theme }) => theme.space.xs};
-  color: ${({ theme }) => theme.colors.textMuted};
-  font-size: 12px;
-  text-decoration: none;
-  padding-top: ${({ theme }) => theme.space.xs};
-  border-top: 1px solid ${({ theme }) => theme.colors.border};
-  width: 100%;
-  justify-content: center;
-  margin-top: ${({ theme }) => theme.space.xs};
-
-  &:hover {
-    color: ${({ theme }) => theme.colors.text};
-  }
-`;
-
-const ChuteButton = styled.button`
+// Page furniture, not part of the sign-in card — each pill pins itself to a
+// corner. Being outside the Card also keeps them out of HankRain's physics:
+// only the card is a collision body, so falling logos pass straight over these.
+const cornerPill = css`
   position: fixed;
-  bottom: ${({ theme }) => theme.space.lg};
-  right: ${({ theme }) => theme.space.lg};
   z-index: 10;
   padding: ${({ theme }) => `${theme.space.xs} ${theme.space.md}`};
   border: 1px solid ${({ theme }) => theme.colors.border};
@@ -180,6 +157,31 @@ const ChuteButton = styled.button`
   color: ${({ theme }) => theme.colors.textMuted};
   font-size: 12px;
   font-family: inherit;
+`;
+
+// Top-right rather than a bottom corner: bottom-left is where Next's dev
+// indicator sits, and bottom-right is the chute. Points at the upstream repo;
+// a fork that modifies Hank and serves it owes its own users ITS source, not
+// this one (see docs/self-hosting.md).
+const SourceLink = styled.a`
+  ${cornerPill}
+  top: ${({ theme }) => theme.space.lg};
+  right: ${({ theme }) => theme.space.lg};
+  display: inline-flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.space.xs};
+  text-decoration: none;
+
+  &:hover {
+    background: ${({ theme }) => theme.colors.bgHover};
+    color: ${({ theme }) => theme.colors.text};
+  }
+`;
+
+const ChuteButton = styled.button`
+  ${cornerPill}
+  bottom: ${({ theme }) => theme.space.lg};
+  right: ${({ theme }) => theme.space.lg};
   cursor: pointer;
 
   &:hover:not(:disabled) {
@@ -337,14 +339,18 @@ export function SignInPanel({
             ) : null}
           </>
         )}
-        <SourceLink
-          href="https://github.com/benjaminjkern/hank"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Hank is open source — view on GitHub
-        </SourceLink>
       </Card>
+      <SourceLink
+        href="https://github.com/benjaminjkern/hank"
+        target="_blank"
+        rel="noreferrer"
+        title="Hank is open source — view on GitHub"
+      >
+        <ProviderIcon>
+          <GitHubMark />
+        </ProviderIcon>
+        open source
+      </SourceLink>
       <ChuteButton type="button" onClick={openChute} disabled={groundDisabled}>
         {groundDisabled ? "chute open…" : "open chute"}
       </ChuteButton>
