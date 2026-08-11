@@ -51,6 +51,10 @@ const scenario: Scenario = {
           companyId: { in: priorActives.map((c) => c.companyId) },
         },
       });
+      if (result.kind !== "enter") {
+        notes.push(`dispatch returned ${result.kind}, expected a destination`);
+        return { ok: false, notes };
+      }
       notes.push(
         `target status after dispatch: ${post.status} (expected APPLYING)`,
         `entryTarget: ${JSON.stringify(result.entryTarget)} (expected company ${target.companyId})`,

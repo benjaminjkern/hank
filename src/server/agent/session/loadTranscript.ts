@@ -7,6 +7,7 @@ import { renderWidgetText } from "@/components/Chat/widgets/registry";
 import type { Prisma } from "@/generated/prisma/client";
 import { Role } from "@/generated/prisma/client";
 import { stripFocusRefTokens } from "@/lib/focusRefToken";
+import { stripWidgetMarker } from "@/lib/widgetMarker";
 import { buildProvenanceMessage } from "@/server/agent/session/uiProvenance";
 import { prisma } from "@/server/db/prisma";
 import { listAttachmentsForMessages } from "@/server/platform/storage/attachments";
@@ -144,6 +145,23 @@ export async function loadSessionMessages(
           return {
             type: "text",
             text: (b as { text?: string }).text ?? "",
+          } as Anthropic.ContentBlockParam;
+        }
+        // Text blocks lose the markup neither side may learn to emit, in both
+        // directions: a user's widget submission is stored with its hidden
+        // marker (the model gets only the label they saw themselves clicking),
+        // and a deterministic-layer line on the assistant channel can carry a
+        // <focus-ref/> chip (the model gets its bare label — same rule as the
+        // pipeline_status provenance above, which is where the OTHER half of
+        // these chips live).
+        if ((b as { type?: string }).type === "text") {
+          const text = (b as { text?: string }).text ?? "";
+          return {
+            type: "text",
+            text:
+              r.role === Role.USER
+                ? stripWidgetMarker(text)
+                : stripFocusRefTokens(text),
           } as Anthropic.ContentBlockParam;
         }
         return b;

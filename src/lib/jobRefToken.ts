@@ -11,7 +11,7 @@
 // The parser only produces text and job-ref pieces — tool segments are
 // outside its concern. Narrowing here lets render-side switch statements
 // stay exhaustive without a tool fallthrough.
-type JobRefTokenPiece =
+export type JobRefTokenPiece =
   | { kind: "text"; text: string }
   | { kind: "job-ref"; jobId: string; label: string };
 

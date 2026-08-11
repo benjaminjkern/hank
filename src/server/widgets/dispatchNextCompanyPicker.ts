@@ -8,13 +8,11 @@
 //     and lets the walkthrough own every status after it.
 //   - "opportunity" → show the opportunity.
 //   - "job" → show the role; a DEFERRED pick revives to SHORTLISTED.
-//   - "add_companies" → back to the dashboard with a conversational opener
-//     ("what are you looking for?"). Hank grows the watchlist via
-//     find_companies / create_companies.
+//   - "add_companies" → hands the turn to Hank to ask what they're after. He
+//     grows the watchlist via find_companies / create_companies once they say.
 //
-// Returns the narration text the caller emits + persists as a `pipeline_status`
-// block, plus the entity the runner should dispatch on. It writes no session
-// state: focus is ephemeral, so the entryTarget IS the handoff.
+// It writes no session state: focus is ephemeral, so the entryTarget IS the
+// handoff.
 
 import { CompanyStatus, JobInteractionStatus } from "@/generated/prisma/client";
 import { formatFocusRefToken } from "@/lib/focusRefToken";
@@ -24,17 +22,32 @@ import { companyStatusFields } from "@/server/entities/companies/companyStatusFi
 
 import type { NextCompanyPickerSubmission } from "./parse";
 
-type NextCompanyPickerDispatchResult = {
-  // Narration line to surface in chat. Caller emits as a `pipeline_status`
-  // event AND persists as a `pipeline_status` content block on a new
-  // assistant ChatMessage so it survives refresh.
-  statusText: string;
-  // The entity the ensuing silent-entry runner should dispatch on — threaded
-  // in-memory as the runner's entryTarget (there's no focus slot to read).
-  // Undefined for add_companies (conversational, nothing to run) and for a
-  // race/stale row, where the runner falls through to "what's next".
-  entryTarget?: EntryTarget;
-};
+// Asking beats guessing here: a search run off the profile alone comes back
+// adjacent to what they already track, and correcting it costs a whole round.
+const ADD_COMPANIES_NUDGE =
+  "(They want to add companies to their watchlist but haven't said what kind. Ask what they're after — sector, stage, the shape of the role — or whether they already have names in mind. Don't search yet.)";
+
+// A pick either names somewhere to GO or opens a conversation, and the two need
+// different things from the caller — so they're separate variants rather than
+// one shape with an optional target. A missing target on an "enter" is a stale
+// row: the runner falls through to "what's next", which re-renders the picker
+// against current data. That fall-through is the right answer for a race and
+// the wrong one for add-companies, which is why the latter is its own variant.
+type NextCompanyPickerDispatchResult =
+  | {
+      kind: "enter";
+      // Narration line to surface in chat. Caller emits as a `pipeline_status`
+      // event AND persists as a `pipeline_status` content block on a new
+      // assistant ChatMessage so it survives refresh.
+      statusText: string;
+      // The entity the ensuing silent-entry runner should dispatch on —
+      // threaded in-memory as the runner's entryTarget (there's no focus slot
+      // to read).
+      entryTarget?: EntryTarget;
+    }
+  // Nothing to run and nothing worth canning: Hank opens the next turn on this
+  // instruction. See ChatTurnRunner's openingNudge.
+  | { kind: "ask"; openingNudge: string };
 
 export async function dispatchNextCompanyPicker(args: {
   userId: string;
@@ -54,6 +67,7 @@ export async function dispatchNextCompanyPicker(args: {
       // Race: the company was deleted between render and submit. Returning no
       // entryTarget falls the runner through to "what's next", which re-renders.
       return {
+        kind: "enter",
         statusText: "That company isn't available anymore — let me re-check.",
       };
     }
@@ -72,6 +86,7 @@ export async function dispatchNextCompanyPicker(args: {
       });
     }
     return {
+      kind: "enter",
       statusText: `Picking up ${formatFocusRefToken("company", submission.companyId, ci.company.name)}.`,
       entryTarget: { kind: "company", id: submission.companyId },
     };
@@ -84,11 +99,13 @@ export async function dispatchNextCompanyPicker(args: {
     });
     if (!opp || opp.userId !== userId) {
       return {
+        kind: "enter",
         statusText:
           "That opportunity isn't available anymore — let me re-check.",
       };
     }
     return {
+      kind: "enter",
       statusText: `Picking up ${formatFocusRefToken("opportunity", submission.opportunityId, opp.label)}.`,
       entryTarget: { kind: "opportunity", id: submission.opportunityId },
     };
@@ -111,6 +128,7 @@ export async function dispatchNextCompanyPicker(args: {
     if (!ji) {
       // Race: the job/JobInteraction vanished between render and submit.
       return {
+        kind: "enter",
         statusText: "That role isn't available anymore — let me re-check.",
       };
     }
@@ -144,16 +162,17 @@ export async function dispatchNextCompanyPicker(args: {
             ? `It's been quiet on ${roleChip}${at} since the interview — want to follow up with them?`
             : `Picking ${roleChip}${at} back up.`;
     return {
+      kind: "enter",
       statusText,
       entryTarget: { kind: "job", id: submission.jobId },
     };
   }
 
-  // add_companies — no entity to dispatch on, just a conversational opener. Hank
-  // grows the watchlist with find_companies (user describes what they want) or
-  // create_companies (user named them).
+  // add_companies — nothing to dispatch on. Hank opens instead of a canned
+  // line, because the useful question here depends on what they've been looking
+  // at ("more early-stage infra like last time?"), which a fixed string can't ask.
   return {
-    statusText:
-      "Let's add some companies. What kind are you looking for? Or name a few and I'll pull them in.",
+    kind: "ask",
+    openingNudge: ADD_COMPANIES_NUDGE,
   };
 }

@@ -201,6 +201,8 @@ export function RightPanel() {
             <Breadcrumbs documents documentsSubPage={documentsSubPage} />
           ) : panelMode === "analytics" ? (
             <Breadcrumbs analytics />
+          ) : panelMode === "discovery" ? (
+            <Breadcrumbs discovery />
           ) : panelMode === "shortlist-board" && viewedBoard ? (
             <Breadcrumbs
               shortlistBoard={{

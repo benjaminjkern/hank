@@ -58,6 +58,10 @@ export async function* runChat(args: ChatArgs): AsyncGenerator<TurnEvent> {
   // consumed by the very next runChatTurn call so Hank opens on the flagged gaps
   // rather than cold, then reset to undefined.
   let pendingProfileGaps: ProfileGaps | undefined;
+  // A pick whose meaning was "ask me about this" (add-companies, find-more):
+  // the instruction Hank opens the next turn on. Same one-shot handling as the
+  // two above.
+  let pendingOpeningNudge: string | undefined;
 
   // 1. Widget submission. The user's message is a structured choice rather than
   // free text, so it commits deterministically — no LLM routing.
@@ -76,6 +80,9 @@ export async function* runChat(args: ChatArgs): AsyncGenerator<TurnEvent> {
   if (submission.kind === "enter") {
     pendingEntryTarget = submission.entryTarget;
   }
+  if (submission.kind === "ask") {
+    pendingOpeningNudge = submission.openingNudge;
+  }
 
   // The user hit send with an empty composer because their board marks are the
   // message. That's a real turn to answer, not the "nothing to run on" case
@@ -88,10 +95,15 @@ export async function* runChat(args: ChatArgs): AsyncGenerator<TurnEvent> {
     (await listUnrelayedBoardEdits(args.userId)).length > 0;
 
   // 2. Nothing to run on — no text typed, nothing marked, no destination
-  // picked. Ask what's next: either the rung-0 profile gate is still open (gaps
-  // thread into the turn, which greets and elicits) or the picker renders and
-  // stops.
-  if (submission.kind !== "enter" && !userMessage && !carriesPanelEdits) {
+  // picked, nothing to ask about. Ask what's next: either the rung-0 profile
+  // gate is still open (gaps thread into the turn, which greets and elicits) or
+  // the picker renders and stops.
+  if (
+    submission.kind !== "enter" &&
+    submission.kind !== "ask" &&
+    !userMessage &&
+    !carriesPanelEdits
+  ) {
     const r = yield* renderWhatsNext({
       ...args,
       narrateProfileSwitch: false,
@@ -110,6 +122,8 @@ export async function* runChat(args: ChatArgs): AsyncGenerator<TurnEvent> {
     // transitions in this loop derive their own state.
     const iterEntryTarget = pendingEntryTarget;
     pendingEntryTarget = undefined;
+    const iterOpeningNudge = pendingOpeningNudge;
+    pendingOpeningNudge = undefined;
     let wrappedUp = false;
     // Set when this turn ended a company. The segment wrap runs HERE, once,
     // rather than inside each bundled mutation — see
@@ -126,6 +140,7 @@ export async function* runChat(args: ChatArgs): AsyncGenerator<TurnEvent> {
       carriesPanelEdits: carriesPanelEdits && i === 0,
       profileGaps: pendingProfileGaps,
       entryTarget: iterEntryTarget,
+      openingNudge: iterOpeningNudge,
     })) {
       if (ev.type === "done") {
         wrappedUp = ev.wrappedUp;

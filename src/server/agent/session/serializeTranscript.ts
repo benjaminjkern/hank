@@ -5,6 +5,8 @@
 
 import { Role } from "@/generated/prisma/client";
 import type { Prisma } from "@/generated/prisma/client";
+import { stripFocusRefTokens } from "@/lib/focusRefToken";
+import { stripWidgetMarker } from "@/lib/widgetMarker";
 import { isRecord } from "@/utils/guards";
 import { truncate } from "@/utils/text";
 
@@ -61,6 +63,12 @@ export function serializeTranscript(
 // `pipeline_activity` stays OUT on purpose — that channel is the machine's own
 // bookkeeping ("condensed the earlier part of this conversation"), and feeding
 // it to the pass that wrote it is circular.
+//
+// Text loses the two markups a reader must never quote back: a clicked message
+// keeps its visible label and loses its hidden widget marker, and a chip line
+// keeps its label and loses its <focus-ref/>. Both strips run on every block —
+// a user never types a chip and the assistant never emits a marker, so there is
+// nothing to gain from branching on role here.
 function extractText(blocks: unknown[]): string {
   let out = "";
   for (const b of blocks) {
@@ -70,7 +78,7 @@ function extractText(blocks: unknown[]): string {
   }
   for (const b of blocks) {
     if (isRecord(b) && b.type === "text" && typeof b.text === "string")
-      out += b.text;
+      out += stripFocusRefTokens(stripWidgetMarker(b.text));
   }
   return out;
 }

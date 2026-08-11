@@ -86,11 +86,19 @@ export const runChatTurn: ChatTurnRunner = async function* (args) {
   const profileIntakeEntry =
     !opensUserTurn && !args.entryTarget && profileIntake;
 
+  // The turn opens with Hank rather than the state machine when there's an
+  // instruction to open on: profile intake derives its own, and a caller can
+  // thread one for a click whose whole meaning is "ask me about this" (the
+  // what's-next chooser's add-companies row, the add-more widget's "Find more").
+  const openingNudge =
+    args.openingNudge ??
+    (profileIntakeEntry ? PROFILE_INTAKE_NUDGE : undefined);
+
   // Path 1: widget submission OR silent entry — state machine drives. On a
   // picker-driven silent entry the target is threaded in (args.entryTarget); a
   // widget submission carries its ids in the marker (handleWidgetSubmission), so
   // entryTarget is undefined there and unused.
-  if ((isWidgetSubmission || !opensUserTurn) && !profileIntakeEntry) {
+  if ((isWidgetSubmission || !opensUserTurn) && !openingNudge) {
     const result = yield* runStateMachineAndPersist(args);
     yield {
       type: "done",
@@ -143,9 +151,7 @@ export const runChatTurn: ChatTurnRunner = async function* (args) {
       ...args,
       buildSystem: (info) => buildTurnSystem(args, profileIntake, info),
       turnIndex: loop,
-      ...(profileIntakeEntry && loop === 0
-        ? { openingNudge: PROFILE_INTAKE_NUDGE }
-        : {}),
+      ...(openingNudge && loop === 0 ? { openingNudge } : {}),
     });
     // Fold this turn's tool outcomes. runAgentTurn hands them back in dispatch
     // order and interprets neither — the two rules are domain policy: the LAST

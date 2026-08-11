@@ -396,6 +396,10 @@ type Actions = {
   viewJob: (jobId: string) => Promise<void>;
   viewOpportunity: (opportunityId: string) => Promise<void>;
   viewShortlistBoard: (companyId: string) => Promise<void>;
+  // Re-open the companies-to-add list. Reachable from the chat chip the search
+  // drops and from Hank's show_discovery — it hangs off no entity, so there is
+  // no page to navigate through to reach it.
+  viewDiscovery: () => Promise<void>;
   viewApplication: (jobId: string) => Promise<void>;
   replaceViewedApplication: (next: ApplicationView) => void;
   // One board-row edit from the panel: POSTs the stance (persisted
@@ -1062,6 +1066,24 @@ export const useChatStore = create<State & Actions>((set, get) => ({
         panelMode: "shortlist-board",
         panelMovedBy: "user",
         pendingBoardEditCount: data.pendingEdits,
+      });
+    } catch {
+      // ignore
+    }
+  },
+
+  async viewDiscovery() {
+    try {
+      const res = await fetch(
+        withImpersonate("/api/discovery", get().impersonateSessionId),
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as DiscoveryListView;
+      set({
+        viewedDiscovery: data,
+        panelMode: "discovery",
+        panelMovedBy: "user",
+        pendingDiscoveryMarkCount: data.pendingMarks,
       });
     } catch {
       // ignore

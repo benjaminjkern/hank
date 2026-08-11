@@ -23,7 +23,9 @@ import {
   type MessageView,
 } from "@/lib/chatStore";
 import { splitFocusRefTokens } from "@/lib/focusRefToken";
+import type { FocusRefTokenPiece } from "@/lib/focusRefToken";
 import { splitJobRefTokens } from "@/lib/jobRefToken";
+import type { JobRefTokenPiece } from "@/lib/jobRefToken";
 import { stripToolErrorMarker } from "@/server/agent/tools/lib/toolError";
 
 import { HankLogo } from "../HankLogo";
@@ -1750,8 +1752,9 @@ function SegmentView({
           p.kind === "focus-ref" ? (
             <FocusRefChip
               key={i}
-              refKind={p.refKind}
-              id={p.id}
+              {...(p.refKind === "discovery"
+                ? { refKind: p.refKind }
+                : { refKind: p.refKind, id: p.id })}
               label={p.label}
             />
           ) : (
@@ -1771,38 +1774,57 @@ function SegmentView({
     // the latest WidgetSegment out of message history.
     return null;
   }
-  // segment.kind === "text" — may carry inline <job-ref/> tokens that need
-  // to split out into chips at render time. The parser returns a flat
-  // mix; user text renders verbatim around the chips, assistant text
-  // runs each text piece through ReactMarkdown.
-  const pieces = splitJobRefTokens(segment.text);
+  // segment.kind === "text" — may carry inline chips from either token
+  // vocabulary: <job-ref/> (a role) and <focus-ref/> (a destination, which the
+  // deterministic layer also emits on this channel when the line is prose rather
+  // than a status ping). Split on focus-refs first, then run each remaining text
+  // run through the job-ref splitter, so one flat list covers both. User text
+  // renders verbatim around the chips; assistant text runs each text piece
+  // through ReactMarkdown.
+  const pieces = splitFocusRefTokens(segment.text).flatMap(
+    (p, i): InlinePiece[] =>
+      p.kind === "text"
+        ? splitJobRefTokens(p.text).map((q, j) => ({ ...q, key: `${i}.${j}` }))
+        : [{ ...p, key: `${i}` }],
+  );
+  const chipFor = (p: Exclude<InlinePiece, { kind: "text" }>) =>
+    p.kind === "job-ref" ? (
+      <JobRefChip key={p.key} jobId={p.jobId} label={p.label} />
+    ) : (
+      <FocusRefChip
+        key={p.key}
+        {...(p.refKind === "discovery"
+          ? { refKind: p.refKind }
+          : { refKind: p.refKind, id: p.id })}
+        label={p.label}
+      />
+    );
   if (role === "user") {
     return (
       <UserText>
-        {pieces.map((p, i) =>
-          p.kind === "job-ref" ? (
-            <JobRefChip key={i} jobId={p.jobId} label={p.label} />
-          ) : (
-            p.text
-          ),
-        )}
+        {pieces.map((p) => (p.kind === "text" ? p.text : chipFor(p)))}
       </UserText>
     );
   }
   return (
     <MarkdownText>
-      {pieces.map((p, i) =>
-        p.kind === "job-ref" ? (
-          <JobRefChip key={i} jobId={p.jobId} label={p.label} />
-        ) : (
-          <ReactMarkdown key={i} remarkPlugins={[remarkGfm]}>
+      {pieces.map((p) =>
+        p.kind === "text" ? (
+          <ReactMarkdown key={p.key} remarkPlugins={[remarkGfm]}>
             {p.text}
           </ReactMarkdown>
+        ) : (
+          chipFor(p)
         ),
       )}
     </MarkdownText>
   );
 }
+
+// A rendered run of one text segment: the two inline-chip vocabularies plus the
+// plain text between them, keyed once so a nested split still yields one flat
+// list. See the composition in the text branch above.
+type InlinePiece = (FocusRefTokenPiece | JobRefTokenPiece) & { key: string };
 
 // One thing the user needs to know, and everything else folded away. A failed
 // run's detail is operator text — a Prisma code, an HTTP status, a stack — so
@@ -1848,26 +1870,30 @@ function JobRefChip({ jobId, label }: { jobId: string; label: string }) {
   );
 }
 
-// Inline chip for a `<focus-ref/>` token — clicking opens the entity's detail
-// page in the right panel (view-only, like JobRefChip; never touches focus).
-// Label is captured at emit time so it survives a rename / delete, and click
-// no-ops on a missing entity via the view*() 404 handling.
-function FocusRefChip({
-  refKind,
-  id,
-  label,
-}: {
-  refKind: "company" | "job" | "opportunity";
-  id: string;
-  label: string;
-}) {
+// Inline chip for a `<focus-ref/>` token — clicking opens that destination in
+// the right panel (view-only, like JobRefChip; never touches focus). Label is
+// captured at emit time so it survives a rename / delete, and click no-ops on a
+// missing entity via the view*() 404 handling.
+//
+// This is the doorway BACK to a surface the user has navigated away from, which
+// is why the discovery list — reachable no other way, since it hangs off no
+// entity and lives in no menu — announces itself with one.
+type FocusRefChipProps = { label: string } & (
+  | { refKind: "company" | "job" | "opportunity"; id: string }
+  | { refKind: "discovery" }
+);
+
+function FocusRefChip(props: FocusRefChipProps) {
+  const { label } = props;
   const viewCompany = useChatStore((s) => s.viewCompany);
   const viewJob = useChatStore((s) => s.viewJob);
   const viewOpportunity = useChatStore((s) => s.viewOpportunity);
+  const viewDiscovery = useChatStore((s) => s.viewDiscovery);
   const onClick = () => {
-    if (refKind === "company") void viewCompany(id);
-    else if (refKind === "job") void viewJob(id);
-    else void viewOpportunity(id);
+    if (props.refKind === "discovery") void viewDiscovery();
+    else if (props.refKind === "company") void viewCompany(props.id);
+    else if (props.refKind === "job") void viewJob(props.id);
+    else void viewOpportunity(props.id);
   };
   return (
     <JobRefChipButton type="button" onClick={onClick} title={label}>
