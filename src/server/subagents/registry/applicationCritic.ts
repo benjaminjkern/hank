@@ -93,6 +93,11 @@ export type CritiqueIssue = {
 // the caller would have to decide whether to trust.
 export type ApplicationCritique = {
   issues: CritiqueIssue[];
+  // One line to the candidate about the application as a whole, shown to them
+  // verbatim in chat. It exists because the alternative is a fixed sentence:
+  // the runner has to say SOMETHING when a pass finishes, and only the reader
+  // who just went through the writing can say what's actually in it.
+  note: string;
 };
 
 // One application the candidate has ALREADY SUBMITTED to this same company —
@@ -148,10 +153,15 @@ const KIND_VALUES = [
 const REPORT_CRITIQUE_SCHEMA: SubAgentOutputSchema = {
   name: "report_critique",
   description:
-    "Report your review of the whole application. `issues` gets one entry per distinct problem the analysis surfaced — an empty array IS the clean verdict, so there is nothing else to set. Each issue is stated twice: `writerNote` for the agent that will redraft the item, `userNote` for the candidate, who may read it verbatim. Both are conclusions, never your reasoning.",
+    "Report your review of the whole application. `issues` gets one entry per distinct problem the analysis surfaced — an empty array IS the clean verdict, so there is nothing else to set. Each issue is stated twice: `writerNote` for the agent that will redraft the item, `userNote` for the candidate, who may read it verbatim. Both are conclusions, never your reasoning. `note` is the one line the candidate reads first.",
   inputSchema: {
     type: "object",
     properties: {
+      note: {
+        type: "string",
+        description:
+          "One or two sentences to the CANDIDATE, shown verbatim as the opening line when their application comes up. Say what's actually in this one — what the letter leads on, which answer does the most work, what you'd look at first — the way a colleague who just read it would. It is NOT a verdict word and NOT a summary of `issues` (those are shown separately, in the candidate's own list): don't say 'no issues found' or count anything. Write it about THIS application, so it couldn't be pasted onto another. Plain language — no field names, no severity/kind words, no talk of reviews, passes, or drafting machinery.",
+      },
       issues: {
         type: "array",
         description:
@@ -192,11 +202,12 @@ const REPORT_CRITIQUE_SCHEMA: SubAgentOutputSchema = {
         },
       },
     },
-    required: ["issues"],
+    required: ["note", "issues"],
   },
 };
 
 type ReportCritiqueInput = {
+  note?: string;
   issues?: Array<{
     targets?: unknown;
     severity?: string;
@@ -405,6 +416,9 @@ export const applicationCriticSubAgent: SubAgentDef<
       });
     }
 
-    return { issues };
+    return {
+      issues,
+      note: typeof out.note === "string" ? out.note.trim() : "",
+    };
   },
 };

@@ -53,6 +53,9 @@ export type CritiqueLoopResult = {
   revisedTargets: string[];
   // Issues still open when the loop stopped (empty on a clean finish).
   unresolvedIssues: CritiqueIssue[];
+  // The last pass's one-line word to the candidate — what the runner says when
+  // it puts the application on screen. Empty when no pass produced one.
+  note: string;
 };
 
 type CritiqueLoopArgs = RunContext & {
@@ -105,6 +108,7 @@ async function* critiqueAndRevise(
       finalVerdict: "clean",
       revisedTargets: [],
       unresolvedIssues: [],
+      note: "",
     };
   }
 
@@ -113,6 +117,7 @@ async function* critiqueAndRevise(
   let revisionRounds = 0;
   let finalVerdict: "clean" | "revise" | "error" = "clean";
   let unresolved: CritiqueIssue[] = [];
+  let note = "";
 
   while (true) {
     yield {
@@ -141,6 +146,9 @@ async function* critiqueAndRevise(
       break;
     }
     critiqueRounds++;
+    // Each round's note replaces the last: the final one describes the text
+    // that actually ends up on the page.
+    note = crit.output.note;
     // No issues IS the clean verdict — the critic reports nothing else.
     if (crit.output.issues.length === 0) {
       finalVerdict = "clean";
@@ -200,8 +208,8 @@ async function* critiqueAndRevise(
           args.userId,
           args.jobId,
           item.kind === "cover"
-            ? { coverLetter: r.content }
-            : { question: item.question, answer: r.content },
+            ? { coverLetter: r.content, author: "hank" }
+            : { question: item.question, answer: r.content, author: "hank" },
         );
         const tgt = item.kind === "cover" ? "cover_letter" : item.question;
         revised.add(tgt);
@@ -220,6 +228,7 @@ async function* critiqueAndRevise(
     finalVerdict,
     revisedTargets: [...revised],
     unresolvedIssues: unresolved,
+    note,
   };
 }
 
@@ -234,6 +243,7 @@ async function loadForm(userId: string, jobId: string): Promise<FormState> {
     shortAnswers: null,
     shortAnswersReuse: null,
     proposedDrafts: null,
+    draftAuthors: null,
   };
   return {
     coverLetter: row.coverLetter,

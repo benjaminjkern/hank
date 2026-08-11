@@ -23,6 +23,7 @@ import { appendPipelineActivity } from "@/server/agent/session";
 import { prisma } from "@/server/db/prisma";
 import {
   applicationEditsFor,
+  DRAFTED_ROW_SELECT,
   proposedDraftsPatch,
   readShortAnswers,
   type ApplicationEdit,
@@ -87,11 +88,7 @@ export async function runCommitApplication(
   const row = await prisma.jobInteraction.findUnique({
     where: { userId_jobId: { userId: args.userId, jobId: args.jobId } },
     select: {
-      coverLetter: true,
-      coverLetterReuse: true,
-      shortAnswers: true,
-      shortAnswersReuse: true,
-      proposedDrafts: true,
+      ...DRAFTED_ROW_SELECT,
       job: {
         select: {
           title: true,

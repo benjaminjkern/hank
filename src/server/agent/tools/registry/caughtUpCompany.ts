@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { JobInteractionStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { caughtUpCompany } from "@/server/entities/companies/setCompanyAside";
 
 import { resolveCompanyArg } from "../lib/resolveEntityArg";
@@ -63,10 +64,7 @@ export const caughtUpCompanyTool: ToolDef<{
           userId: ctx.userId,
           job: { companyId },
           status: {
-            in: [
-              JobInteractionStatus.SHORTLISTED,
-              JobInteractionStatus.SCANNED,
-            ],
+            in: [...WORKABLE_STATUSES, JobInteractionStatus.SCANNED],
           },
         },
       });

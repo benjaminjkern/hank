@@ -18,13 +18,17 @@ import styled from "styled-components";
 
 import { buildWidgetSubmissionMessage } from "@/components/Chat/widgets/types";
 import { useChatStore } from "@/lib/chatStore";
+import type { DraftAuthor } from "@/server/entities/jobs/applicationDrafts";
 import type {
   ApplicationItem,
   ApplicationItemStatus,
   ApplicationView as ApplicationViewPayload,
 } from "@/server/views/application";
 
-import { ReuseSwitch } from "./shared/applicationArtifacts";
+import {
+  ConfirmRemoveButton,
+  ReuseSwitch,
+} from "./shared/applicationArtifacts";
 
 const Root = styled.div`
   display: flex;
@@ -91,14 +95,19 @@ const LinkOut = styled.a`
   align-self: center;
 `;
 
-const Item = styled.section<{ $edited: boolean }>`
+// The outline is the page's one piece of live state: this box holds a change
+// Hank hasn't been told about. Nothing else on the card is allowed to use the
+// accent colour, so "outlined" reads as one thing.
+const Item = styled.section<{ $pending: boolean }>`
   display: flex;
   flex-direction: column;
   gap: ${({ theme }) => theme.space.sm};
   padding: ${({ theme }) => theme.space.lg};
   border: 1px solid
-    ${({ theme, $edited }) =>
-      $edited ? theme.colors.accent : theme.colors.border};
+    ${({ theme, $pending }) =>
+      $pending ? theme.colors.accent : theme.colors.border};
+  box-shadow: ${({ theme, $pending }) =>
+    $pending ? `0 0 0 3px ${theme.colors.accent}22` : "none"};
   border-radius: ${({ theme }) => theme.radius.md};
   background: ${({ theme }) => theme.colors.bgPanel};
 `;
@@ -118,7 +127,7 @@ const ItemLabel = styled.div`
   min-width: 0;
 `;
 
-const Tag = styled.span<{ $tone: "muted" | "accent" | "danger" }>`
+const Tag = styled.span<{ $tone: "accent" | "danger" }>`
   flex-shrink: 0;
   font-size: 10px;
   font-family: ${({ theme }) => theme.font.mono};
@@ -126,11 +135,7 @@ const Tag = styled.span<{ $tone: "muted" | "accent" | "danger" }>`
   letter-spacing: 0.4px;
   white-space: nowrap;
   color: ${({ theme, $tone }) =>
-    $tone === "accent"
-      ? theme.colors.accent
-      : $tone === "danger"
-        ? theme.colors.danger
-        : theme.colors.textSubtle};
+    $tone === "accent" ? theme.colors.accent : theme.colors.danger};
 `;
 
 const SubLabel = styled.div`
@@ -170,6 +175,13 @@ const ItemFoot = styled.div`
   justify-content: space-between;
   gap: ${({ theme }) => theme.space.sm};
   min-height: 18px;
+`;
+
+const FootControls = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.space.xs};
+  min-width: 0;
 `;
 
 const SaveState = styled.span<{ $tone: "idle" | "saving" | "saved" | "error" }>`
@@ -284,29 +296,6 @@ const Empty = styled.div`
   line-height: 1.6;
 `;
 
-// The read-through verdict, and the one thing the page couldn't say before: a
-// review that ran and DIDN'T come back clean. Bordered on the leading edge only
-// — it's an annotation on the application, not a card competing with the items.
-const ReviewBanner = styled.div<{ $tone: "open" | "quiet" }>`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: ${({ theme }) => `${theme.space.sm} ${theme.space.md}`};
-  border-left: 2px solid
-    ${({ theme, $tone }) =>
-      $tone === "open" ? theme.colors.danger : theme.colors.success};
-  background: ${({ theme }) => theme.colors.bgMuted};
-  border-radius: ${({ theme }) => theme.radius.sm};
-  font-size: 12px;
-  line-height: 1.5;
-  color: ${({ theme }) => theme.colors.textMuted};
-`;
-
-const ReviewHeadline = styled.span`
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.text};
-`;
-
 // One unresolved finding, sitting against the text it's about. Two rewrites
 // couldn't settle it, because settling it means knowing something about the
 // user that isn't on the page.
@@ -331,11 +320,12 @@ function countThings(n: number): string {
   return n === 1 ? "one thing" : `${n} things`;
 }
 
-const STATUS_TAG: Record<ApplicationItemStatus, string | null> = {
-  written_by_you: "yours",
-  drafted: "hank's draft",
-  needs_you: "needs you",
-  empty: null,
+// Who wrote what's in the box. A byline, deliberately — it sits under the
+// question in ordinary prose rather than competing with the accent chip above,
+// which answers the different question of whether Hank has seen it yet.
+const BYLINE: Record<DraftAuthor, string> = {
+  hank: "Hank drafted this — change anything that doesn't sound like you.",
+  user: "Your words.",
 };
 
 const PLACEHOLDER: Record<ApplicationItemStatus, string> = {
@@ -390,13 +380,6 @@ export function ApplicationView({
             edits from now on are just for you, and Hank won&apos;t be asked to
             look again.
           </Note>
-        )}
-        {application.review && (
-          <ReviewSummary
-            review={application.review}
-            openCount={open}
-            submitted={application.submitted}
-          />
         )}
         {asking && !application.submitted && (
           <Note>
@@ -489,67 +472,6 @@ export function ApplicationView({
       {fillInYourself.length > 0 && <StockFields items={fillInYourself} />}
     </Root>
   );
-}
-
-// Whether the accuracy-and-consistency pass approved the application — which
-// the page had no way to say, so a draft with a known contradiction in it looked
-// exactly like one that had been read and cleared.
-//
-// The four states are genuinely different news, and none of them is "no review
-// has run" (that renders nothing at all — an absence isn't a claim).
-function ReviewSummary({
-  review,
-  openCount,
-  submitted,
-}: {
-  review: NonNullable<ApplicationViewPayload["review"]>;
-  openCount: number;
-  submitted: boolean;
-}) {
-  if (review.state === "open") {
-    return (
-      <ReviewBanner $tone="open">
-        <ReviewHeadline>
-          {submitted
-            ? `${capitalize(countThings(openCount))} went out flagged.`
-            : `${capitalize(countThings(openCount))} worth a look before you send this.`}
-        </ReviewHeadline>
-        <span>
-          Reading it back against your résumé turned these up. They&apos;re
-          marked against the answers below — most come down to something only
-          you can settle.
-        </span>
-        {review.orphaned.map((line) => (
-          <span key={line}>· {line}</span>
-        ))}
-      </ReviewBanner>
-    );
-  }
-  if (review.state === "failed") {
-    return (
-      <ReviewBanner $tone="quiet">
-        <span>
-          The accuracy pass didn&apos;t finish on this one, so nothing has read
-          it back against your résumé. Worth your own once-over.
-        </span>
-      </ReviewBanner>
-    );
-  }
-  return (
-    <ReviewBanner $tone="quiet">
-      <span>
-        {review.state === "clean"
-          ? "Read back against your résumé and the posting — nothing came up."
-          : review.state === "stale"
-            ? "It read clean when it was written, though you've edited it since — nothing has looked over your changes."
-            : "The read-back flagged a few things and you've since rewritten every one of them."}
-      </span>
-    </ReviewBanner>
-  );
-}
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 // The form's stock fields — name, work authorization, LinkedIn URL. The decider
@@ -678,6 +600,7 @@ function ApplicationItemCard({
     "idle" | "saving" | "saved" | "error"
   >("idle");
   const savedRef = useRef(item.text ?? "");
+  const [copied, setCopied] = useState(false);
   const [renamingLabel, setRenamingLabel] = useState(false);
   const [label, setLabel] = useState(item.label);
   const [renaming, setRenaming] = useState(false);
@@ -685,6 +608,26 @@ function ApplicationItemCard({
   function cancelRename() {
     setRenamingLabel(false);
     setLabel(item.label);
+  }
+
+  // Only for a question this person described by hand: the form isn't asking it
+  // after all, so it leaves with whatever was written under it.
+  async function remove() {
+    if (renaming) return;
+    setRenaming(true);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/application`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: item.id }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      replaceViewedApplication((await res.json()) as ApplicationViewPayload);
+    } catch {
+      setSaveState("error");
+    } finally {
+      setRenaming(false);
+    }
   }
 
   // The question text is the key its answer is stored under, so this goes
@@ -727,6 +670,26 @@ function ApplicationItemCard({
     setLabel(item.label);
   }, [item.label]);
 
+  // Copying is the other way a person claims a piece of writing: they took it
+  // to paste into the real form, which says "reuse this later" as clearly as
+  // editing does. A dirty box saves first — that write flips the flag on its
+  // own, so there's nothing left to ask for.
+  async function copy() {
+    const text_ = text;
+    try {
+      await navigator.clipboard.writeText(text_);
+    } catch {
+      setSaveState("error");
+      return;
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+    if (readOnly) return;
+    if (text_ !== savedRef.current) await persist({ text: text_ });
+    else if (text_.trim() && item.reuse !== true)
+      await persist({ reuse: true });
+  }
+
   async function persist(patch: { text?: string; reuse?: boolean }) {
     if (readOnly) return;
     setSaveState("saving");
@@ -747,9 +710,12 @@ function ApplicationItemCard({
     }
   }
 
-  const tag = STATUS_TAG[item.status];
+  // One thing the outline says: there's a change here Hank hasn't seen, and it
+  // rides the next message. A question described by hand counts even with
+  // nothing written under it — the form asks something he can't see.
+  const pending = item.edited || item.addedNotRelayed;
   return (
-    <Item $edited={item.edited}>
+    <Item $pending={pending}>
       <ItemHead>
         <ItemLabel>
           {renamingLabel ? (
@@ -779,12 +745,10 @@ function ApplicationItemCard({
           )}
           {item.required && <SubLabel>Required</SubLabel>}
         </ItemLabel>
-        {item.edited ? (
-          <Tag $tone="accent">edited · not sent yet</Tag>
-        ) : item.addedNotRelayed ? (
-          <Tag $tone="accent">added · not sent yet</Tag>
-        ) : (
-          tag && <Tag $tone="muted">{tag}</Tag>
+        {pending && (
+          <Tag $tone="accent">
+            {item.edited ? "edited" : "added"} · not sent yet
+          </Tag>
         )}
       </ItemHead>
 
@@ -796,11 +760,18 @@ function ApplicationItemCard({
               {" "}
               <AddButton onClick={() => setRenamingLabel(true)}>
                 Reword it
-              </AddButton>
+              </AddButton>{" "}
+              <ConfirmRemoveButton
+                hasText={!!item.text?.trim()}
+                onRemove={() => void remove()}
+                label="Remove it"
+                prompt="Remove the question and its answer?"
+              />
             </>
           )}
         </SubLabel>
       )}
+      {item.author && <SubLabel>{BYLINE[item.author]}</SubLabel>}
       {item.note && <SubLabel>{item.note}</SubLabel>}
 
       {/* Above the editor, not below it: the point is to be read before the
@@ -825,11 +796,18 @@ function ApplicationItemCard({
 
       <ItemFoot>
         {item.text ? (
-          <ReuseSwitch
-            on={item.reuse === true}
-            disabled={readOnly}
-            onChange={(next) => void persist({ reuse: next })}
-          />
+          <FootControls>
+            <ReuseSwitch
+              on={item.reuse === true}
+              disabled={readOnly}
+              onChange={(next) => void persist({ reuse: next })}
+            />
+            {!readOnly && (
+              <AddButton onClick={() => void copy()} disabled={!text.trim()}>
+                {copied ? "Copied" : "Copy"}
+              </AddButton>
+            )}
+          </FootControls>
         ) : (
           <span />
         )}

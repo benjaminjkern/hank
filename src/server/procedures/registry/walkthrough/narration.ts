@@ -90,6 +90,34 @@ export function narrateJobClose(args: {
   return `Closed ${jobRef(args)} — ${humanJobCloseReason(args.reason)}.${noteSuffix(args.note)}`;
 }
 
+// What the runner says when it puts a finished application on screen. The
+// reviewer's own words lead — it read the writing and nothing deterministic can
+// say what's in it — and every finding it couldn't settle is printed in full
+// underneath, because a finding is only useful next to the words it objects to
+// and the count alone told the user nothing they could act on.
+//
+// The frame is one sentence and holds only what the model has no way to know:
+// what the button is called.
+export function narrateApplicationReady(args: {
+  note: string | null;
+  openFindings: string[];
+}): string {
+  const parts: string[] = [];
+  if (args.note?.trim()) parts.push(args.note.trim());
+  if (args.openFindings.length > 0) {
+    parts.push(
+      args.openFindings.length === 1
+        ? "One thing I couldn't settle on my own — it's yours to call:"
+        : "A few things I couldn't settle on my own — they're yours to call:",
+    );
+    parts.push(args.openFindings.map((f) => `- ${f}`).join("\n"));
+  }
+  parts.push(
+    "It's on the right — change anything that doesn't sound like you, and tap **I submitted ✓** once you've applied.",
+  );
+  return parts.join("\n\n");
+}
+
 export function narrateJobApplied(args: {
   jobTitle: string | null;
   applyChannel: ApplyChannel;

@@ -10,9 +10,12 @@
 // Every handler that writes returns the fresh view, so the panel never has to
 // guess what the write did to the rest of the form.
 //
-// Editing sets the item's "ok to reuse when drafting" flag, since the user
-// actively working the text is exactly what makes it theirs. Only the touched
-// item flips; an explicit `reuse` in the same request (the switch itself) wins.
+// Writing here records two things about the touched item, and only that item.
+// It stamps the person as its author — the page's byline and the reviewer's
+// "leave their sentences alone" rule both read that — and it sets the "ok to
+// reuse when drafting" flag, since someone working the text is what makes it
+// worth drawing on later. An explicit `reuse` in the same request (the switch
+// itself) wins, and says nothing about authorship.
 
 import { z } from "zod";
 
@@ -24,8 +27,11 @@ import {
 } from "@/server/auth/viewerScope";
 import { prisma } from "@/server/db/prisma";
 import {
+  draftAuthorsPatch,
+  forgetDraftAuthor,
   readReuseFlags,
   readShortAnswers,
+  type ApplicationItemRef,
 } from "@/server/entities/jobs/applicationDrafts";
 import {
   COVER_LETTER_ID,
@@ -33,6 +39,7 @@ import {
 } from "@/server/entities/jobs/applicationItemId";
 import {
   addUserQuestion,
+  removeUserQuestion,
   renameUserQuestion,
   resolveQuestionId,
 } from "@/server/entities/jobs/applicationQuestions";
@@ -67,6 +74,9 @@ const RenameQuestionSchema = z.object({
   itemId: z.string(),
   question: z.string().trim().min(1).max(2000),
 });
+
+// Remove a question this user added by hand — `itemId` addresses it.
+const RemoveQuestionSchema = z.object({ itemId: z.string() });
 
 export async function GET(
   req: Request,
@@ -156,6 +166,42 @@ export async function PUT(
   return Response.json(view);
 }
 
+// Take back a hand-added question. Separate from a PATCH that blanks the text:
+// that clears the ANSWER and leaves the form still asking, which is right for a
+// question the form really asks and wrong for one that was never there.
+export async function DELETE(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const blocked = rejectImpersonatedWrite(req);
+  if (blocked) return blocked;
+  const user = await getCurrentUser();
+  if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
+  const { id: jobId } = await params;
+
+  const parsed = RemoveQuestionSchema.safeParse(
+    await req.json().catch(() => null),
+  );
+  if (!parsed.success) {
+    return Response.json({ error: "bad body" }, { status: 400 });
+  }
+
+  const resolved = await resolveQuestionId(jobId, parsed.data.itemId);
+  if (resolved?.kind !== "question") {
+    return Response.json({ error: "unknown item" }, { status: 404 });
+  }
+
+  const removed = await removeUserQuestion(user.id, jobId, resolved.text);
+  if (!removed.ok) {
+    const status = removed.reason === "not_yours" ? 403 : 404;
+    return Response.json({ error: removed.reason }, { status });
+  }
+
+  const view = await loadApplicationView(user.id, jobId);
+  if (!view) return Response.json({ error: "not found" }, { status: 404 });
+  return Response.json(view);
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -178,12 +224,22 @@ export async function PATCH(
       coverLetter: true,
       shortAnswers: true,
       shortAnswersReuse: true,
+      draftAuthors: true,
       applicationReview: true,
     },
   });
   if (!existing) return Response.json({ error: "not found" }, { status: 404 });
 
   const data: Prisma.JobInteractionUpdateInput = {};
+
+  // Text typed here is the person's, and clearing an item un-claims it: the
+  // words the stamp was about are gone. Toggling reuse says nothing about who
+  // wrote it, so it leaves the stamp alone.
+  const claim = (item: ApplicationItemRef, cleared: boolean) => {
+    data.draftAuthors = cleared
+      ? forgetDraftAuthor(existing, item)
+      : draftAuthorsPatch(existing, item, "user");
+  };
 
   // Rewriting an item settles whatever the review had open against it — the
   // objection was to text that no longer exists. Toggling reuse doesn't: the
@@ -205,6 +261,7 @@ export async function PATCH(
       if (next !== null && next !== existing.coverLetter) {
         data.coverLetterReuse = true;
       }
+      claim({ kind: "cover_letter" }, next === null);
     }
     if (reuse !== undefined) data.coverLetterReuse = reuse;
   } else {
@@ -245,6 +302,7 @@ export async function PATCH(
       }
       data.shortAnswers = answers;
       data.shortAnswersReuse = flags;
+      claim({ kind: "question", question }, trimmed.length === 0);
     }
     if (reuse !== undefined && idx >= 0) {
       flags[idx] = reuse;

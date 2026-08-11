@@ -22,6 +22,7 @@
 // Hank draft isn't reuse-eligible until the user opts it in) and re-baselines
 // proposedDrafts so a later panel edit diverges from what he actually wrote.
 
+import { JobInteractionStatus } from "@/generated/prisma/client";
 import type { RunContext, TurnEvent } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
 import {
@@ -73,8 +74,13 @@ type DraftApplicationOutcome = {
   answersCount: number;
   // "Acme" / "this company" — for the co-write opening.
   companyDisplay: string;
-  // Decider help-first notice (soft-hold override), surfaced once.
+  // Decider help-first notice (soft-hold override), surfaced once. Distinct
+  // from `note` below: `notice` is a heads-up about overriding something the
+  // user asked for, `note` is the reviewer's line about the finished writing.
   notice: string | null;
+  // The reviewer's one line to the user about what's on the page, written by
+  // the critic and printed verbatim. Null when nothing was reviewed this pass.
+  note: string | null;
   // What the recruiter-lens review concluded, when one ran this pass. Null when
   // nothing was drafted, so nothing was reviewed. The caller narrates it: a
   // review that finished with findings still open has to be SAID, or the draft
@@ -114,6 +120,21 @@ export async function* runDraftApplication(
   const { jobId } = args;
   let didWork = false;
   let review: ApplicationReview | null = null;
+  let note: string | null = null;
+
+  // Starting a pass is what separates the role being written from the ones
+  // queued behind it — both read SHORTLISTED otherwise, so nothing could tell
+  // "next up" from "on screen right now". It lives here rather than in
+  // work_on_job so both entries (the walkthrough job arm and draft_application)
+  // get it. Idempotent, and it only ever moves a row forward.
+  await prisma.jobInteraction.updateMany({
+    where: {
+      userId: args.userId,
+      jobId,
+      status: JobInteractionStatus.SHORTLISTED,
+    },
+    data: { status: JobInteractionStatus.APPLYING },
+  });
 
   // Step 4: ensure the application form is fetched. ensureApplicationForm
   // persists into Job.applicationQuestions; needsQuestionsRefresh gates it.
@@ -218,6 +239,7 @@ export async function* runDraftApplication(
       if (drafted.ok) {
         await persistApplicationAnswer(args.userId, jobId, {
           coverLetter: drafted.content,
+          author: "hank",
         });
         hasCoverLetter = true;
         draftedSomething = true;
@@ -257,6 +279,7 @@ export async function* runDraftApplication(
         await persistApplicationAnswer(args.userId, jobId, {
           question: qd.question,
           answer: drafted.content,
+          author: "hank",
         });
         yield { type: "refresh_viewed_state" };
       } else {
@@ -287,6 +310,7 @@ export async function* runDraftApplication(
       step = await critique.next();
     }
     review = await persistApplicationReview(args.userId, jobId, step.value);
+    note = step.value.note.trim() || null;
 
     const refreshed = await prisma.jobInteraction.findUnique({
       where: { userId_jobId: { userId: args.userId, jobId } },
@@ -310,6 +334,7 @@ export async function* runDraftApplication(
     answersCount: answers.length,
     companyDisplay,
     notice: decision?.notice ?? null,
+    note,
     review,
   };
 }

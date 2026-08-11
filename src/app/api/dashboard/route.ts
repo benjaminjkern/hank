@@ -26,6 +26,7 @@ export const dynamic = "force-dynamic";
 const ACTIVE = [
   JobInteractionStatus.SCANNED,
   JobInteractionStatus.SHORTLISTED,
+  JobInteractionStatus.APPLYING,
   JobInteractionStatus.APPLIED,
   JobInteractionStatus.RESPONDED,
   JobInteractionStatus.INTERVIEW_SCHEDULED,

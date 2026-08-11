@@ -89,14 +89,15 @@ export const draftApplicationQuestionTool: ToolDef<{
       );
     }
 
-    // Persisted reuse:false like any agent draft — the user supplied the angle
-    // via extraContext, but the words are still Hank's until they claim them.
+    // The user supplied the angle via extraContext, but the words are still
+    // Hank's until they claim them — so it stamps his name and stays out of the
+    // reuse corpus.
     const persisted = await persistApplicationAnswer(
       ctx.userId,
       jobId,
       isCover
-        ? { coverLetter: drafted.content }
-        : { question: resolved.text, answer: drafted.content },
+        ? { coverLetter: drafted.content, author: "hank" }
+        : { question: resolved.text, answer: drafted.content, author: "hank" },
     );
     if (!persisted.ok) {
       return toolError(

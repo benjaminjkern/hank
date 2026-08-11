@@ -159,7 +159,7 @@ A **procedure** ([procedures/registry/](../src/server/procedures/registry/), one
 | `preScan/` | metadata-only bucketing of NEW jobs, chunked | — | company arm; batch add |
 | `shortlist/` | seed-or-reshow (`runShortlist`): `loadShortlistJobsInput` → `shortlistJobs` → `seedBoardStances` → board on screen; the negotiation is chat + panel edits, ended by `commit_shortlist` ([flows.md](flows.md)) | — | company arm (`direction` forces a fresh seed) |
 | `reconsiderJob.ts` | revive an off-board role with a stance (enrich the body first if never read) | `update_shortlist_proposal` | board edit route |
-| `draftApplication/` | `ensureApplicationForm` → `applicationDecider` → `applicationDrafting` → `critiqueAndRevise` | the drafting tools | job arm |
+| `draftApplication/` | `ensureApplicationForm` → `applicationDecider` → `applicationDrafting` → `critiqueAndRevise`; also flips the row SHORTLISTED → APPLYING as the pass starts. `runReviewApplication` is the second entry — the critique loop alone, for writing that changed after a pass | the drafting tools; `review_application` | job arm |
 | `enrichCompanies/` | worker pool over the per-company chain (`enrichOne`: hunt `companyBasicInfo` → `commitHuntedUrl` → `runVerifyCompanyLogo`). Identity only — no scrape, no prescan, no company status. `runChecklistAdd` = create stubs → this batch | `enrich_companies` | the discovery commit, company-arm step 0a |
 | `scrapeJobsForCompany.ts` | gate → scrape + upsert + closure detection → prescan the delta → status | `scrape_jobs_for_company` | company-arm stale-board refresh |
 | `findCompanies/` | load profile + résumé + watchlist → `findCompanies` sub-agent → candidates | — | discovery arm |
