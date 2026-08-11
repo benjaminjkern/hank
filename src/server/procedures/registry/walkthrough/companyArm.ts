@@ -7,12 +7,17 @@
 // Every rung re-derives its position from the DB, so re-entering just lands on
 // the first thing that still needs doing.
 
-import { CompanyStatus, JobInteractionStatus } from "@/generated/prisma/client";
+import {
+  CompanyStatus,
+  JobEventType,
+  JobInteractionStatus,
+} from "@/generated/prisma/client";
 import { statusEvent, widgetEvent } from "@/server/agent/contracts";
 import type { TurnEvent } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
 import { markCompanyReady } from "@/server/entities/companies/markCompanyStatus";
 import { caughtUpCompany } from "@/server/entities/companies/setCompanyAside";
+import { roundStartedAt } from "@/server/entities/jobs/boardStance";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
 import { runPreScan } from "@/server/procedures/registry/preScan";
 import { runScan } from "@/server/procedures/registry/scan";
@@ -315,27 +320,42 @@ export async function* runCompanyArm(
     const who = c?.name ?? "this company";
     // The prescan/scan already recorded WHY each job was dropped, per job, on
     // its structured closeSummaryLabel. Summarize them so the user gets a
-    // specific, defensible reason ("they're sales, product, and recruiting
-    // roles") instead of a vague "none line up" — the generic version reads as
+    // specific, defensible account ("12 sales roles, 3 product roles, and 2 in
+    // Europe") instead of a vague "none line up" — the generic version reads as
     // hand-wavy and invites "but surely they have something?" pushback.
-    const closed = await prisma.jobInteraction.findMany({
-      where: {
-        userId: args.userId,
-        job: { companyId },
-        status: JobInteractionStatus.CLOSED,
-        closeSummaryLabel: { not: null },
-      },
-      select: { closeSummaryLabel: true },
-    });
+    //
+    // Scoped to THIS round, the same boundary the board's filtered tail uses.
+    // Counting every close the company ever had lets an old round's dominant
+    // reason keep voting, and inflates the "N open roles" number past what this
+    // pass actually looked at.
+    const roundStart = await roundStartedAt(args.userId, companyId);
+    const closed = roundStart
+      ? await prisma.jobInteraction.findMany({
+          where: {
+            userId: args.userId,
+            job: { companyId },
+            status: JobInteractionStatus.CLOSED,
+            events: {
+              some: {
+                type: JobEventType.CLOSED,
+                occurredAt: { gte: roundStart },
+              },
+            },
+          },
+          select: { closeSummaryLabel: true },
+        })
+      : [];
     const detail = summarizeCloseRationales(
       closed.flatMap((row) => {
         const label = row.closeSummaryLabel?.trim();
         return label ? [label] : [];
       }),
     );
-    const reasoning = detail
-      ? `I went through ${who}'s ${skippedCount} open role${skippedCount === 1 ? "" : "s"}, but none line up with what you're looking for right now — they're ${detail}. I'll keep ${who} on your list and check back next time. Just say the word if you want to reopen any of those or close ${who} out.`
-      : `I went through ${who}'s open roles, but none line up with what you're looking for right now. I'll keep ${who} on your list and check back next time. Just say the word if you want to reopen any of those or close ${who} out.`;
+    // Only claim a number when it's the number this pass actually went through.
+    const reasoning =
+      detail && closed.length > 0
+        ? `I went through ${who}'s ${closed.length} open role${closed.length === 1 ? "" : "s"} and none line up with what you're looking for right now — ${detail}. I'll keep ${who} on your list and check back next time. Just say the word if you want to reopen any of those or close ${who} out.`
+        : `I went through ${who}'s open roles, but none line up with what you're looking for right now. I'll keep ${who} on your list and check back next time. Just say the word if you want to reopen any of those or close ${who} out.`;
     yield { type: "text", text: reasoning };
     // Walkthrough wrap: land the right engagement tail (IN_FLIGHT/IN_PROCESS if
     // apps went out this round, else CAUGHT_UP) instead of forcing CAUGHT_UP.

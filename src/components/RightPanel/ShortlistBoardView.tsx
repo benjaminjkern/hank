@@ -1,14 +1,21 @@
 "use client";
 
-// The shortlist board — every role STILL being considered at one company, with
-// the deciding pass's one-line reason per row. Closed, delisted and applied-to
-// roles are not here: they're decided, the user watched them go, and the
-// company page's never-pursued list is where they live. Every row still open to
-// a decision carries the same three marks (Pick / Maybe / Pass), pre-selected
-// to what Hank proposed, so agreeing costs no clicks; clicking the current mark
-// clears it to undecided. A row the user re-marks KEEPS its position, flagged
-// pending, until their next chat message relays it — rows never move out from
-// under the cursor. Nothing is final until Hank commits the board in chat.
+// The shortlist board — one company's round, split by what COMMITTING it does:
+// the live rows on top, and a collapsed "Closing these" pile holding every role
+// the commit would close (marked pass, or ruled out by the automatic filtering
+// before the shortlist ever saw it).
+//
+// Every row carries the SAME three marks (Shortlist / Defer / Close),
+// pre-selected to where it stands — so agreeing with Hank costs no clicks, and
+// a filtered row shows Close already set. That's why there's no separate
+// "actually, consider this": marking a filtered row Shortlist or Defer un-closes
+// it, and clicking its set Close puts it back on the table undecided.
+//
+// A row the user re-marks KEEPS its position, flagged pending, until their next
+// chat message relays it — including a revived one, which stays in the pile it
+// came from. Rows never move out from under the cursor. Roles decided in an
+// EARLIER round aren't here at all; the company page's never-pursued list is
+// where those live. Nothing is final until Hank commits the board in chat.
 
 import { useState } from "react";
 import styled from "styled-components";
@@ -104,10 +111,9 @@ const TierCount = styled.span`
   font-family: ${({ theme }) => theme.font.mono};
 `;
 
-// The card highlights on hover but is NOT itself a click target — navigation is
-// the explicit "View role" button in the footer. Marking a row and opening it
-// are different intents, and burying one inside the other's hit area put three
-// buttons inside a fourth.
+// Not a click target and not hover-lit: navigation is the explicit "View role"
+// button in the footer, and the marks are their own buttons. A card that lights
+// up under the cursor promises a click that isn't there.
 const RowCard = styled.div<{ $pending?: boolean }>`
   display: flex;
   flex-direction: column;
@@ -119,10 +125,6 @@ const RowCard = styled.div<{ $pending?: boolean }>`
   border-radius: ${({ theme }) => theme.radius.md};
   background: ${({ theme }) => theme.colors.bgPanel};
   min-width: 0;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.bgHover};
-  }
 `;
 
 const RowTop = styled.div`
@@ -151,28 +153,6 @@ const RowReason = styled.div`
   font-size: 12px;
   color: ${({ theme }) => theme.colors.textMuted};
   font-style: italic;
-`;
-
-// Deliberately a labelled button, not a fourth mark: this row is out of the
-// pool, so the action is un-closing it — "pass" on an already-closed role would
-// be a no-op button sitting next to two live ones.
-const ReviveButton = styled.button`
-  font-size: 11px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  color: ${({ theme }) => theme.colors.textMuted};
-  background: transparent;
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    color: ${({ theme }) => theme.colors.accent};
-    border-color: ${({ theme }) => theme.colors.accent};
-  }
-  &:disabled {
-    cursor: default;
-    opacity: 0.5;
-  }
 `;
 
 const StanceRow = styled.div`
@@ -234,26 +214,29 @@ const ScanTag = styled.span`
   color: ${({ theme }) => theme.colors.textSubtle};
 `;
 
-// The screen has two groups, not one per tier. `consider` is everything the
-// shortlist pass actually ranked: those rows arrive with their mark
-// pre-selected, so a heading per verdict only restated what the marks already
-// say. `aside` is the tail nobody ranked — auto-filtered, unread, or parked —
-// which is worth auditing but not worth the vertical space by default.
-type BoardGroup = "consider" | "aside";
+// The screen has two groups, not one per tier, and the line between them is
+// what COMMITTING does: `keep` survives it, `discard` is closed by it. Rows
+// arrive with their mark pre-selected, so a heading per verdict only restated
+// what the marks already say.
+//
+// That's why "not read yet" and "on hold" sit with the live rows despite nobody
+// having ranked them — they survive the commit, so filing them under a heading
+// about closing would be a lie about what happens next.
+type BoardGroup = "keep" | "discard";
 
 const GROUP_OF_TIER: Record<ShortlistBoardTier, BoardGroup> = {
-  picks: "consider",
-  borderline: "consider",
-  pass: "consider",
-  undecided: "consider",
-  notReadYet: "aside",
-  onHold: "aside",
-  filteredThisRound: "aside",
+  picks: "keep",
+  borderline: "keep",
+  undecided: "keep",
+  notReadYet: "keep",
+  onHold: "keep",
+  pass: "discard",
+  filteredThisRound: "discard",
 };
 
-const ASIDE_LABEL = "Probably not worth a look";
-const ASIDE_HINT =
-  "Ruled out before the shortlist, not read yet, or parked on hold";
+const DISCARD_LABEL = "Closing these";
+const DISCARD_HINT =
+  "Marked pass, or ruled out before the shortlist. Committing closes them — mark one Shortlist or Defer to pull it back.";
 
 // 16px, stroke-only, inheriting the button's color so the $active accent
 // applies for free — same convention as ThemeToggle's icons. `aria-hidden`
@@ -335,7 +318,24 @@ function stanceOf(
   if (tier === "picks") return "pick";
   if (tier === "borderline") return "borderline";
   if (tier === "pass") return "pass";
+  // A row the filtering closed is already a close — showing Close selected is
+  // what makes the three marks say the same thing on every card, and it's why
+  // there's no separate revive button: the other two marks un-close it.
+  if (tier === "filteredThisRound") return "pass";
   return null;
+}
+
+// What the mark does from here, said in the row's own terms. On a row the
+// filtering closed, the already-set Close isn't a mark the user made — so
+// "click again to leave it undecided" would describe undoing something they
+// never did. What they'd actually be doing is overruling the filter.
+function markTitle(label: string, active: boolean, filtered: boolean): string {
+  if (!active) {
+    return filtered ? `${label} — this puts it back on the table` : label;
+  }
+  return filtered
+    ? "Ruled out before the shortlist — click to put it back on the table"
+    : `${label} — click again to leave it undecided`;
 }
 
 type PlacedRow = { tier: ShortlistBoardTier; row: ShortlistBoardRow };
@@ -351,14 +351,17 @@ function BoardRow({
 }) {
   const viewJob = useChatStore((s) => s.viewJob);
   const editShortlistBoard = useChatStore((s) => s.editShortlistBoard);
-  const reviveFilteredJob = useChatStore((s) => s.reviveFilteredJob);
   const readOnly = useChatStore((s) => s.impersonateSessionId !== null);
   const [busy, setBusy] = useState(false);
 
   const stance = stanceOf(row, tier);
+  const filtered = tier === "filteredThisRound";
 
   // Clicking the mark a row already carries clears it — that's the un-select,
-  // and it lands the row in Undecided rather than forcing a choice.
+  // and it lands the row in Undecided rather than forcing a choice. On a
+  // filtered row that gesture reads as "actually, put this back on the table":
+  // Close is the mark it carries, so clicking it un-closes to undecided, and
+  // the server revives the row whichever of the three is pressed.
   async function mark(next: StanceValue) {
     if (busy) return;
     setBusy(true);
@@ -368,16 +371,6 @@ function BoardRow({
         row.jobId,
         next === stance ? "undecided" : next,
       );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function revive() {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await reviveFilteredJob(companyId, row.jobId);
     } finally {
       setBusy(false);
     }
@@ -398,13 +391,8 @@ function BoardRow({
       )}
       {row.scanDissent && <ScanTag>⚠ {row.scanDissent}</ScanTag>}
       <StanceRow>
-        {!readOnly && row.revivable && (
-          <ReviveButton disabled={busy} onClick={() => void revive()}>
-            Actually, consider this
-          </ReviveButton>
-        )}
         {!readOnly &&
-          row.stanceable &&
+          row.markable &&
           STANCES.map((s) => (
             <StanceButton
               key={s.value}
@@ -415,11 +403,7 @@ function BoardRow({
               // mark does now that the label isn't on screen.
               aria-label={s.label}
               aria-pressed={stance === s.value}
-              title={
-                stance === s.value
-                  ? `${s.label} — click again to leave it undecided`
-                  : s.label
-              }
+              title={markTitle(s.label, stance === s.value, filtered)}
               onClick={() => void mark(s.value)}
             >
               <s.Icon />
@@ -434,7 +418,7 @@ function BoardRow({
   );
 }
 
-function AsideGroup({
+function DiscardGroup({
   companyId,
   placed,
 }: {
@@ -446,9 +430,9 @@ function AsideGroup({
     <TierSection>
       <TierHeader onClick={() => setOpen((o) => !o)}>
         <TierCaret $open={open}>▶</TierCaret>
-        <TierTitle>{ASIDE_LABEL}</TierTitle>
+        <TierTitle>{DISCARD_LABEL}</TierTitle>
         <TierCount>{placed.length}</TierCount>
-        {open && <ScanTag>— {ASIDE_HINT}</ScanTag>}
+        {open && <ScanTag>— {DISCARD_HINT}</ScanTag>}
       </TierHeader>
       {open &&
         placed.map(({ tier, row }) => (
@@ -471,10 +455,10 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
 
   // The server's tier order IS the render order within each group, so
   // flattening keeps picks ahead of borderline ahead of pass.
-  const consider: PlacedRow[] = [];
-  const aside: PlacedRow[] = [];
+  const keep: PlacedRow[] = [];
+  const discard: PlacedRow[] = [];
   for (const { tier, rows } of board.tiers) {
-    const bucket = GROUP_OF_TIER[tier] === "consider" ? consider : aside;
+    const bucket = GROUP_OF_TIER[tier] === "keep" ? keep : discard;
     for (const row of rows) bucket.push({ tier, row });
   }
 
@@ -504,7 +488,7 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
         )}
       </Header>
       <TierSection>
-        {consider.map(({ tier, row }) => (
+        {keep.map(({ tier, row }) => (
           <BoardRow
             key={row.jobId}
             companyId={board.companyId}
@@ -513,8 +497,8 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
           />
         ))}
       </TierSection>
-      {aside.length > 0 && (
-        <AsideGroup companyId={board.companyId} placed={aside} />
+      {discard.length > 0 && (
+        <DiscardGroup companyId={board.companyId} placed={discard} />
       )}
     </Root>
   );

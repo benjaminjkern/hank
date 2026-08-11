@@ -44,15 +44,18 @@ export type ShortlistBoardTier =
   // filtering is auditable while the round is still open:
   | "filteredThisRound";
 
-// Render order (also the collapse order — the UI opens the decision groups and
-// collapses the two tails).
+// Render order. The last two are the ones the panel collapses, and they're
+// adjacent on purpose: together they are exactly what committing this board
+// CLOSES. Everything above survives the commit in some form, which is why
+// "not read yet" and "on hold" sit with the live groups rather than in the tail
+// — they're still in play, they just haven't been ranked.
 const SHORTLIST_BOARD_TIERS: ShortlistBoardTier[] = [
   "picks",
   "borderline",
-  "pass",
   "undecided",
   "notReadYet",
   "onHold",
+  "pass",
   "filteredThisRound",
 ];
 
@@ -82,11 +85,12 @@ export type ShortlistBoardRow = {
   // The user re-marked this row and hasn't sent a message yet, so it's drawn
   // under its old group with the new mark selected.
   pending: boolean;
-  // Whether the panel offers the stance buttons on this row.
-  stanceable: boolean;
-  // Whether the panel offers "actually, consider this" — filtered rows only,
-  // and only while the round is open.
-  revivable: boolean;
+  // Whether the panel offers the three marks on this row. Wider than
+  // `isStanceable`, deliberately: a row the filtering closed can be marked too,
+  // and the mark revives it on the way (see runReconsiderJob). The entity
+  // predicate stays narrow because a CLOSED row genuinely cannot hold a stance
+  // until something un-closes it.
+  markable: boolean;
 };
 
 export type ShortlistBoardTierRows = {
@@ -254,11 +258,12 @@ export async function loadShortlistBoard(
       pending,
       // Only while a proposal is open: a committed board is a record, not a
       // working surface. Changing a decided role is a conversation with Hank
-      // ("actually, close that one"), not a click here.
-      stanceable: open && isStanceable(r.status),
-      // The filtered tail is correctable for exactly as long as the round is —
-      // committing closes that door with the rest of the board.
-      revivable: open && r.status === JobInteractionStatus.CLOSED,
+      // ("actually, close that one"), not a click here. This round's filtered
+      // rows are included — correcting the filtering is the point of showing
+      // it, and committing closes that door with the rest of the board.
+      markable:
+        open &&
+        (isStanceable(r.status) || r.status === JobInteractionStatus.CLOSED),
     });
     byTier.set(tier, list);
   }
