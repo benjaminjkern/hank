@@ -35,6 +35,7 @@ import { findCompaniesTool } from "@/server/agent/tools/registry/findCompanies";
 import { showWhatsNextTool } from "@/server/agent/tools/registry/showWhatsNext";
 import { workOnJobTool } from "@/server/agent/tools/registry/workOnJob";
 import { showCompanyTool } from "@/server/agent/tools/registry/showCompany";
+import { showDiscoveryTool } from "@/server/agent/tools/registry/showDiscovery";
 import { showJobTool } from "@/server/agent/tools/registry/showJob";
 import { showOpportunityTool } from "@/server/agent/tools/registry/showOpportunity";
 import { showShortlistBoardTool } from "@/server/agent/tools/registry/showShortlistBoard";
@@ -114,6 +115,7 @@ const HANK_TOOLS: AnyToolDef[] = [
   // drop a clickable chip in chat, without starting any work or changing state.
   // The "just look at this" counterparts to company_walkthrough / work_on_job.
   showCompanyTool as AnyToolDef,
+  showDiscoveryTool as AnyToolDef,
   showJobTool as AnyToolDef,
   showOpportunityTool as AnyToolDef,
   // The shortlist-board trio. show_ is the display + full read (all tiers,

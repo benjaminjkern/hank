@@ -13,23 +13,37 @@ import { escapeHtml, unescapeHtml } from "@/utils/html";
 
 // The parser only produces text and focus-ref pieces — status text is otherwise
 // plain. Narrowing here keeps the render-side switch exhaustive.
-export type FocusRefKind = "company" | "job" | "opportunity";
+//
+// `discovery` is the one destination naming no entity — it's the list of
+// companies the last search proposed, of which a user has exactly one — so it
+// carries a label and no id.
+export type FocusRefKind = "company" | "job" | "opportunity" | "discovery";
 
-type FocusRefTokenPiece =
+export type FocusRefTokenPiece =
   | { kind: "text"; text: string }
-  | { kind: "focus-ref"; refKind: FocusRefKind; id: string; label: string };
+  | {
+      kind: "focus-ref";
+      refKind: "company" | "job" | "opportunity";
+      id: string;
+      label: string;
+    }
+  | { kind: "focus-ref"; refKind: "discovery"; label: string };
 
 // id is a cuid (`c…` + alphanumeric); match conservatively so well-formed ids
-// parse and arbitrary user-typed `<focus-ref/>` doesn't.
+// parse and arbitrary user-typed `<focus-ref/>` doesn't. The attribute is
+// OPTIONAL because an id-less kind omits it entirely rather than emitting an
+// empty one — `id=""` would read as an id we failed to fill in.
 const FOCUS_REF_PATTERN =
-  /<focus-ref\s+refKind="(company|job|opportunity)"\s+id="([A-Za-z0-9_-]+)"\s+label="([^"]*)"\s*\/>/g;
+  /<focus-ref\s+refKind="(company|job|opportunity|discovery)"(?:\s+id="([A-Za-z0-9_-]+)")?\s+label="([^"]*)"\s*\/>/g;
 
 export function formatFocusRefToken(
   refKind: FocusRefKind,
-  id: string,
+  // null for a kind with no entity behind it — today that's `discovery` alone.
+  id: string | null,
   label: string,
 ): string {
-  return `<focus-ref refKind="${refKind}" id="${id}" label="${escapeHtml(label)}"/>`;
+  const idAttr = id === null ? "" : ` id="${id}"`;
+  return `<focus-ref refKind="${refKind}"${idAttr} label="${escapeHtml(label)}"/>`;
 }
 
 // Split a string around `<focus-ref/>` tokens into a flat piece list of text
@@ -49,12 +63,20 @@ export function splitFocusRefTokens(text: string): FocusRefTokenPiece[] {
     if (start > lastIdx) {
       out.push({ kind: "text", text: text.slice(lastIdx, start) });
     }
-    out.push({
-      kind: "focus-ref",
-      refKind: refKind as FocusRefKind,
-      id,
-      label: unescapeHtml(encodedLabel),
-    });
+    out.push(
+      refKind === "discovery"
+        ? {
+            kind: "focus-ref",
+            refKind: "discovery",
+            label: unescapeHtml(encodedLabel),
+          }
+        : {
+            kind: "focus-ref",
+            refKind: refKind as "company" | "job" | "opportunity",
+            id,
+            label: unescapeHtml(encodedLabel),
+          },
+    );
     lastIdx = start + whole.length;
   }
   if (lastIdx < text.length) {

@@ -28,3 +28,13 @@ export function extractWidgetMarker(
     return null;
   }
 }
+
+// The same message with the marker removed, leaving the visible label the user
+// actually saw on the button ("[Add companies to watchlist]"). What replays to
+// the model, so a click reads as a click instead of teaching him the widget
+// kinds and choice names — internal vocabulary he must never speak back (see
+// AGENTS.md → "Translate, don't parrot"). Dispatch always parses the LIVE
+// message, so stripping at replay time can't affect routing.
+export function stripWidgetMarker(message: string): string {
+  return message.replace(WIDGET_MARKER_RE, "").trimStart();
+}

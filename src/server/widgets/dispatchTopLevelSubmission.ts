@@ -39,6 +39,10 @@ import {
 
 import { buildPanelEditBlocks } from "./panelEditRelay";
 
+// "Find more" says they want another round, not what it should contain.
+const FIND_MORE_NUDGE =
+  "(They just finished adding companies and want another round. Ask what to look for this time — a different sector, stage, or angle from the batch they just saw. Don't search yet.)";
+
 export type TopLevelSubmissionArgs = RunContext & {
   sessionId: string;
   userMessage: string;
@@ -60,7 +64,12 @@ export type TopLevelSubmissionOutcome =
   // A mutation committed and consumed the message. Nothing is typed and no
   // destination was named, so the caller falls through to its normal
   // no-message path.
-  | { kind: "consumed" };
+  | { kind: "consumed" }
+  // The click's whole meaning was "ask me about this" — there's no destination
+  // and no text to answer, so Hank opens the next turn on this instruction
+  // rather than the deterministic layer taking a silent entry (which, with
+  // nothing to run on, would just re-render what they clicked out of).
+  | { kind: "ask"; openingNudge: string };
 
 export async function* dispatchTopLevelSubmission(
   args: TopLevelSubmissionArgs,
@@ -85,9 +94,10 @@ export async function* dispatchTopLevelSubmission(
     return { kind: "terminal" };
   }
 
-  // "Find more" / "Done adding" after a finished add. More re-enters the search
-  // with no direction (the watchlist just grew, so a fresh run reads
-  // differently); done falls through to what's next.
+  // "Find more" / "Done adding" after a finished add. More asks what to look for
+  // this time before searching — they've just seen a batch, so "more" with no
+  // steer returns names adjacent to the ones they passed on; done falls through
+  // to what's next.
   const addMoreSubmission = parseAddMoreCompaniesSubmission(userMessage);
   if (addMoreSubmission) {
     await appendUserMessage(sessionId, userMessage, attachmentIds, {
@@ -95,7 +105,7 @@ export async function* dispatchTopLevelSubmission(
       leadingBlocks: await buildPanelEditBlocks(userId),
     });
     if (addMoreSubmission.answer === "yes") {
-      return { kind: "enter", entryTarget: { kind: "discovery" } };
+      return { kind: "ask", openingNudge: FIND_MORE_NUDGE };
     }
     // Done adding is a topic boundary — the same event the end of a company is,
     // so it gets the same wrap. Gated on the round having decided something:
@@ -122,6 +132,9 @@ export async function* dispatchTopLevelSubmission(
       sessionId,
       submission: pickerSubmission,
     });
+    if (dispatch.kind === "ask") {
+      return { kind: "ask", openingNudge: dispatch.openingNudge };
+    }
     yield* narrateStatus(sessionId, dispatch.statusText, runId);
     yield* yieldUiEvents(
       (await buildShowEvents(userId, showTargetFor(dispatch.entryTarget)))

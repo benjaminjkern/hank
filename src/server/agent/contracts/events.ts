@@ -177,6 +177,13 @@ export type ChatTurnRunner = (
     // entries, where the runner takes the target from the handoff tool the agent
     // called instead. See EntryTarget.
     entryTarget?: EntryTarget;
+    // A synthetic first user turn for a turn nothing else opens: the user
+    // clicked something whose whole meaning is "ask me about this", so there's
+    // no text to answer and no entity to dispatch on. Setting it makes the turn
+    // Hank's (the deterministic layer would otherwise take a silent entry and
+    // find nothing to run). Parenthesized so he reads it as an instruction
+    // rather than words to echo, and never persisted.
+    openingNudge?: string;
   },
 ) => AsyncGenerator<TurnEvent>;
 

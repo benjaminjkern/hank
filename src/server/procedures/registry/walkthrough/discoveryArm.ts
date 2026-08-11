@@ -1,3 +1,4 @@
+import { formatFocusRefToken } from "@/lib/focusRefToken";
 import { yieldUiEvents } from "@/server/agent/contracts";
 import type { TurnEvent } from "@/server/agent/contracts";
 import { runCommitDiscovery } from "@/server/procedures/registry/commitDiscovery";
@@ -43,9 +44,14 @@ export async function* runDiscoveryArm(
 
   // The panel is the surface, so the only chat line is the pointer to it. The
   // names themselves are on screen and Hank is told not to re-list them.
+  //
+  // That pointer is a CHIP, not plain words: the list hangs off no entity and
+  // sits in no menu, so once the user navigates the panel elsewhere this line in
+  // their scrollback is the way back to it.
+  const count = `${r.candidates.length} ${r.candidates.length === 1 ? "company" : "companies"}`;
   yield {
     type: "text",
-    text: `Put ${r.candidates.length} ${r.candidates.length === 1 ? "company" : "companies"} on the right — they're all set to add, so uncheck any you don't want and send. Tell me what's off about them and I'll look again instead.`,
+    text: `Put ${formatFocusRefToken("discovery", null, count)} on the right — they're all set to add, so uncheck any you don't want and send. Tell me what's off about them and I'll look again instead.`,
   };
   yield* yieldUiEvents((await buildDiscoveryEvents(args.userId)).events);
   return { wrappedUp: false };

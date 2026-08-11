@@ -61,6 +61,7 @@ export function Breadcrumbs({
   documents,
   documentsSubPage,
   analytics,
+  discovery,
   shortlistBoard,
   jobId,
   application,
@@ -81,6 +82,8 @@ export function Breadcrumbs({
   documentsSubPage?: DocumentsSubPage;
   // True for the analytics view: `Dashboard / Analytics`.
   analytics?: boolean;
+  // True for the discovery view: `Dashboard / Companies to add`.
+  discovery?: boolean;
   // Company whose shortlist board is showing: `Dashboard / <Company> / Shortlist`.
   shortlistBoard?: CompanyCrumb;
   // The job an application page belongs to, so its crumb links back to the role.
@@ -151,6 +154,19 @@ export function Breadcrumbs({
         ) : (
           <Current>Documents</Current>
         )}
+      </Nav>
+    );
+  }
+
+  // Discovery: `Dashboard / Companies to add`. The list hangs off no entity, so
+  // the Dashboard crumb is the only way out of this view — without it the panel
+  // has no exit at all.
+  if (discovery) {
+    return (
+      <Nav aria-label="Breadcrumb">
+        <Crumb onClick={() => viewDashboard()}>Dashboard</Crumb>
+        <Sep>/</Sep>
+        <Current>Companies to add</Current>
       </Nav>
     );
   }
