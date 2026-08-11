@@ -240,15 +240,6 @@ async function fetchAllIcims(origin: string): Promise<ScrapeResult> {
 
 export const icims: AtsProviderModule = {
   provider: "icims",
-  // iCIMS apply/classic-board URLs are on *.icims.com (the per-job apply_url is
-  // careers-{co}.icims.com/jobs/{id}/login). Recognizing the host keeps the
-  // diligence guard from false-flagging `unsupported` — iCIMS is intentionally
-  // NOT questions-capable (login-gated apply). The Jibe API board URL itself is
-  // on a custom domain and won't host-match here (it's detected by ICIMS_API_RE).
-  hostFragments: ["icims.com"],
-  // The apply flow redirects to a login-gated careers-{co}.icims.com page — no
-  // public questions endpoint. The walkthrough hands off to the manual path.
-  supportsQuestions: false,
   detect(url) {
     if (!ICIMS_API_RE.test(url)) return null;
     // Canonical iCIMS (Jibe) board URL — `{origin}/api/jobs`. The hunter stores

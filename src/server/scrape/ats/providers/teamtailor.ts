@@ -317,8 +317,6 @@ function extractTeamtailorQuestionType(blockHtml: string): string | undefined {
 
 export const teamtailor: AtsProviderModule = {
   provider: "teamtailor",
-  hostFragments: ["teamtailor.com"],
-  supportsQuestions: true,
   detect(url) {
     const m = url.match(TEAMTAILOR_RE);
     if (!m) return null;

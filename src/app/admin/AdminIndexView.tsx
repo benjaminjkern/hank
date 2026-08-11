@@ -9,6 +9,7 @@ type Props = {
   todayCostLabel: string;
   userCount: number;
   runsLast24h: number;
+  boardReaders: number;
 };
 
 const Page = styled.div`
@@ -100,6 +101,7 @@ export function AdminIndexView({
   todayCostLabel,
   userCount,
   runsLast24h,
+  boardReaders,
 }: Props) {
   return (
     <Page>
@@ -150,6 +152,18 @@ export function AdminIndexView({
             <CardNumber $emphasized={runsLast24h > 0}>
               {runsLast24h}
               <CardUnit>last 24h</CardUnit>
+            </CardNumber>
+          </CardLink>
+          <CardLink href="/admin/board-readers">
+            <CardTitle>Board readers</CardTitle>
+            <CardHint>
+              Boards no wired scraper recognizes, grouped by board software.
+              Several companies behind one family means it&apos;s earned a real
+              provider file.
+            </CardHint>
+            <CardNumber $emphasized={boardReaders > 0}>
+              {boardReaders}
+              <CardUnit>learned</CardUnit>
             </CardNumber>
           </CardLink>
           <CardLink href="/admin/users">

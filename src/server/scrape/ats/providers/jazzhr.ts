@@ -275,8 +275,6 @@ async function fetchJazzHRQuestions(
 
 export const jazzhr: AtsProviderModule = {
   provider: "jazzhr",
-  hostFragments: ["applytojob.com"],
-  supportsQuestions: true,
   detect(url) {
     const m = url.match(JAZZHR_RE);
     if (!m) return null;

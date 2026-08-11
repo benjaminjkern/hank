@@ -381,8 +381,6 @@ async function fetchWorkdayQuestions(
 
 export const workday: AtsProviderModule = {
   provider: "workday",
-  hostFragments: ["myworkdayjobs.com"],
-  supportsQuestions: true,
   detect(url) {
     const m = url.match(WORKDAY_RE);
     if (!m) return null;

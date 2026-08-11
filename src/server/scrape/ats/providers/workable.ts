@@ -203,8 +203,6 @@ async function fetchWorkableQuestions(
 
 export const workable: AtsProviderModule = {
   provider: "workable",
-  hostFragments: ["workable.com"],
-  supportsQuestions: true,
   detect(url) {
     const m = url.match(WORKABLE_RE) ?? url.match(WORKABLE_SUB_RE);
     if (!m) return null;

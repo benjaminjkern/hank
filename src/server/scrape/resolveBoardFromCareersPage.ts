@@ -1,5 +1,11 @@
 // Last-resort board discovery: given a company's careers page (or homepage),
-// find the real ATS board hiding behind it.
+// find a way to read the jobs behind it. Three strategies, cheapest first —
+// two named-ATS resolutions, then the generic probe.
+//
+// This is the ONE place the generic probe is reached from the hunt path, and
+// deliberately so: it runs once, on a detect miss, whereas `probeAtsBoards`
+// fans `testScrape` across ~24 slug candidates and paying ~25s of speculative
+// discovery per candidate would multiply catastrophically.
 //
 // Two enterprise ATSes can't be reached by slug-guessing or host-matching, so
 // neither `detectAts` nor `probeAtsBoards` can find them — the only path is to
@@ -28,25 +34,27 @@
 import { assertPublicUrl } from "@/server/platform/net/assertPublicUrl";
 
 import { extractWorkdayBoardUrlFromHtml } from "./ats";
+import { MIN_REAL_JOBS } from "./ats/shared";
+import { probeGenericBoard } from "./generic/genericProbe";
 import { scrapeFetchSignal } from "./scrapeSignal";
 
 import { testScrape } from "./index";
 
-import type { AtsProvider } from "./types";
+import type { ScrapeSource } from "./types";
 
 // Branded careers wrappers reject obvious bot UAs (403/406). We only read HTML
 // to locate the board URL — no auth, no writes.
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 const FETCH_TIMEOUT_MS = 20_000;
-// A board with one "Open Application" template entry isn't a real board.
-const MIN_REAL_JOBS = 2;
 // Cap the iCIMS origin fan-out — the page can carry a lot of hrefs.
 const MAX_ICIMS_ORIGINS = 6;
 
 export type ResolvedBoard = {
   boardUrl: string;
-  provider: AtsProvider;
+  // "recipe" when the generic probe worked the board out rather than a named
+  // ATS resolving it — the URL is just as usable, it's read differently.
+  provider: ScrapeSource;
   jobCount: number;
   companyName: string;
   sampleTitles: string[];
@@ -91,9 +99,26 @@ export async function resolveBoardFromCareersPage(
     if (verified) return { ok: true, board: verified };
   }
 
+  // Nothing named matched — try to work the board out from first principles.
+  // The probe verifies its own result by running the recipe it inferred, so a
+  // hit here is as real as a named-ATS one.
+  const probed = await probeGenericBoard(url);
+  if (probed.ok && probed.data.jobs.length >= MIN_REAL_JOBS) {
+    return {
+      ok: true,
+      board: {
+        boardUrl: url,
+        provider: "recipe",
+        jobCount: probed.data.jobs.length,
+        companyName: probed.data.companyName,
+        sampleTitles: probed.data.jobs.slice(0, 5).map((j) => j.title),
+      },
+    };
+  }
+
   return {
     ok: false,
-    reason: `no Workday board URL or iCIMS jobs API found via ${url}. The company may be on an unsupported ATS, or the board is injected by client-side JS that isn't in the static HTML — try a deeper /careers or /jobs page, or web_search "<Company> careers"`,
+    reason: `nothing readable found via ${url}: no Workday board URL, no iCIMS jobs API, and the generic probe struck out (tried ${probed.ok ? "everything" : probed.tried.join(", ")}). The board may be injected by client-side JS that isn't in the static HTML — try a deeper /careers or /jobs page, or web_search "<Company> careers"`,
   };
 }
 

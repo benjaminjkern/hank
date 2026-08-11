@@ -165,11 +165,6 @@ async function fetchAllRippling(slug: string): Promise<ScrapeResult> {
 
 export const rippling: AtsProviderModule = {
   provider: "rippling",
-  hostFragments: ["ats.rippling.com"],
-  // Custom application questions live in the apply-form config behind the SPA;
-  // the detail exposes only an eeocQuestionnaireEnabled flag and no public
-  // questions endpoint, so questions are unsupported.
-  supportsQuestions: false,
   detect(url) {
     const m = url.match(RIPPLING_RE);
     if (!m) return null;

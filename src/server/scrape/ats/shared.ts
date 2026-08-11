@@ -38,18 +38,10 @@ export type AtsHandler =
 export type QuestionsHints = { greenhouseSlug?: string | null };
 
 // The contract every ATS provider module implements. index.ts assembles the
-// ordered registry from these and derives detectAts / detectAtsHostHint /
-// providerSupportsApplicationQuestions / fetchApplicationQuestions from it.
+// ordered registry from these and derives detectAts + fetchApplicationQuestions
+// from it.
 export type AtsProviderModule = {
   provider: AtsProvider;
-  // Loose hostname fragments for detectAtsHostHint (the "this looks like ATS X"
-  // heuristic). Empty for the single-tenant SPA providers we don't host-hint.
-  hostFragments: string[];
-  // Whether the apply-form questions are genuinely scrapeable — the gate the
-  // diligence layer reads. Independent of
-  // whether fetchQuestions is wired: a provider can be login/SPA-gated (false)
-  // yet still recognized for list+detail scraping.
-  supportsQuestions: boolean;
   // Strict board detection for scraping. Returns an AtsHandler or null.
   detect: (url: string) => AtsHandler | null;
   // Questions routing. matchesQuestions may be broader than detect (e.g.
@@ -61,6 +53,14 @@ export type AtsProviderModule = {
     hints: QuestionsHints,
   ) => Promise<ApplicationQuestionsEnvelope>;
 };
+
+// How many real postings a URL must yield before it counts as a working board.
+// One entry is almost always an "Open Application" / "Don't see your role?"
+// template rather than a board. Every discovery path shares this number — the
+// slug probe, the careers-page resolver, the hunter's own success criterion,
+// and the generic probe — so they can't drift into disagreeing about what
+// "works" means.
+export const MIN_REAL_JOBS = 2;
 
 // -- shared parsing helpers ----------------------------------------------
 

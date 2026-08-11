@@ -303,8 +303,6 @@ function findGreenhouseField(
 
 export const greenhouse: AtsProviderModule = {
   provider: "greenhouse",
-  hostFragments: ["greenhouse.io"],
-  supportsQuestions: true,
   detect(url) {
     const m = url.match(GREENHOUSE_RE) ?? url.match(GREENHOUSE_API_RE);
     if (!m) return null;

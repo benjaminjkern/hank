@@ -19,6 +19,8 @@
 // resolveBoardFromCareersPage is for (reached by running test_scrape on the
 // company's careers page). Same for iCIMS' per-company careers domain.
 
+import { MIN_REAL_JOBS } from "./ats/shared";
+
 import { testScrape } from "./index";
 
 import type { AtsProvider } from "./types";
@@ -139,9 +141,6 @@ function buildAtsProbeTargets(
   return targets;
 }
 
-// Minimum real jobs for a board to count as a hit — mirrors the hunter's own
-// success criterion (a single "open application" template entry isn't a board).
-const MIN_JOBS = 2;
 // Safety bound on parallel external fetches for one probe. 8 candidates × 5
 // providers is 40 in the worst case; cap so a probe never fans out unbounded.
 const MAX_PROBE_TARGETS = 24;
@@ -162,7 +161,7 @@ export async function probeAtsBoards(args: {
   const settled = await Promise.allSettled(
     targets.map(async (t) => {
       const r = await testScrape(t.url);
-      if (!r.ok || r.jobCount < MIN_JOBS) return null;
+      if (!r.ok || r.jobCount < MIN_REAL_JOBS) return null;
       return {
         provider: r.provider,
         slug: t.slug,

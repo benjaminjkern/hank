@@ -175,11 +175,6 @@ async function fetchAllEightfold(tenant: string): Promise<ScrapeResult> {
 
 export const eightfold: AtsProviderModule = {
   provider: "eightfold",
-  hostFragments: ["eightfold.ai"],
-  // Eightfold is a discovery layer — applications redirect OUT to the company's
-  // underlying ATS (SuccessFactors/Workday/etc.), and no Eightfold-native
-  // questions endpoint exists, so questions are unsupported.
-  supportsQuestions: false,
   detect(url) {
     const m = url.match(EIGHTFOLD_RE);
     if (!m) return null;

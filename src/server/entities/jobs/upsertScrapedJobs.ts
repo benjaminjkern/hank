@@ -1,9 +1,7 @@
-// Shared scrape-upsert. Callers — the walkthrough's board scrape (first pull for a company),
-// scrapeJobsForCompany (the shared scrape core behind the scrape_jobs_for_company
-// tool + the walkthrough's on-entry board refresh), the walkthrough state
-// machine's step-0 empty-company auto-prep, and retryBlocked — each take the
-// array of normalized job records from `scrapeUrl` and persist them via the
-// same write transaction.
+// Shared scrape-upsert. Its one caller is syncCompanyBoard, reached from both
+// paths that pull a company's board (the scrape_jobs_for_company procedure and
+// the walkthrough's on-entry board scrape); it takes the array of normalized
+// job records from `scrapeUrl` and persists them through the same writes.
 //
 // Behavior:
 // - Upserts Job by sourceUrl (existing rows refresh title/location/etc +
@@ -31,6 +29,7 @@ import {
 import { bulkUpdate } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
 import { logCompanyEvent } from "@/server/entities/companies/logCompanyEvent";
+import { isLearnedSource } from "@/server/scrape/types";
 import type { ScrapeDiagnostics, ScrapedJob } from "@/server/scrape/types";
 
 import { mintJobSlugs, type JobSlugParts } from "./jobSlug";
@@ -61,10 +60,24 @@ const CLOSURE_FLIP_STATUSES = [
 type UpsertScrapedJobsResult = {
   totalJobs: number;
   newJobInteractions: number;
-  // Postings this pass found gone from the board. 0 also means "we didn't
-  // look" — the caller distinguishes the cases from the scrape's own
-  // `truncatedAt`; the other two skips are logged, not returned.
+  // Postings this pass found gone from the board and delisted. 0 also means "we
+  // didn't look" — the caller distinguishes the cases from the scrape's own
+  // `truncatedAt`; the other skips are logged, not returned.
   delistedJobs: number;
+  // Postings that ARE missing from the board but were deliberately not
+  // delisted, because a learned reader read this board. Not a lesser version of
+  // `delistedJobs` — it's the evidence trail that replaces the write: the
+  // caller reports the count, Job.lastSeenAt carries the per-posting "absent
+  // since", and /admin/board-readers is where a human acts on it.
+  missingNotDelisted: number;
+  // How much of what we already held this run still returned. Null on a first
+  // scrape (nothing to compare) or when closure didn't run at all.
+  overlap: number | null;
+  openCount: number;
+  // Set when the run was thrown away wholesale rather than persisted — a
+  // learned reader whose postings belong to another company. Nothing was
+  // written, so the caller must not stamp the scrape as successful.
+  rejected?: string;
   scrapeStartedAt: Date;
 };
 
@@ -91,14 +104,32 @@ export async function upsertScrapedJobs(args: {
   // unique index inside a multi-row insert. Last occurrence wins.
   const jobs = [...new Map(args.jobs.map((j) => [j.sourceUrl, j])).values()];
 
-  const newJobInteractions = await persistScrapedJobs({
+  const persisted = await persistScrapedJobs({
     userId: args.userId,
     companyId: args.companyId,
     jobs,
     scrapeStartedAt,
     companySlug: company?.slug ?? null,
     companyName: company?.name ?? null,
+    rejectStolenUrls: isLearnedSource(args.diagnostics),
   });
+  if (!persisted.ok) {
+    // A learned reader produced URLs another company already owns, so its
+    // locator is pointing at the wrong board. Write nothing: the alternative is
+    // silently moving another company's postings, which no later pass would
+    // detect or undo.
+    return {
+      totalJobs: 0,
+      newJobInteractions: 0,
+      delistedJobs: 0,
+      missingNotDelisted: 0,
+      overlap: null,
+      openCount: 0,
+      rejected: persisted.reason,
+      scrapeStartedAt,
+    };
+  }
+  const newJobInteractions = persisted.newJobInteractions;
 
   // One collapsed company-feed row for the surfacing (not one per SURFACED job).
   // The per-job SURFACED JobEvents still land above (first-pulled-up marker).
@@ -125,6 +156,8 @@ export async function upsertScrapedJobs(args: {
     scrapedJobs: args.jobs,
     closedAt: scrapeStartedAt,
     truncatedAt: args.diagnostics?.truncatedAt,
+    // A learned reader measures but never writes — see the `withhold` branch.
+    withhold: isLearnedSource(args.diagnostics),
   });
 
   // A successful scrape produced this call (every caller checks scrape.ok
@@ -139,6 +172,9 @@ export async function upsertScrapedJobs(args: {
     totalJobs: args.jobs.length,
     newJobInteractions,
     delistedJobs: closure.delisted,
+    missingNotDelisted: closure.missingNotDelisted,
+    overlap: closure.overlap,
+    openCount: closure.openCount,
     scrapeStartedAt,
   };
 }
@@ -158,13 +194,30 @@ export async function upsertScrapedJobs(args: {
 // simply false for another user's rows. So the pair below is hand-rolled, and
 // carries the one thing the seam would have given us for free: the stance
 // clear-on-transition, without which a delisted row keeps a stale board mark.
+type ClosureResult = {
+  delisted: number;
+  missingNotDelisted: number;
+  overlap: number | null;
+  openCount: number;
+};
+
+// The pass didn't run at all — distinct from "it ran and found nothing gone",
+// which reports an overlap of 1.
+const NO_CLOSURE: ClosureResult = {
+  delisted: 0,
+  missingNotDelisted: 0,
+  overlap: null,
+  openCount: 0,
+};
+
 async function detectAndApplyClosures(args: {
   userId: string;
   companyId: string;
   scrapedJobs: ScrapedJob[];
   closedAt: Date;
   truncatedAt: number | undefined;
-}): Promise<{ delisted: number }> {
+  withhold: boolean;
+}): Promise<ClosureResult> {
   // A capped or lossy scrape is not evidence anything came down — the postings
   // it never fetched are missing from `seen` exactly like taken-down ones.
   // Logged because this permanently disables closures on boards bigger than the
@@ -174,12 +227,12 @@ async function detectAndApplyClosures(args: {
       `[upsertScrapedJobs] skipping closure for company ${args.companyId}: ` +
         `scrape returned a partial board (${args.truncatedAt} jobs).`,
     );
-    return { delisted: 0 };
+    return NO_CLOSURE;
   }
 
   const seen = new Set(args.scrapedJobs.map((j) => j.sourceUrl));
   // Empty scrape — never close on no signal.
-  if (seen.size === 0) return { delisted: 0 };
+  if (seen.size === 0) return NO_CLOSURE;
 
   const open = await prisma.job.findMany({
     where: {
@@ -192,7 +245,37 @@ async function detectAndApplyClosures(args: {
   const gone = open.filter(
     (j) => j.sourceUrl != null && !seen.has(j.sourceUrl),
   );
-  if (gone.length === 0) return { delisted: 0 };
+  const overlap =
+    open.length === 0 ? null : (open.length - gone.length) / open.length;
+
+  // A learned reader read this board, so we MEASURE the missing set and refuse
+  // to act on it. Delisting is terminal, global, and applies to every user
+  // watching a posting; an inferred locator that silently starts returning a
+  // partial list would take live roles down for all of them, and nothing about
+  // a successful-looking scrape would reveal it.
+  //
+  // Withholding the write is not the same as not looking: `overlap` feeds the
+  // reader's health check, the count reaches the user as "these look gone, say
+  // the word", and Job.lastSeenAt already records when each posting was last
+  // returned. That's what makes this a delay in the WRITE rather than a blind
+  // spot.
+  if (args.withhold) {
+    return {
+      delisted: 0,
+      missingNotDelisted: gone.length,
+      overlap,
+      openCount: open.length,
+    };
+  }
+
+  if (gone.length === 0) {
+    return {
+      delisted: 0,
+      missingNotDelisted: 0,
+      overlap,
+      openCount: open.length,
+    };
+  }
 
   // Suspicious mass-closure guard: a scrape dropping this much of a non-trivial
   // board is more likely a scraper regression than a real mass takedown.
@@ -204,7 +287,12 @@ async function detectAndApplyClosures(args: {
       `[upsertScrapedJobs] skipping closure for company ${args.companyId}: ` +
         `${gone.length}/${open.length} scraped jobs missing this pass (suspected partial scrape).`,
     );
-    return { delisted: 0 };
+    return {
+      delisted: 0,
+      missingNotDelisted: gone.length,
+      overlap,
+      openCount: open.length,
+    };
   }
 
   const goneIds = gone.map((j) => j.id);
@@ -265,7 +353,12 @@ async function detectAndApplyClosures(args: {
     });
   }
 
-  return { delisted: goneIds.length };
+  return {
+    delisted: goneIds.length,
+    missingNotDelisted: 0,
+    overlap,
+    openCount: open.length,
+  };
 }
 
 // The upsert half: Job rows, their slugs, and the caller's JobInteractions,
@@ -285,8 +378,13 @@ async function persistScrapedJobs(args: {
   scrapeStartedAt: Date;
   companySlug: string | null;
   companyName: string | null;
-}): Promise<number> {
-  if (args.jobs.length === 0) return 0;
+  // For a learned reader: refuse the run if any posting is already owned by a
+  // DIFFERENT company. Free — the ownership read below happens either way.
+  rejectStolenUrls: boolean;
+}): Promise<
+  { ok: true; newJobInteractions: number } | { ok: false; reason: string }
+> {
+  if (args.jobs.length === 0) return { ok: true, newJobInteractions: 0 };
 
   const slugParts = (job: ScrapedJob): JobSlugParts => ({
     companySlug: args.companySlug,
@@ -301,8 +399,24 @@ async function persistScrapedJobs(args: {
   // a sourceUrl already owned by another company keeps that company.
   const existing = await prisma.job.findMany({
     where: { sourceUrl: { in: args.jobs.map((j) => j.sourceUrl) } },
-    select: { id: true, sourceUrl: true, slug: true },
+    select: { id: true, sourceUrl: true, slug: true, companyId: true },
   });
+
+  // A URL another company already owns means this reader's locator is reading
+  // the wrong board. For a wired provider that can't happen (its endpoint is
+  // the company's own), so the check only gates learned readers — and it
+  // rejects the RUN rather than the row, because a locator that's wrong about
+  // one posting is wrong about the board.
+  if (args.rejectStolenUrls) {
+    const stolen = existing.filter((r) => r.companyId !== args.companyId);
+    if (stolen.length > 0) {
+      return {
+        ok: false,
+        reason: `${stolen.length} posting(s) already belong to another company (e.g. ${stolen[0].sourceUrl}) — the reader is pointed at the wrong board`,
+      };
+    }
+  }
+
   const idBySourceUrl = new Map(
     existing.flatMap((r) => (r.sourceUrl == null ? [] : [[r.sourceUrl, r.id]])),
   );
@@ -400,12 +514,12 @@ async function persistScrapedJobs(args: {
   });
   const alreadySeeded = new Set(seeded.map((r) => r.jobId));
   const missing = jobIds.filter((id) => !alreadySeeded.has(id));
-  if (missing.length === 0) return 0;
+  if (missing.length === 0) return { ok: true, newJobInteractions: 0 };
 
   // Interaction + its SURFACED marker commit together, so a row can't strand
   // without the event that says when it hit the user's pool.
   const surfacedAt = new Date();
-  return await prisma.$transaction(async (tx) => {
+  const newJobInteractions = await prisma.$transaction(async (tx) => {
     const rows = await tx.jobInteraction.createManyAndReturn({
       data: missing.map((jobId) => ({
         userId: args.userId,
@@ -429,4 +543,5 @@ async function persistScrapedJobs(args: {
     }
     return rows.length;
   });
+  return { ok: true, newJobInteractions };
 }

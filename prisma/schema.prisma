@@ -168,12 +168,93 @@ model Company {
   // cleared manually in Prisma Studio. Null = none pending.
   deletionRecommendedAt     DateTime?
   deletionRecommendedReason String?
+  // How we read this board when no wired provider recognizes it. Null = a wired
+  // ATS handles it (the common case) or nothing has looked yet. An FK rather
+  // than a lookup by URL so the scrape path costs no extra query — the Company
+  // row is already being read.
+  boardReaderId String?
 
+  boardReader                   BoardReader?         @relation(fields: [boardReaderId], references: [id], onDelete: SetNull)
   jobs                          Job[]
   companyInteractions           CompanyInteraction[]
   events                        CompanyEvent[]
   notes                         MemoryNote[]
   contacts                      Contact[]
+
+  @@index([boardReaderId])
+}
+
+// How we read a board no wired provider recognizes.
+//
+// Keyed on the BOARD, not the company, so a second company on the same board
+// software pays neither a probe nor a recon. A row whose `recipe` is null is
+// the verdict "we looked and here's why we can't" — and that row, with its
+// `companies` count, IS the artifact that says which board software has earned
+// a hand-written provider under scrape/ats/providers/.
+//
+// `recipe` holds a BoardRecipe (src/server/scrape/recipe/types.ts). It is DATA,
+// never code: only runRecipe.ts executes it, which is what keeps a learned
+// board from being an execution surface.
+model BoardReader {
+  id String @id @default(cuid())
+  // origin + first path segment, lowercased. Origin alone is too coarse (one
+  // host fronts several boards); the full sourceUrl too fine (query strings
+  // vary per company, so nobody would ever share a row). See recipe/matchKey.ts.
+  matchKey String @unique
+  // Coarse board-software family ("wp-job-manager", "recruitee", "nextdata").
+  // The grouping key behind /admin/board-readers — twelve companies under one
+  // familyKey is the signal to write a real provider.
+  familyKey String?
+  // The board URL this reader was authored against.
+  sourceUrl String
+  recipe    Json?
+  origin    BoardReaderOrigin
+  health    BoardReaderHealth @default(HEALTHY)
+
+  lastRunAt       DateTime?
+  lastSucceededAt DateTime?
+  jobsLastRun     Int?
+  // Postings the last run didn't return that we still hold open. RECORDED, NEVER
+  // ACTED ON: a learned board does not delist (detectAndApplyClosures measures
+  // and withholds), because closure is terminal, global, and would take live
+  // roles down for every user if an inferred locator drifted. Job.lastSeenAt
+  // carries the per-posting detail.
+  missingLastRun  Int?
+  // Fraction of the previously-open postings the last run still returned.
+  overlapLastRun  Float?
+  consecutiveFailures Int @default(0)
+
+  // The board only yields its postings to a rendered browser. Prod can't do
+  // that; scripts/ats/research-board.ts authors a recipe locally that can.
+  needsBrowser Boolean @default(false)
+  // Why recon couldn't produce a recipe, in the operator's words.
+  reconNote    String?
+  // Cooldown anchor. A failed recon is remembered so a permanently-dead board
+  // isn't re-paid for on every staleness tick.
+  reconnedAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  companies Company[]
+
+  @@index([familyKey])
+  @@index([health])
+}
+
+// Whether rebuilding this reader is free (deterministic probe) or costs an LLM
+// call. Drives whether a quarantined reader is simply re-probed or needs recon.
+enum BoardReaderOrigin {
+  PROBE
+  RECON
+}
+
+enum BoardReaderHealth {
+  HEALTHY
+  // Skipped by scrapeUrl, which falls through to the probe; the company becomes
+  // re-recon eligible. There is no promotion tier above HEALTHY because
+  // delisting is off for learned boards permanently — health exists only for
+  // self-healing.
+  QUARANTINED
 }
 
 model CompanyInteraction {

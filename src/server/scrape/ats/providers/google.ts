@@ -1,3 +1,5 @@
+import { browserCapability } from "@/server/platform/browser/browserCapability";
+
 import { currentScrapeSignal } from "../../scrapeSignal";
 
 import type { ScrapeResult, ScrapedJob } from "../../types";
@@ -64,6 +66,14 @@ async function fetchGoogleDetail(
 }
 
 async function fetchAllGoogle(inputUrl: string): Promise<ScrapeResult> {
+  // Asked BEFORE the import, so a deployment with no browser never loads
+  // Playwright and its failure names the board rather than our machinery.
+  if (browserCapability() === "none") {
+    return {
+      ok: false,
+      error: `google: this board only lists its postings once the page renders in a browser, which this deployment can't run`,
+    };
+  }
   let headless: typeof import("@/server/platform/browser/headless");
   try {
     headless = await import("@/server/platform/browser/headless");
@@ -160,9 +170,6 @@ async function fetchAllGoogle(inputUrl: string): Promise<ScrapeResult> {
 
 export const google: AtsProviderModule = {
   provider: "google",
-  hostFragments: [],
-  // Apply is Google-account-gated → questions unsupported.
-  supportsQuestions: false,
   detect(url) {
     if (!GOOGLE_RE.test(url)) return null;
     return {

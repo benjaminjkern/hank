@@ -15,6 +15,9 @@ import {
   caughtUpCompany,
 } from "@/server/entities/companies/setCompanyAside";
 import { syncCompanyBoard } from "@/server/entities/jobs/syncCompanyBoard";
+import { runReconBoard } from "@/server/procedures/registry/reconBoard";
+import type { ReconBoardResult } from "@/server/procedures/registry/reconBoard";
+import type { ScrapeFailureKind } from "@/server/scrape/types";
 import { urlHost } from "@/utils/url";
 
 import { narrateCompanyBlock, narrateCompanyCaughtUp } from "./narration";
@@ -26,6 +29,13 @@ import type { WalkthroughArgs } from "./types";
 // re-scrapes it. 24h: a returning-the-next-day user picks up new postings on
 // entry; same-session re-entries (lastScrapedJobsAt just stamped) skip it.
 const SCRAPE_STALENESS_MS = 24 * 60 * 60 * 1000;
+
+// The two failures a better read-plan could fix. An upstream blip is not one of
+// them and must never buy an LLM call.
+const RECON_WORTHY_FAILURES = new Set<ScrapeFailureKind>([
+  "no_reader",
+  "reader_broken",
+]);
 
 // Top-level helper so the React Compiler purity lint doesn't flag Date.now() at
 // a call site (AGENTS.md). Null = never fetched = stale.
@@ -54,12 +64,42 @@ export async function* runBoardScrape(
       : `Scanning ${urlHost(sourceUrl) ?? sourceUrl} for openings…`,
   );
 
-  const fetched = await syncCompanyBoard({
+  let fetched = await syncCompanyBoard({
     userId: args.userId,
     companyId,
     sourceUrl,
     signal: args.signal,
   });
+
+  // Unreadable in a way a better read-plan could fix — work one out and try
+  // once more, rather than setting the company aside for a board shape we've
+  // simply never met. Narrated because it takes a while and the user should
+  // know what the pause is.
+  let reconVerdict: ReconBoardResult["kind"] | null = null;
+  if (!fetched.ok && RECON_WORTHY_FAILURES.has(fetched.kind)) {
+    yield statusEvent(
+      `${displayName}'s site isn't one of the usual job boards — working out how to read it…`,
+    );
+    const recon = await runReconBoard({
+      ...args,
+      companyId,
+      companyName: displayName,
+      sourceUrl,
+    });
+    reconVerdict = recon.kind;
+    if (recon.kind === "learned") {
+      fetched = await syncCompanyBoard({
+        userId: args.userId,
+        companyId,
+        sourceUrl,
+        signal: args.signal,
+      });
+    } else if (recon.kind === "needs_browser") {
+      yield statusEvent(
+        `${displayName}'s openings only show up once their page fully loads in a browser, which I can't do from here — send me a specific role's link and I can still work it.`,
+      );
+    }
+  }
 
   if (!fetched.ok) {
     if (hadRoles) {
@@ -71,8 +111,14 @@ export async function* runBoardScrape(
     yield statusEvent(
       `I couldn't reach ${displayName}'s board just now — I'll set it aside until it's readable again.`,
     );
+    // A login or bot wall is a different fact from "we couldn't parse it", and
+    // only recon can tell them apart — it's the only thing that looked at the
+    // page rather than at an endpoint.
     const blocked = {
-      reason: CompanyBlockReason.CANNOT_SCRAPE,
+      reason:
+        reconVerdict === "needs_auth"
+          ? CompanyBlockReason.AUTH_WALLED
+          : CompanyBlockReason.CANNOT_SCRAPE,
       note: `scrape failed: ${fetched.error}`,
     };
     await blockCompany({ userId: args.userId, companyId, ...blocked });
@@ -107,7 +153,21 @@ export async function* runBoardScrape(
     }
   } else {
     yield statusEvent(
-      `Found ${fetched.totalJobs} job posting${fetched.totalJobs === 1 ? "" : "s"}${fetched.newJobInteractions > 0 ? ` (${fetched.newJobInteractions} new)` : ""} — taking a closer look…`,
+      `Found ${fetched.totalJobs} job posting${fetched.totalJobs === 1 ? "" : "s"}${fetched.newJobInteractions > 0 ? ` (${fetched.newJobInteractions} new)` : ""}${
+        fetched.learned
+          ? " — their site isn't one of the standard job boards, so I'm reading it directly"
+          : ""
+      } — taking a closer look…`,
+    );
+  }
+
+  // Roles we hold open that this read didn't return. On a board we're reading
+  // directly we won't mark them gone on our own — the read is good enough to
+  // add roles, not to declare one dead — so the user gets the call instead of
+  // the board silently looking frozen.
+  if (fetched.missingNotDelisted > 0) {
+    yield statusEvent(
+      `${fetched.missingNotDelisted} role${fetched.missingNotDelisted === 1 ? "" : "s"} I have on file didn't come back in that read. Since I'm reading their site directly I won't mark ${fetched.missingNotDelisted === 1 ? "it" : "them"} gone on my own — say the word if ${fetched.missingNotDelisted === 1 ? "it's" : "they're"} down.`,
     );
   }
 

@@ -1,3 +1,5 @@
+import { browserCapability } from "@/server/platform/browser/browserCapability";
+
 import { currentScrapeSignal } from "../../scrapeSignal";
 
 import type { ScrapeResult, ScrapedJob } from "../../types";
@@ -50,6 +52,14 @@ async function fetchNetflixDetail(
 }
 
 async function fetchAllNetflix(): Promise<ScrapeResult> {
+  // Asked BEFORE the import, so a deployment with no browser never loads
+  // Playwright and its failure names the board rather than our machinery.
+  if (browserCapability() === "none") {
+    return {
+      ok: false,
+      error: `netflix: this board only lists its postings once the page renders in a browser, which this deployment can't run`,
+    };
+  }
   let headless: typeof import("@/server/platform/browser/headless");
   try {
     headless = await import("@/server/platform/browser/headless");
@@ -135,9 +145,6 @@ async function fetchAllNetflix(): Promise<ScrapeResult> {
 
 export const netflix: AtsProviderModule = {
   provider: "netflix",
-  hostFragments: [],
-  // Apply is login-gated → questions unsupported.
-  supportsQuestions: false,
   detect(url) {
     if (!NETFLIX_RE.test(url)) return null;
     return {

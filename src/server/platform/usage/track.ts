@@ -17,7 +17,10 @@ export type UsageOperation =
   | "chat"
   | "compact_summary"
   | "parse_resume"
-  | "scrape_html" // generic-HTML LLM scrape; no code path emits it — kept so old rows resolve
+  // Do NOT reuse for the learned-board work: this key meant "an LLM read HTML
+  // and emitted job postings", which is exactly what board_recipe refuses to do.
+  | "scrape_html" // no code path emits it — kept so old rows resolve
+  | "board_recipe" // recon: authors a declarative read-plan for a board no wired provider recognizes (never emits postings — the runner fetches them)
   | "shortlist_jobs"
   | "shortlist_reject_summary" // post-commit sub-agent: synthesizes per-job skip notes + a memory-write decision from shortlist-widget rejections
   | "users_distill" // no code path emits it — superseded by memory_consolidation; kept so old TokenUsage rows resolve

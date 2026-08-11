@@ -1,5 +1,7 @@
 import type { RoleAttrs } from "@/server/entities/jobs/roleAttrs";
 
+import type { BoardRecipe } from "./recipe/types";
+
 // `Partial<RoleAttrs>` is the canonical promoted-attribute list (location /
 // department / compensation / employmentType — see entities/jobs/roleAttrs.ts),
 // optional here because a source supplies them only when it has them: ATS APIs
@@ -38,8 +40,14 @@ export type AtsProvider =
   | "netflix"
   | "google";
 
+// "recipe" = a LEARNED board: read by the declarative runner (scrape/recipe/)
+// from a plan the deterministic probe inferred or the board_recipe sub-agent
+// authored, rather than by a hand-written provider a human verified. The
+// distinction is load-bearing downstream — see isLearnedSource below.
+export type ScrapeSource = AtsProvider | "recipe";
+
 export type ScrapeDiagnostics = {
-  provider: AtsProvider | "generic-html";
+  provider: ScrapeSource;
   fetchedUrl: string;
   pageLength: number;
   pageSnippet: string;
@@ -54,6 +62,13 @@ export type ScrapeDiagnostics = {
   // this, because the postings it never fetched would otherwise read as taken
   // down and get delisted for every user (see detectAndApplyClosures).
   truncatedAt?: number;
+  // Set ONLY when the deterministic probe just inferred this recipe, so the
+  // caller can persist it and skip the whole fan-out next time. A run off an
+  // already-stored recipe leaves it absent — there'd be nothing new to save.
+  learnedRecipe?: BoardRecipe;
+  // Which probe technique found the board ("json endpoint …", "embedded blob
+  // __NEXT_DATA__"). Operator-facing; recorded on the reader row.
+  technique?: string;
 };
 
 export type ScrapedCompany = {
@@ -62,8 +77,34 @@ export type ScrapedCompany = {
   diagnostics?: ScrapeDiagnostics;
 };
 
+// Whether this scrape came from a learned board reader rather than a
+// hand-written provider. A learned source is NEVER allowed to delist: closure
+// detection is terminal, global, and applies to every user watching a posting,
+// and an inferred locator that silently starts returning a partial list would
+// take live roles down for all of them. detectAndApplyClosures still MEASURES
+// the missing set on these scrapes — it just withholds the write.
+export function isLearnedSource(
+  diagnostics: ScrapeDiagnostics | undefined,
+): boolean {
+  return diagnostics?.provider === "recipe";
+}
+
+// Why a scrape failed, as far as the entry point can tell. Only the first two
+// are worth re-authoring a reader for; an upstream blip must not burn an LLM
+// recon, which is why this is a discriminator and not a string match on
+// `error`. Providers don't set it — scrapeUrl normalizes their failures to
+// "upstream", which is what a provider error always is.
+export type ScrapeFailureKind =
+  // No wired provider matched and the deterministic probe found nothing.
+  | "no_reader"
+  // A stored recipe ran and produced nothing usable — it needs re-authoring.
+  | "reader_broken"
+  // Network, non-200, bad JSON. Transient until proven otherwise.
+  | "upstream";
+
 export type ScrapeResult =
-  { ok: true; data: ScrapedCompany } | { ok: false; error: string };
+  | { ok: true; data: ScrapedCompany }
+  | { ok: false; error: string; kind?: ScrapeFailureKind };
 
 // Application form questions scraped from the ATS. Stored on
 // Job.applicationQuestions; null = no fetch attempted yet, which is distinct

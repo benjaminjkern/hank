@@ -234,10 +234,6 @@ async function fetchAllSmartRecruiters(slug: string): Promise<ScrapeResult> {
 
 export const smartrecruiters: AtsProviderModule = {
   provider: "smartrecruiters",
-  hostFragments: ["smartrecruiters.com"],
-  // The screening-questions config (Application API /postings/{uuid}/configuration)
-  // is auth-gated (401 without an API key). No unauthenticated path today.
-  supportsQuestions: false,
   detect(url) {
     const m =
       url.match(SMARTRECRUITERS_RE) ?? url.match(SMARTRECRUITERS_API_RE);

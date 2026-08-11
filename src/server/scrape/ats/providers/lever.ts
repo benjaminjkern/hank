@@ -198,8 +198,6 @@ async function fetchLeverQuestions(
 
 export const lever: AtsProviderModule = {
   provider: "lever",
-  hostFragments: ["lever.co"],
-  supportsQuestions: true,
   detect(url) {
     const m = url.match(LEVER_RE) ?? url.match(LEVER_API_RE);
     if (!m) return null;
