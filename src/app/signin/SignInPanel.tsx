@@ -159,17 +159,20 @@ const cornerPill = css`
   font-family: inherit;
 `;
 
-// Top-right rather than a bottom corner: bottom-left is where Next's dev
-// indicator sits, and bottom-right is the chute. Points at the upstream repo;
-// a fork that modifies Hank and serves it owes its own users ITS source, not
-// this one (see docs/self-hosting.md).
+// Mark only, no label — the GitHub logo is the convention for this and the
+// accessible name is on the element. Top-right rather than a bottom corner:
+// bottom-left is where Next's dev indicator sits, and bottom-right is the
+// chute. Points at the upstream repo; a fork that modifies Hank and serves it
+// owes its own users ITS source, not this one (see docs/self-hosting.md).
 const SourceLink = styled.a`
   ${cornerPill}
   top: ${({ theme }) => theme.space.lg};
   right: ${({ theme }) => theme.space.lg};
   display: inline-flex;
   align-items: center;
-  gap: ${({ theme }) => theme.space.xs};
+  justify-content: center;
+  padding: ${({ theme }) => theme.space.xs};
+  line-height: 0;
   text-decoration: none;
 
   &:hover {
@@ -344,12 +347,10 @@ export function SignInPanel({
         href="https://github.com/benjaminjkern/hank"
         target="_blank"
         rel="noreferrer"
-        title="Hank is open source — view on GitHub"
+        title="View source on GitHub"
+        aria-label="View source on GitHub"
       >
-        <ProviderIcon>
-          <GitHubMark />
-        </ProviderIcon>
-        open source
+        <GitHubMark />
       </SourceLink>
       <ChuteButton type="button" onClick={openChute} disabled={groundDisabled}>
         {groundDisabled ? "chute open…" : "open chute"}

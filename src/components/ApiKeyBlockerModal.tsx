@@ -14,10 +14,14 @@ import { useChatStore, type ApiKeyBlockerReason } from "@/lib/chatStore";
 // route). On a successful save the chat session is refetched (so the server-side
 // hasKey flags flip too) and the blocker is cleared, which unmounts this overlay.
 //
-// When the instance disallows own keys (`allowUserApiKeys=false`), pasting is
-// not a way out of this modal, so the form is replaced by a request-access
-// button. That is the ONLY route in on an invite-gated deployment — a modal
-// that just says "add a key" there is a dead end the user can't act on.
+// Whenever the user doesn't already have the server key, asking an admin for
+// it is the PRIMARY way out and bringing your own is the disclosed fallback —
+// most people blocked here have no API key and no intention of getting one, so
+// leading with "paste a key" is a dead end for them. Which controls appear:
+//
+//   no server access                → Request access (+ "use your own" if allowed)
+//   has server access, own keys on  → the paste form (their key, or the server's, failed)
+//   has server access, own keys off → nothing actionable; the instance's key is broken
 const Backdrop = styled.div`
   position: fixed;
   inset: 0;
@@ -111,6 +115,26 @@ const Submit = styled.button`
   &:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+  }
+`;
+
+// Reveals the paste-a-key form. Styled as text rather than a button so it
+// reads as the lesser of the two ways out, next to the filled Request-access
+// control.
+const SecondaryButton = styled.button`
+  align-self: flex-start;
+  padding: 0;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: ${({ theme }) => theme.colors.textMuted};
+  text-decoration: underline;
+  cursor: pointer;
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text};
   }
 `;
 
@@ -231,8 +255,10 @@ function copyFor(reason: ApiKeyBlockerReason): Copy {
 
 export function ApiKeyBlockerModal({
   allowUserApiKeys,
+  hasServerKeyAccess,
 }: {
   allowUserApiKeys: boolean;
+  hasServerKeyAccess: boolean;
 }) {
   const reason = useChatStore((s) => s.apiKeyBlocker);
   const setApiKeyBlocker = useChatStore((s) => s.setApiKeyBlocker);
@@ -243,6 +269,7 @@ export function ApiKeyBlockerModal({
   const [requestState, setRequestState] = useState<"idle" | "sent" | "pending">(
     "idle",
   );
+  const [showKeyForm, setShowKeyForm] = useState(false);
   const [pending, startTransition] = useTransition();
 
   if (!reason) return null;
@@ -257,14 +284,17 @@ export function ApiKeyBlockerModal({
     reason === "deepseek_no_credit";
   const providerLabel = isDeepseek ? "DeepSeek" : "Anthropic";
 
-  // With own keys disallowed there is no key to paste, so the modal splits by
-  // WHOSE key is at fault. "Missing" means this account was never granted the
-  // server key — the user can ask for it. Invalid / no-credit means the
-  // server's own key is broken, which no user action fixes.
-  const notGranted =
-    !allowUserApiKeys &&
-    (reason === "missing" || reason === "missing_deepseek");
-  const serverKeyFaulty = !allowUserApiKeys && !notGranted;
+  // Asking an admin for the server key is the primary way out of this modal
+  // whenever the user doesn't already have it — regardless of which reason
+  // fired, and regardless of whether they could also paste their own. Bringing
+  // a key is the fallback for people who have one.
+  const canRequestAccess = !hasServerKeyAccess;
+  // A saved key was found and rejected rather than simply absent, so say so —
+  // otherwise "your account needs access" reads as if nothing was tried.
+  const ownKeyRejected = reason !== "missing" && reason !== "missing_deepseek";
+  // Nothing the user can do: they already have the server key, it's the one
+  // that failed, and this instance won't take a personal one.
+  const serverKeyFaulty = !canRequestAccess && !allowUserApiKeys;
 
   async function onRequestAccess() {
     setError(null);
@@ -301,16 +331,19 @@ export function ApiKeyBlockerModal({
     >
       <Card>
         <Title id="api-key-modal-title">
-          {notGranted
-            ? "Your account needs access"
+          {canRequestAccess
+            ? "Ask for access to get started"
             : serverKeyFaulty
               ? "Hank is temporarily unavailable"
               : title}
         </Title>
         <Body>
-          {notGranted ? (
+          {canRequestAccess ? (
             <>
-              This instance runs on its own API key, and your account
+              {ownKeyRejected
+                ? `Your saved ${providerLabel} key was rejected. `
+                : ""}
+              Hank runs on this instance&apos;s own API key, and your account
               hasn&apos;t been given access to it yet. Send a request and
               you&apos;ll be able to start once it&apos;s approved.
             </>
@@ -324,28 +357,30 @@ export function ApiKeyBlockerModal({
             body
           )}
         </Body>
-        {notGranted ? (
-          <>
-            {requestState === "idle" ? (
-              <Actions>
-                <Submit
-                  type="button"
-                  disabled={pending}
-                  onClick={() => startTransition(() => void onRequestAccess())}
-                >
-                  {pending ? "Sending…" : "Request access"}
-                </Submit>
-              </Actions>
-            ) : (
-              <Hint>
-                {requestState === "sent"
-                  ? "Request sent. You'll be able to chat once it's approved — no need to ask again."
-                  : "Your earlier request is still waiting. You'll be able to chat once it's approved."}
-              </Hint>
-            )}
-            {error && <ErrorText>{error}</ErrorText>}
-          </>
-        ) : serverKeyFaulty ? null : (
+
+        {canRequestAccess ? (
+          requestState === "idle" ? (
+            <Actions>
+              <Submit
+                type="button"
+                disabled={pending}
+                onClick={() => startTransition(() => void onRequestAccess())}
+              >
+                {pending ? "Sending…" : "Request access"}
+              </Submit>
+            </Actions>
+          ) : (
+            <Hint>
+              {requestState === "sent"
+                ? "Request sent. You'll be able to chat once it's approved — no need to ask again."
+                : "Your earlier request is still waiting. You'll be able to chat once it's approved."}
+            </Hint>
+          )
+        ) : null}
+
+        {/* The paste form: the whole modal when the user already has server
+            access, a disclosed fallback when asking is the primary path. */}
+        {allowUserApiKeys && !(canRequestAccess && !showKeyForm) ? (
           <Form action={(fd) => startTransition(() => void onSubmit(fd))}>
             <Label htmlFor="api-key-modal-input">{providerLabel} API key</Label>
             <Input
@@ -366,12 +401,19 @@ export function ApiKeyBlockerModal({
                 {pending ? "Validating…" : "Save and continue"}
               </Submit>
             </Actions>
-            {error && <ErrorText>{error}</ErrorText>}
             <SecondaryLink href="/settings">
               Manage keys in Settings
             </SecondaryLink>
           </Form>
-        )}
+        ) : null}
+
+        {allowUserApiKeys && canRequestAccess && !showKeyForm ? (
+          <SecondaryButton type="button" onClick={() => setShowKeyForm(true)}>
+            Or use your own {providerLabel} API key
+          </SecondaryButton>
+        ) : null}
+
+        {error && <ErrorText>{error}</ErrorText>}
       </Card>
     </Backdrop>
   );

@@ -52,7 +52,10 @@ export async function AppShell({ path }: { path: string }) {
         left={<ChatPanel />}
         right={<RightPanel />}
       />
-      <ApiKeyBlockerModal allowUserApiKeys={allowUserApiKeys} />
+      <ApiKeyBlockerModal
+        allowUserApiKeys={allowUserApiKeys}
+        hasServerKeyAccess={session.user.canUseServerKey}
+      />
       <LoadingOverlay />
     </>
   );
