@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { scrapeUrl } from "../../src/server/scrape";
+import { browserCapability } from "../../src/server/platform/browser/browserCapability";
 import { closeHeadless } from "../../src/server/platform/browser/headless";
 import {
   extractGreenhouseSlugFromBoardUrl,
@@ -27,11 +28,16 @@ import {
 // the provider can only get titles + metadata (e.g. Meta, whose per-job
 // description is login/JS-gated), so a short rawContent is expected; we just
 // assert it's non-empty.
+// `needsBrowser` rows only run where a browser is available. On a deployment
+// (or a laptop) without one they print SKIPPED rather than FAIL — a canary that
+// goes red for a capability you deliberately don't have teaches nothing, and it
+// would hide the rows that genuinely broke.
 const BOARDS: Array<{
   ats: string;
   url: string;
   expectForm?: "present" | "unsupported";
   expectDetail?: "full" | "list-only";
+  needsBrowser?: boolean;
 }> = [
   { ats: "Greenhouse", url: "https://job-boards.greenhouse.io/figma" },
   { ats: "Greenhouse-custom", url: "https://boards.greenhouse.io/databricks" },
@@ -101,6 +107,7 @@ const BOARDS: Array<{
     ats: "Shopify",
     url: "https://www.shopify.com/careers/search",
     expectForm: "unsupported",
+    needsBrowser: true,
   },
   // Meta: list-only (GraphQL list via headless capture; per-job description is
   // login/JS-gated, so rawContent is title + locations + teams). Google + Netflix
@@ -112,6 +119,7 @@ const BOARDS: Array<{
     url: "https://www.metacareers.com/jobs",
     expectForm: "unsupported",
     expectDetail: "list-only",
+    needsBrowser: true,
   },
 ];
 
@@ -134,8 +142,15 @@ async function verify(): Promise<Row[]> {
     url,
     expectForm = "present",
     expectDetail = "full",
+    needsBrowser = false,
   } of BOARDS) {
     process.stdout.write(`\n=== ${ats} (${url}) ===\n`);
+    if (needsBrowser && browserCapability() === "none") {
+      const why = "SKIPPED (needs a browser — set HEADLESS_BROWSER=local)";
+      process.stdout.write(`${why}\n`);
+      rows.push({ ats, list: why, detail: why, meta: why, form: why });
+      continue;
+    }
     // 1) LIST
     const t1 = Date.now();
     const scrape = await scrapeUrl(url);

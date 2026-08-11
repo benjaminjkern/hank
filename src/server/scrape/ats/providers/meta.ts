@@ -1,3 +1,5 @@
+import { browserCapability } from "@/server/platform/browser/browserCapability";
+
 import { currentScrapeSignal } from "../../scrapeSignal";
 import { rawAttrs, type AtsProviderModule } from "../shared";
 
@@ -13,6 +15,14 @@ const META_RE = /^https?:\/\/(?:www\.)?metacareers\.com\//i;
 // DOM description) and the detail GraphQL never fires capturably — so Meta is
 // LIST-ONLY: rawContent is title + locations + teams. Questions: login-gated.
 async function fetchAllMeta(): Promise<ScrapeResult> {
+  // Asked BEFORE the import, so a deployment with no browser never loads
+  // Playwright and its failure names the board rather than our machinery.
+  if (browserCapability() === "none") {
+    return {
+      ok: false,
+      error: `meta: this board only lists its postings once the page renders in a browser, which this deployment can't run`,
+    };
+  }
   let headless: typeof import("@/server/platform/browser/headless");
   try {
     headless = await import("@/server/platform/browser/headless");
@@ -116,9 +126,6 @@ async function fetchAllMeta(): Promise<ScrapeResult> {
 
 export const meta: AtsProviderModule = {
   provider: "meta",
-  hostFragments: [],
-  // Apply is login-gated → questions unsupported.
-  supportsQuestions: false,
   detect(url) {
     if (!META_RE.test(url)) return null;
     return {

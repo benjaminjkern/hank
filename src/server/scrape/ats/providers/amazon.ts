@@ -161,11 +161,6 @@ async function fetchAllAmazon(inputUrl: string): Promise<ScrapeResult> {
 
 export const amazon: AtsProviderModule = {
   provider: "amazon",
-  hostFragments: ["amazon.jobs"],
-  // account.amazon.jobs apply flow requires a signed-in candidate — no public
-  // questions endpoint, so questions stay unsupported (the router returns
-  // {status:"unsupported"} and the walkthrough asks the user to fill the form).
-  supportsQuestions: false,
   detect(url) {
     if (!AMAZON_RE.test(url)) return null;
     return {

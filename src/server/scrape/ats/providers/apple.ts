@@ -201,10 +201,6 @@ async function fetchAllApple(inputUrl: string): Promise<ScrapeResult> {
 
 export const apple: AtsProviderModule = {
   provider: "apple",
-  hostFragments: ["jobs.apple.com"],
-  // The apply flow requires an Apple ID sign-in — no public form endpoint, so
-  // questions are unsupported.
-  supportsQuestions: false,
   detect(url) {
     if (!APPLE_RE.test(url)) return null;
     return {

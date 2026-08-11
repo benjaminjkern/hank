@@ -18,6 +18,7 @@
 import { z } from "zod";
 
 import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
+import type { ReconBoardResult } from "@/server/procedures/registry/reconBoard";
 import {
   runScrapeJobsForCompany,
   type PreScanOutcome,
@@ -108,9 +109,9 @@ export const scrapeJobsForCompanyTool: ToolDef<z.infer<typeof PARSER>> = {
 function describeOutcome(name: string, outcome: ScrapeOutcome): string {
   switch (outcome.kind) {
     case "scrape_failed":
-      return `scrape of ${name} failed: ${outcome.error}. Company unchanged — it keeps the roles already on file.`;
+      return `scrape of ${name} failed: ${outcome.error}. Company unchanged — it keeps the roles already on file.${describeRecon(name, outcome.recon)}`;
     case "no_delta":
-      return `scrape ${name}: no new postings since last scrape (board had ${outcome.totalJobs} job${outcome.totalJobs === 1 ? "" : "s"}${describeTruncation(outcome.truncatedAt)}). Status unchanged (${outcome.priorStatus}).`;
+      return `scrape ${name}: no new postings since last scrape (board had ${outcome.totalJobs} job${outcome.totalJobs === 1 ? "" : "s"}${describeTruncation(outcome.truncatedAt)}). Status unchanged (${outcome.priorStatus}).${describeMissing(outcome.missingNotDelisted)}`;
     case "scraped":
       return [
         `scrape ${name}: ${outcome.newJobInteractions} new posting${outcome.newJobInteractions === 1 ? "" : "s"} (total ${outcome.totalJobs} on board${describeTruncation(outcome.truncatedAt)})`,
@@ -119,9 +120,42 @@ function describeOutcome(name: string, outcome: ScrapeOutcome): string {
               `${outcome.delistedJobs} posting${outcome.delistedJobs === 1 ? "" : "s"} came down off the board and ${outcome.delistedJobs === 1 ? "was" : "were"} marked no-longer-listed`,
             ]
           : []),
+        ...(outcome.missingNotDelisted > 0
+          ? [describeMissing(outcome.missingNotDelisted).trim()]
+          : []),
         describePreScan(outcome.preScan),
         `lastScrapedJobsAt=${outcome.scrapeStartedAt.toISOString()}`,
       ].join("\n");
+  }
+}
+
+// This company's board isn't one of the standard job boards, so it's read
+// directly from their site — which is reliable enough to ADD roles but not to
+// declare one gone for good. Hank has to be able to say so, and to offer the
+// user the call, or a shrinking board silently looks like a static one.
+function describeMissing(missingNotDelisted: number): string {
+  if (missingNotDelisted <= 0) return "";
+  return ` NOTE: ${missingNotDelisted} role${missingNotDelisted === 1 ? "" : "s"} we hold open ${missingNotDelisted === 1 ? "was" : "were"} not in this read. Their site isn't a standard job board, so nothing is marked no-longer-listed automatically here — mention it and offer to close them if the user says they're gone.`;
+}
+
+// Recon ran because the board was unreadable. Its verdict is what Hank tells
+// the user, in his own words — never the mechanism.
+function describeRecon(
+  name: string,
+  recon: ReconBoardResult | undefined,
+): string {
+  if (!recon) return "";
+  switch (recon.kind) {
+    case "learned":
+      return ` Worked out how to read ${name}'s site (${recon.jobCount} postings), but the follow-up read didn't land — try again shortly.`;
+    case "needs_browser":
+      return ` Their openings only appear once the page fully loads in a browser, which isn't something this can do. If the user pastes a specific role's link, that role can still be worked.`;
+    case "needs_auth":
+      return ` Their board is behind a login or a bot check, so it can't be read at all.`;
+    case "exhausted":
+      return ` Tried every way of reading their site and none worked: ${recon.note}`;
+    case "skipped":
+      return "";
   }
 }
 

@@ -289,8 +289,6 @@ async function fetchGemQuestions(
 
 export const gem: AtsProviderModule = {
   provider: "gem",
-  hostFragments: ["jobs.gem.com"],
-  supportsQuestions: true,
   detect(url) {
     const m = url.match(GEM_RE);
     if (!m) return null;

@@ -204,10 +204,6 @@ async function fetchAllOracle(
 
 export const oracle: AtsProviderModule = {
   provider: "oracle",
-  hostFragments: ["oraclecloud.com"],
-  // The apply flow is hCaptcha- + login-gated; no public questions endpoint, so
-  // questions are unsupported.
-  supportsQuestions: false,
   detect(url) {
     const m = url.match(ORACLE_RE);
     if (!m) return null;

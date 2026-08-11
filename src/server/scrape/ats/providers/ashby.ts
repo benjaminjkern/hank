@@ -360,8 +360,6 @@ async function fetchAshbyQuestions(
 
 export const ashby: AtsProviderModule = {
   provider: "ashby",
-  hostFragments: ["ashbyhq.com"],
-  supportsQuestions: true,
   detect(url) {
     const m = url.match(ASHBY_RE) ?? url.match(ASHBY_API_RE);
     if (!m) return null;

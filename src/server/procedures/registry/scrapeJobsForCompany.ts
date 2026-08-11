@@ -25,9 +25,22 @@ import { prisma } from "@/server/db/prisma";
 import { markCompanyPostFilter } from "@/server/entities/companies/markCompanyStatus";
 import { syncCompanyBoard } from "@/server/entities/jobs/syncCompanyBoard";
 import { runPreScan } from "@/server/procedures/registry/preScan";
+import { runReconBoard } from "@/server/procedures/registry/reconBoard";
+import type { ReconBoardResult } from "@/server/procedures/registry/reconBoard";
+import type { ScrapeFailureKind } from "@/server/scrape/types";
 import { buildShowEvents } from "@/server/views/showEvents";
 
 const TIMEOUT_MS = 90_000;
+// Recon's own budget, spent OUTSIDE the scrape's. It's an LLM loop with a
+// read-tool that fetches, so it belongs to a different cost class than the
+// fetch-sized window above.
+const RECON_TIMEOUT_MS = 120_000;
+// The two failures a better read-plan could fix. An upstream blip is not one of
+// them and must never buy an LLM call.
+const RECON_WORTHY_FAILURES = new Set<ScrapeFailureKind>([
+  "no_reader",
+  "reader_broken",
+]);
 
 export type ScrapeJobsForCompanyArgs = RunContext & {
   sessionId: string;
@@ -48,12 +61,25 @@ export type PreScanOutcome =
     };
 
 export type ScrapeOutcome =
-  | { kind: "scrape_failed"; error: string }
+  | {
+      kind: "scrape_failed";
+      error: string;
+      // Whether a better read-plan could plausibly fix this, or it was just a
+      // bad minute on someone else's server. Carried as a discriminator rather
+      // than inferred from `error`, so nothing has to pattern-match prose to
+      // decide whether to spend an LLM call.
+      failureKind: ScrapeFailureKind;
+      // What recon concluded, when the failure was worth escalating. Absent
+      // means it wasn't worth an LLM call, or the cooldown was still running.
+      recon?: ReconBoardResult;
+    }
   | {
       kind: "no_delta";
       totalJobs: number;
       truncatedAt?: number;
       priorStatus: CompanyStatus;
+      learned: boolean;
+      missingNotDelisted: number;
     }
   | {
       kind: "scraped";
@@ -61,6 +87,12 @@ export type ScrapeOutcome =
       totalJobs: number;
       // Postings that came down off the board this pass.
       delistedJobs: number;
+      // Postings missing from the board that were deliberately NOT delisted —
+      // a learned reader read this board, and closure is terminal and global.
+      // The caller must say so: silence here reads as "nothing changed".
+      missingNotDelisted: number;
+      // This board was read by an inferred plan, not a hand-written provider.
+      learned: boolean;
       // Set when the board came back partial (provider cap or a dropped detail
       // fetch). Both success outcomes carry it because "12 roles" and "12 of
       // 1078 roles" are different facts, and the agent phrases them differently.
@@ -96,18 +128,59 @@ export async function runScrapeJobsForCompany(
       closeReason: companyInteraction.closeReason,
     };
   }
-  if (!companyInteraction.company.sourceUrl) {
+  const sourceUrl = companyInteraction.company.sourceUrl;
+  if (!sourceUrl) {
     return { ok: false, kind: "no_source_url" };
   }
 
+  const driveArgs = {
+    ...args,
+    company: companyInteraction.company,
+    priorStatus: companyInteraction.status,
+  };
+
+  const first = await raceDrive(driveArgs);
+
+  // The board is unreadable in a way a better plan could fix. Recon runs
+  // OUTSIDE the scrape's timeout with its own budget, because it's a different
+  // kind of work — an LLM loop, not a fetch — and squeezing it into a window
+  // sized for HTTP would guarantee it never finishes.
+  if (
+    first.ok &&
+    first.outcome.kind === "scrape_failed" &&
+    RECON_WORTHY_FAILURES.has(first.outcome.failureKind)
+  ) {
+    const recon = await raceRecon({
+      ...args,
+      companyId: companyInteraction.company.id,
+      companyName: companyInteraction.company.name,
+      sourceUrl,
+    });
+    if (recon?.kind === "learned") {
+      const retried = await raceDrive(driveArgs);
+      // Only take the retry if it actually worked — a second failure should
+      // report the original problem, not "we tried again and it broke too".
+      if (retried.ok && retried.outcome.kind !== "scrape_failed")
+        return retried;
+    }
+    if (recon) {
+      return {
+        ...first,
+        outcome: { ...first.outcome, recon },
+      };
+    }
+  }
+
+  return first;
+}
+
+async function raceDrive(
+  args: Parameters<typeof drive>[0],
+): Promise<ScrapeJobsForCompanyResult> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      drive({
-        ...args,
-        company: companyInteraction.company,
-        priorStatus: companyInteraction.status,
-      }),
+      drive(args),
       new Promise<ScrapeJobsForCompanyResult>((_, reject) => {
         timer = setTimeout(
           () =>
@@ -122,6 +195,33 @@ export async function runScrapeJobsForCompany(
       kind: "failed",
       error: err instanceof Error ? err.message : String(err),
     };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function raceRecon(
+  args: RunContext & {
+    companyId: string;
+    companyName: string;
+    sourceUrl: string;
+  },
+): Promise<ReconBoardResult | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      runReconBoard(args),
+      new Promise<ReconBoardResult>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("recon timed out")),
+          RECON_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } catch {
+    // A recon that times out is not a verdict about the board — report the
+    // original scrape failure unchanged.
+    return null;
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -148,7 +248,11 @@ async function drive(
   if (!scraped.ok) {
     return {
       ok: true,
-      outcome: { kind: "scrape_failed", error: scraped.error },
+      outcome: {
+        kind: "scrape_failed",
+        error: scraped.error,
+        failureKind: scraped.kind,
+      },
       events,
     };
   }
@@ -165,6 +269,8 @@ async function drive(
           ? { truncatedAt: scraped.truncatedAt }
           : {}),
         priorStatus: args.priorStatus,
+        learned: scraped.learned,
+        missingNotDelisted: scraped.missingNotDelisted,
       },
       events,
     };
@@ -196,6 +302,8 @@ async function drive(
       newJobInteractions: scraped.newJobInteractions,
       totalJobs: scraped.totalJobs,
       delistedJobs: scraped.delistedJobs,
+      missingNotDelisted: scraped.missingNotDelisted,
+      learned: scraped.learned,
       ...(scraped.truncatedAt != null
         ? { truncatedAt: scraped.truncatedAt }
         : {}),
