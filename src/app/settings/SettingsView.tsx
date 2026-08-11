@@ -29,6 +29,10 @@ type Props = {
   };
   anthropicKey: KeyInfo;
   deepseekKey: KeyInfo;
+  // False when the instance runs on its own key only. The paste forms are
+  // hidden rather than disabled — an input you can type into but not submit
+  // reads as a bug. The server actions refuse the write regardless.
+  allowUserApiKeys: boolean;
 };
 
 const Page = styled.div`
@@ -354,7 +358,12 @@ function ApiKeySection({
   );
 }
 
-export function SettingsView({ identity, anthropicKey, deepseekKey }: Props) {
+export function SettingsView({
+  identity,
+  anthropicKey,
+  deepseekKey,
+  allowUserApiKeys,
+}: Props) {
   return (
     <Page>
       <Container>
@@ -385,56 +394,73 @@ export function SettingsView({ identity, anthropicKey, deepseekKey }: Props) {
           </Identity>
         </Section>
 
-        <ApiKeySection
-          title="DeepSeek API key"
-          idBase="deepseek"
-          keyInfo={deepseekKey}
-          inputLabel="Paste a DeepSeek API key"
-          placeholder="sk-..."
-          hint={
-            <>
-              Powers chat and every background task — Hank needs this to run.
-              Get one at platform.deepseek.com → API Keys. Encrypted at rest,
-              never logged.
-            </>
-          }
-          serverKeyNote={
-            deepseekKey.canUseServerKey ? (
-              <ServerKeyNote>
-                Your account may fall back to the server&apos;s DeepSeek key
-                when you haven&apos;t set your own. Your own key always wins.
-              </ServerKeyNote>
-            ) : null
-          }
-          onSave={saveDeepseekKey}
-          onClear={clearDeepseekKey}
-        />
+        {!allowUserApiKeys ? (
+          <Section>
+            <SectionTitle>API keys</SectionTitle>
+            <ServerKeyNote>
+              {deepseekKey.canUseServerKey
+                ? "This instance runs on its own API key, so there's nothing for you to set up."
+                : "This instance runs on its own API key, and your account hasn't been given access to it yet. Hank will offer to send the request when you try to chat."}
+            </ServerKeyNote>
+          </Section>
+        ) : null}
 
-        <ApiKeySection
-          title="Anthropic API key"
-          idBase="anthropic"
-          keyInfo={anthropicKey}
-          inputLabel="Paste an Anthropic API key"
-          placeholder="sk-ant-..."
-          hint={
-            <>
-              Powers résumé parsing and logo vision — PDFs and images DeepSeek
-              can&apos;t read. Optional: those features fall back without it.
-              Get one at console.anthropic.com → API Keys. Encrypted at rest,
-              never logged.
-            </>
-          }
-          serverKeyNote={
-            anthropicKey.canUseServerKey ? (
-              <ServerKeyNote>
-                Your account may fall back to the server&apos;s Anthropic key
-                when you haven&apos;t set your own. Your own key always wins.
-              </ServerKeyNote>
-            ) : null
-          }
-          onSave={saveApiKey}
-          onClear={clearApiKey}
-        />
+        {allowUserApiKeys ? (
+          <>
+            <ApiKeySection
+              title="DeepSeek API key"
+              idBase="deepseek"
+              keyInfo={deepseekKey}
+              inputLabel="Paste a DeepSeek API key"
+              placeholder="sk-..."
+              hint={
+                <>
+                  Powers chat and every background task — Hank needs this to
+                  run. Get one at platform.deepseek.com → API Keys. Encrypted at
+                  rest, never logged.
+                </>
+              }
+              serverKeyNote={
+                deepseekKey.canUseServerKey ? (
+                  <ServerKeyNote>
+                    Your account may fall back to the server&apos;s DeepSeek key
+                    when you haven&apos;t set your own. Your own key always
+                    wins.
+                  </ServerKeyNote>
+                ) : null
+              }
+              onSave={saveDeepseekKey}
+              onClear={clearDeepseekKey}
+            />
+
+            <ApiKeySection
+              title="Anthropic API key"
+              idBase="anthropic"
+              keyInfo={anthropicKey}
+              inputLabel="Paste an Anthropic API key"
+              placeholder="sk-ant-..."
+              hint={
+                <>
+                  Powers résumé parsing and logo vision — PDFs and images
+                  DeepSeek can&apos;t read. Optional: those features fall back
+                  without it. Get one at console.anthropic.com → API Keys.
+                  Encrypted at rest, never logged.
+                </>
+              }
+              serverKeyNote={
+                anthropicKey.canUseServerKey ? (
+                  <ServerKeyNote>
+                    Your account may fall back to the server&apos;s Anthropic
+                    key when you haven&apos;t set your own. Your own key always
+                    wins.
+                  </ServerKeyNote>
+                ) : null
+              }
+              onSave={saveApiKey}
+              onClear={clearApiKey}
+            />
+          </>
+        ) : null}
       </Container>
     </Page>
   );

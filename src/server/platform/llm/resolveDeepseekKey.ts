@@ -1,12 +1,15 @@
 import { prisma } from "@/server/db/prisma";
+import { hasServerKeyAccess } from "@/server/platform/deployment";
 
 import { decryptApiKey } from "./keyCrypto";
 
 // The single resolution point for a DeepSeek API key — the mirror of
 // resolveAnthropicKey.ts. Precedence:
 //   1. User's own decrypted key (deepseekKeyEncrypted), if set
-//   2. process.env.DEEPSEEK_API_KEY, only when canUseServerKey=true
-//      (one flag gates BOTH server keys — there is no separate DeepSeek flag)
+//   2. process.env.DEEPSEEK_API_KEY, only when hasServerKeyAccess() says so —
+//      the user's canUseServerKey grant OR the instance-wide
+//      SERVER_KEY_BY_DEFAULT. One gate covers BOTH server keys; there is no
+//      separate DeepSeek flag.
 //   3. NoDeepseekKeyError
 // `billedToServer` reports which key paid (false = user's own, true = server
 // fallback) so callers can thread it into recordUsage.
@@ -35,11 +38,11 @@ export async function resolveDeepseekApiKey(
       }),
       billedToServer: false,
     };
-  if (user.canUseServerKey) {
+  if (hasServerKeyAccess(user.canUseServerKey)) {
     const serverKey = process.env.DEEPSEEK_API_KEY;
     if (serverKey) return { key: serverKey, billedToServer: true };
     throw new NoDeepseekKeyError(
-      "Server fallback is enabled for this user, but DEEPSEEK_API_KEY is not set",
+      "Server key access is granted, but DEEPSEEK_API_KEY is not set",
     );
   }
   throw new NoDeepseekKeyError();

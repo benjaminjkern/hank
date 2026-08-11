@@ -13,9 +13,13 @@ Hank ships configured for case 1.
 
 ## Running it for yourself
 
-The defaults are single-user shaped: sign-in is OAuth against apps you register,
-there's no public sign-up flow, and the server API key is the one in your `.env`.
-Nothing is exposed until you deploy it somewhere public.
+The defaults are single-user shaped: you sign in by typing an email (no password,
+no OAuth app to register), and every account shares the API key in your `.env`.
+That's the fastest path to a working install and it assumes the only person who
+can reach the app is you.
+
+It also means the door is open to anyone who can load the page, so those defaults
+stop being appropriate the moment the app has a public URL.
 
 If you deploy to a public URL and don't want strangers signing in, see
 [Keeping a public deployment closed](#keeping-a-public-deployment-closed).
@@ -82,25 +86,41 @@ someone else's data is in your database.
 
 ## Keeping a public deployment closed
 
-Hank has a built-in gate, and it's the per-user `canUseServerKey` flag — `false`
-by default for every new account. A user with no key of their own and no grant
-can sign in but can't use the agent.
+Three environment variables decide this, and **the defaults are wrong for a
+public deployment on purpose** — they're tuned for someone who just cloned the
+repo to use it themselves:
 
-So a public deployment where you approve people individually is the default
-behavior, not a feature you have to build:
+| Variable                | Default | What the default means                             |
+| ----------------------- | ------- | -------------------------------------------------- |
+| `AUTH_MODE`             | `local` | Anyone who loads the page can sign in as any account |
+| `SERVER_KEY_BY_DEFAULT` | `true`  | Every account may spend your API key                 |
+| `ALLOW_USER_API_KEYS`   | `false` | Users can't bring their own key                      |
 
-1. Deploy with `DEEPSEEK_API_KEY` set as the server key.
-2. Leave `canUseServerKey` at its default for new sign-ups.
-3. Grant it per user at `/admin/users` when you decide to let someone in.
+Deploy that combination to a public URL and you have an open door with your
+credit card behind it. A public instance wants:
 
-Users who sign in but aren't granted can't run the agent, so they never generate
-transcripts or profile notes. Their `User` row (email, name, avatar from OAuth)
-is created, which is a much smaller footprint than an active account.
+```bash
+AUTH_MODE="oauth"               # a real identity, not a typed email
+SERVER_KEY_BY_DEFAULT="false"   # nobody spends your key until you say so
+ALLOW_USER_API_KEYS="false"     # and nobody bypasses that with their own key
+```
 
-If you'd rather let anyone in on their own dime, users can save their own API key
-in Settings and use Hank without a grant. **That's the configuration that needs a
-privacy policy and terms of service** — you're accepting arbitrary sign-ups whose
-personal data lands in your database.
+With `SERVER_KEY_BY_DEFAULT=false`, the per-user `canUseServerKey` column
+becomes the invite gate:
+
+1. Someone signs in. Their `User` row is created — email, name, avatar.
+2. They can't run the agent, so they generate no transcripts, no profile notes,
+   and no résumé upload. That's a much smaller footprint than an active account.
+3. The blocked chat offers them a **Request access** button, which records the
+   ask and pushes you a notification.
+4. You grant it per user at `/admin/users`, where pending requests show how long
+   they've been waiting.
+
+**Setting `ALLOW_USER_API_KEYS=true` opts out of all of that.** Anyone who can
+sign in can then use Hank on their own dime without your approval, which means
+their personal data lands in your database without you ever deciding to accept
+it. That is the configuration that needs a privacy policy and terms of service
+of your own.
 
 ## If you run Hank for other people
 

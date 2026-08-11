@@ -10,6 +10,7 @@ import { PanelUrlSync } from "@/components/PanelUrlSync";
 import { RightPanel } from "@/components/RightPanel/RightPanel";
 import { parsePanelUrl } from "@/lib/panelUrl";
 import { auth } from "@/server/auth/config";
+import { allowUserApiKeys } from "@/server/platform/deployment";
 import { loadPanelView } from "@/server/views/panelView";
 
 // The app, at whichever panel view `path` names. Shared by `/` and
@@ -51,7 +52,7 @@ export async function AppShell({ path }: { path: string }) {
         left={<ChatPanel />}
         right={<RightPanel />}
       />
-      <ApiKeyBlockerModal />
+      <ApiKeyBlockerModal allowUserApiKeys={allowUserApiKeys} />
       <LoadingOverlay />
     </>
   );
