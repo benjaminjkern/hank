@@ -10,12 +10,12 @@
 // Every handler that writes returns the fresh view, so the panel never has to
 // guess what the write did to the rest of the form.
 //
-// Writing here records two things about the touched item, and only that item.
-// It stamps the person as its author — the page's byline and the reviewer's
-// "leave their sentences alone" rule both read that — and it sets the "ok to
-// reuse when drafting" flag, since someone working the text is what makes it
-// worth drawing on later. An explicit `reuse` in the same request (the switch
-// itself) wins, and says nothing about authorship.
+// Nothing here touches either baseline, and that IS the mechanism: text that
+// no longer matches what Hank wrote is the user's, and text that doesn't match
+// what he's seen is an unsent change. Writing a baseline would erase both facts.
+// It does set the "ok to reuse when drafting" flag on the touched item — working
+// the text is what makes it worth drawing on later — and an explicit `reuse` in
+// the same request (the switch itself) wins.
 
 import { z } from "zod";
 
@@ -27,11 +27,8 @@ import {
 } from "@/server/auth/viewerScope";
 import { prisma } from "@/server/db/prisma";
 import {
-  draftAuthorsPatch,
-  forgetDraftAuthor,
   readReuseFlags,
   readShortAnswers,
-  type ApplicationItemRef,
 } from "@/server/entities/jobs/applicationDrafts";
 import {
   COVER_LETTER_ID,
@@ -43,10 +40,6 @@ import {
   renameUserQuestion,
   resolveQuestionId,
 } from "@/server/entities/jobs/applicationQuestions";
-import {
-  clearFindingsForItem,
-  readApplicationReview,
-} from "@/server/entities/jobs/applicationReview";
 import { loadApplicationView } from "@/server/views/application";
 import { normalizeForCompare } from "@/utils/text";
 
@@ -224,33 +217,12 @@ export async function PATCH(
       coverLetter: true,
       shortAnswers: true,
       shortAnswersReuse: true,
-      draftAuthors: true,
       applicationReview: true,
     },
   });
   if (!existing) return Response.json({ error: "not found" }, { status: 404 });
 
   const data: Prisma.JobInteractionUpdateInput = {};
-
-  // Text typed here is the person's, and clearing an item un-claims it: the
-  // words the stamp was about are gone. Toggling reuse says nothing about who
-  // wrote it, so it leaves the stamp alone.
-  const claim = (item: ApplicationItemRef, cleared: boolean) => {
-    data.draftAuthors = cleared
-      ? forgetDraftAuthor(existing, item)
-      : draftAuthorsPatch(existing, item, "user");
-  };
-
-  // Rewriting an item settles whatever the review had open against it — the
-  // objection was to text that no longer exists. Toggling reuse doesn't: the
-  // words are unchanged, so the finding still stands.
-  if (text !== undefined) {
-    const cleared = clearFindingsForItem(
-      readApplicationReview(existing.applicationReview),
-      itemId,
-    );
-    if (cleared) data.applicationReview = cleared;
-  }
 
   if (itemId === COVER_LETTER_ID) {
     if (text !== undefined) {
@@ -261,7 +233,6 @@ export async function PATCH(
       if (next !== null && next !== existing.coverLetter) {
         data.coverLetterReuse = true;
       }
-      claim({ kind: "cover_letter" }, next === null);
     }
     if (reuse !== undefined) data.coverLetterReuse = reuse;
   } else {
@@ -302,7 +273,6 @@ export async function PATCH(
       }
       data.shortAnswers = answers;
       data.shortAnswersReuse = flags;
-      claim({ kind: "question", question }, trimmed.length === 0);
     }
     if (reuse !== undefined && idx >= 0) {
       flags[idx] = reuse;

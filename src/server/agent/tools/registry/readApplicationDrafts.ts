@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import {
+  isStockItem,
   loadApplicationView,
   type ApplicationItemStatus,
 } from "@/server/views/application";
@@ -15,7 +16,7 @@ import type { ToolDef } from "../lib/types";
 const WHEN_EMPTY: Record<ApplicationItemStatus, string> = {
   written_by_you: "(empty)",
   drafted: "(empty)",
-  needs_you: "(nothing written — this one needs the user's own input)",
+  needs_you: "(nothing written — waiting on something only they can tell you)",
   empty: "(nothing written)",
 };
 
@@ -52,6 +53,10 @@ export const readApplicationDraftsTool: ToolDef<{ job?: string }> = {
 
     const parts: string[] = [`# ${view.jobTitle} @ ${view.companyName}`];
     for (const item of view.items) {
+      // Stock fields are summarised at the end. Listed here as empty items they
+      // read as unfinished work — which is exactly how they got reported back
+      // to the user as "several questions are still blank".
+      if (isStockItem(item)) continue;
       const heading =
         item.kind === "cover_letter"
           ? "## Cover letter"
@@ -62,10 +67,20 @@ export const readApplicationDraftsTool: ToolDef<{ job?: string }> = {
       }
       const owner =
         item.status === "written_by_you"
-          ? "the user wrote or reworked this"
-          : "draft you wrote; the user hasn't touched it";
+          ? "their own words — don't rewrite these"
+          : "your draft, as written";
       const edited = item.edited ? ", changed since you last saw it" : "";
       parts.push("", heading, `(${owner}${edited})`, item.text.trim());
+    }
+
+    const stock = view.items.filter(isStockItem);
+    if (stock.length > 0) {
+      parts.push(
+        "",
+        `Plus ${stock.length} stock field${stock.length === 1 ? "" : "s"} the user fills in directly on the posting — nothing to draft, and NOT unfinished work: ${stock
+          .map((i) => i.label)
+          .join(", ")}.`,
+      );
     }
 
     return { content: parts.join("\n") };

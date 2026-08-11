@@ -41,6 +41,7 @@ const CHIP_WORD: Record<ApplicationEdit["change"], string> = {
   revised: "edited",
   cleared: "cleared",
   added: "added",
+  removed: "removed",
 };
 
 export async function buildPanelEditBlocks(

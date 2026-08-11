@@ -16,7 +16,7 @@ export const saveApplicationAnswerTool: ToolDef<{
   name: "save_application_answer",
   affectsViewedState: true,
   description:
-    "Persist a user's OWN VERBATIM application text — when they hand you the exact words to save (\"just put exactly this: …\"), not something for you to compose. For Hank-authored or refined answers, use draft_application_question instead (it writes prose in their voice through the drafting workflow). Pass `coverLetter` to save/replace the cover letter, and/or `question` + `answer` to save one short answer (pass the question text exactly as the form shows it — it's matched to the form's question). `job` (the role's slug) — pass the role the user means. Merges (won't wipe sibling short answers) and saves early so the user sees it in the side panel right away.",
+    "Persist a user's OWN VERBATIM application text — ONLY when they hand you the exact words to save (\"just put exactly this: …\"). It transcribes; it does not compose, and it does not shape what they said into an answer. Anything you write or refine — including an answer built from what they just told you in chat — goes through draft_application_question with their input as `extraContext`. Pass `coverLetter` to save/replace the cover letter, and/or `question` + `answer` to save one short answer (pass the question text exactly as the form shows it — it's matched to the form's question). `job` (the role's slug) — pass the role the user means. Merges (won't wipe sibling short answers) and saves early so the user sees it in the side panel right away.",
   inputSchema: {
     type: "object",
     properties: {
@@ -59,8 +59,9 @@ export const saveApplicationAnswerTool: ToolDef<{
     if (!jobResolved.ok) return jobResolved.result;
     const jobId = jobResolved.id;
 
-    // Their exact words, so they own it — and it feeds later drafts, exactly
-    // as if they had typed it into the panel.
+    // Their words, so the page attributes it to them. It does NOT touch the
+    // reuse flag: that switch lives on the application page, and flipping it
+    // from a chat message would be a change the user has no way to see happen.
     const r = await persistApplicationAnswer(ctx.userId, jobId, {
       coverLetter: input.coverLetter,
       question: input.question,

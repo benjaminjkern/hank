@@ -20,12 +20,14 @@ import { normalizeForCompare } from "@/utils/text";
 import { COVER_LETTER_ID, questionId } from "./applicationItemId";
 import {
   drainSettledFindings,
+  partitionFindings,
   readApplicationReview,
   type ReviewFinding,
 } from "./applicationReview";
 import {
   markUserQuestionsRelayed,
   readStoredUserQuestions,
+  removedSinceRelayed,
 } from "./userAddedQuestions";
 
 import type { ShortAnswer } from "./types";
@@ -39,15 +41,15 @@ export type ProposedDrafts = {
 export type ApplicationItemRef =
   { kind: "cover_letter" } | { kind: "question"; question: string };
 
-// A row's application text plus the baseline it's compared against — the input
-// every rule in this file takes.
+// A row's application text plus the two baselines every rule here compares it
+// against.
 export type DraftedRow = {
   coverLetter: string | null;
   coverLetterReuse: boolean | null;
   shortAnswers: Prisma.JsonValue | null;
   shortAnswersReuse: Prisma.JsonValue | null;
   proposedDrafts: Prisma.JsonValue | null;
-  draftAuthors: Prisma.JsonValue | null;
+  relayedDrafts: Prisma.JsonValue | null;
 };
 
 export const DRAFTED_ROW_SELECT = {
@@ -56,104 +58,37 @@ export const DRAFTED_ROW_SELECT = {
   shortAnswers: true,
   shortAnswersReuse: true,
   proposedDrafts: true,
-  draftAuthors: true,
+  relayedDrafts: true,
 } as const;
 
-// Who wrote the text an item holds right now. Stamped by the write that put it
-// there, because it can't be derived: relaying an edit re-baselines
-// proposedDrafts to the user's words, so one message later the divergence that
-// proved they wrote it is gone.
+// Whose words an item currently holds. Nothing records this: the live text
+// either matches what Hank wrote or it doesn't, and only his own writes move
+// that baseline. So putting his wording back makes it his again — which is the
+// honest answer, since it IS his again.
 export type DraftAuthor = "hank" | "user";
 
-export type DraftAuthors = {
-  coverLetter: DraftAuthor | null;
-  answers: Array<{ question: string; author: DraftAuthor }>;
-};
-
-function asAuthor(v: unknown): DraftAuthor | null {
-  return v === "hank" || v === "user" ? v : null;
-}
-
-export function readDraftAuthors(raw: Prisma.JsonValue | null): DraftAuthors {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return { coverLetter: null, answers: [] };
-  }
-  const obj = raw as Record<string, unknown>;
-  const answers = Array.isArray(obj.answers)
-    ? obj.answers.flatMap((e) => {
-        if (!e || typeof e !== "object" || Array.isArray(e)) return [];
-        const rec = e as Record<string, unknown>;
-        const author = asAuthor(rec.author);
-        return typeof rec.question === "string" && author
-          ? [{ question: rec.question, author }]
-          : [];
-      })
-    : [];
-  return { coverLetter: asAuthor(obj.coverLetter), answers };
-}
-
-// Null = nobody has claimed this item: nothing is written, or the text arrived
-// by a path that doesn't stamp.
+// Null when there's nothing written to attribute.
 export function authorFor(
-  row: Pick<DraftedRow, "draftAuthors">,
+  row: Pick<DraftedRow, "coverLetter" | "shortAnswers" | "proposedDrafts">,
   item: ApplicationItemRef,
 ): DraftAuthor | null {
-  const authors = readDraftAuthors(row.draftAuthors);
-  if (item.kind === "cover_letter") return authors.coverLetter;
+  const live = liveText(row, item);
+  if (!live.trim()) return null;
+  const written = baselineFor(readProposedDrafts(row.proposedDrafts), item);
+  return written !== undefined && sameText(written, live) ? "hank" : "user";
+}
+
+function liveText(
+  row: Pick<DraftedRow, "coverLetter" | "shortAnswers">,
+  item: ApplicationItemRef,
+): string {
+  if (item.kind === "cover_letter") return row.coverLetter ?? "";
   const norm = normalizeForCompare(item.question);
   return (
-    authors.answers.find((a) => normalizeForCompare(a.question) === norm)
-      ?.author ?? null
+    readShortAnswers(row.shortAnswers).find(
+      (a) => normalizeForCompare(a.question) === norm,
+    )?.answer ?? ""
   );
-}
-
-// Stamp one item's author, leaving the others alone. Returns the whole column
-// value — every writer of application text calls this.
-export function draftAuthorsPatch(
-  row: Pick<DraftedRow, "draftAuthors">,
-  item: ApplicationItemRef,
-  author: DraftAuthor,
-): Prisma.InputJsonValue {
-  const authors = readDraftAuthors(row.draftAuthors);
-  if (item.kind === "cover_letter") {
-    return {
-      ...authors,
-      coverLetter: author,
-    } as unknown as Prisma.InputJsonValue;
-  }
-  const norm = normalizeForCompare(item.question);
-  const hit = authors.answers.some(
-    (a) => normalizeForCompare(a.question) === norm,
-  );
-  const answers = hit
-    ? authors.answers.map((a) =>
-        normalizeForCompare(a.question) === norm
-          ? { question: item.question, author }
-          : a,
-      )
-    : [...authors.answers, { question: item.question, author }];
-  return { ...authors, answers } as unknown as Prisma.InputJsonValue;
-}
-
-// Drop an item's stamp — the text it described is gone.
-export function forgetDraftAuthor(
-  row: Pick<DraftedRow, "draftAuthors">,
-  item: ApplicationItemRef,
-): Prisma.InputJsonValue {
-  const authors = readDraftAuthors(row.draftAuthors);
-  if (item.kind === "cover_letter") {
-    return {
-      ...authors,
-      coverLetter: null,
-    } as unknown as Prisma.InputJsonValue;
-  }
-  const norm = normalizeForCompare(item.question);
-  return {
-    ...authors,
-    answers: authors.answers.filter(
-      (a) => normalizeForCompare(a.question) !== norm,
-    ),
-  } as unknown as Prisma.InputJsonValue;
 }
 
 export function readShortAnswers(raw: Prisma.JsonValue | null): ShortAnswer[] {
@@ -228,18 +163,7 @@ export function isUserOwned(
   row: DraftedRow,
   item: ApplicationItemRef,
 ): boolean {
-  if (!hasText(row, item)) return false;
-  return authorFor(row, item) !== "hank";
-}
-
-function hasText(row: DraftedRow, item: ApplicationItemRef): boolean {
-  if (item.kind === "cover_letter") {
-    return (row.coverLetter ?? "").trim().length > 0;
-  }
-  const norm = normalizeForCompare(item.question);
-  return readShortAnswers(row.shortAnswers).some(
-    (a) => normalizeForCompare(a.question) === norm && a.answer.trim() !== "",
-  );
+  return authorFor(row, item) === "user";
 }
 
 export type ApplicationEdit = {
@@ -248,14 +172,19 @@ export type ApplicationEdit = {
   label: string;
   // "wrote" — nothing was there; "revised" — Hank's version changed;
   // "cleared" — the user emptied it; "added" — the user described a question
-  // the scrape missed, which is news even with no answer under it yet.
-  change: "wrote" | "revised" | "cleared" | "added";
+  // the scrape missed, which is news even with no answer under it yet;
+  // "removed" — they took one of their own back off the form.
+  change: "wrote" | "revised" | "cleared" | "added" | "removed";
   diff: WordDiff;
 };
 
-// Every item on one row whose live text differs from Hank's baseline.
+// Every item on one row whose live text differs from what Hank has SEEN. Note
+// the column: an unsent change is measured against `relayedDrafts`, while whose
+// words they are is measured against `proposedDrafts`. Same shape, different
+// questions — reading the wrong one is how a relayed edit used to re-attribute
+// itself to Hank.
 export function applicationEditsFor(row: DraftedRow): ApplicationEdit[] {
-  const drafts = readProposedDrafts(row.proposedDrafts);
+  const drafts = readProposedDrafts(row.relayedDrafts);
   const out: ApplicationEdit[] = [];
 
   const push = (
@@ -299,10 +228,9 @@ export function applicationEditsFor(row: DraftedRow): ApplicationEdit[] {
   return out;
 }
 
-// The baseline patch that says "this is what Hank has seen" — the current text
-// of every item. Written whenever he drafts and whenever an edit is relayed, so
-// the next divergence is measured from the version he actually knows about.
-export function proposedDraftsPatch(row: {
+// Every item's current text in baseline shape. This is what the RELAY stamps
+// into `relayedDrafts` — he has now seen all of it, whoever wrote it.
+export function draftsSnapshot(row: {
   coverLetter: string | null;
   shortAnswers: Prisma.JsonValue | null;
 }): Prisma.InputJsonValue {
@@ -316,6 +244,36 @@ export function proposedDraftsPatch(row: {
   return drafts;
 }
 
+// Set ONE item in a baseline, leaving every other entry alone — column-neutral,
+// because both baselines need it. A whole-row snapshot would be wrong on the
+// written-by side: drafting the cover letter must not also claim the short
+// answers the user wrote themselves.
+export function setDraftEntry(
+  raw: Prisma.JsonValue | null,
+  item: ApplicationItemRef,
+  text: string,
+): Prisma.InputJsonValue {
+  const drafts = readProposedDrafts(raw) ?? {
+    coverLetter: null,
+    answers: [],
+  };
+  if (item.kind === "cover_letter") {
+    return { ...drafts, coverLetter: text } as unknown as Prisma.InputJsonValue;
+  }
+  const norm = normalizeForCompare(item.question);
+  const hit = drafts.answers.some(
+    (a) => normalizeForCompare(a.question) === norm,
+  );
+  const answers = hit
+    ? drafts.answers.map((a) =>
+        normalizeForCompare(a.question) === norm
+          ? { question: item.question, text }
+          : a,
+      )
+    : [...drafts.answers, { question: item.question, text }];
+  return { ...drafts, answers } as unknown as Prisma.InputJsonValue;
+}
+
 export type ApplicationEditRelay = {
   jobId: string;
   jobTitle: string;
@@ -324,6 +282,9 @@ export type ApplicationEditRelay = {
   // The hand-added questions carried by this relay, by their exact text —
   // settle stamps these relayedAt so they report once, not every message.
   addedQuestions: string[];
+  // Questions the user took back off the form after he'd been told about them.
+  // Settle deletes these outright: the entry exists only to carry this news.
+  removedQuestions: string[];
   // Review findings this user answered by rewriting the item. The diff alone
   // shows WHAT changed; pairing it with the objection shows what question the
   // user was answering, which is the half worth remembering.
@@ -378,14 +339,21 @@ export async function listUnrelayedApplicationEdits(
     // Only THIS user's unrelayed additions: the column is global to the job, so
     // another account's question isn't news to this user's Hank.
     const added = readStoredUserQuestions(r.job.userAddedQuestions).filter(
-      (q) => q.addedByUserId === userId && !q.relayedAt,
+      (q) => q.addedByUserId === userId && !q.relayedAt && !q.removedAt,
     );
+    const removed = removedSinceRelayed(r.job.userAddedQuestions, userId);
     const edits = [
       ...applicationEditsFor(r),
       ...added.map((q) => ({
         itemId: questionId(q.question),
         label: q.question,
         change: "added" as const,
+        diff: EMPTY_DIFF,
+      })),
+      ...removed.map((q) => ({
+        itemId: questionId(q.question),
+        label: q.question,
+        change: "removed" as const,
         diff: EMPTY_DIFF,
       })),
     ];
@@ -400,6 +368,7 @@ export async function listUnrelayedApplicationEdits(
             companyName: r.job.company?.name ?? null,
             edits,
             addedQuestions: added.map((q) => q.question),
+            removedQuestions: removed.map((q) => q.question),
             settledFindings,
           },
         ];
@@ -435,13 +404,21 @@ export async function settleRelayedApplicationEdits(
       // Only the rows that actually have some carry the column — which costs a
       // second statement at most, since bulkUpdate groups by patch SHAPE, and
       // blanket-writing it would erase a review that simply had nothing to drain.
+      const review = readApplicationReview(row.applicationReview);
+      const answers = readShortAnswers(row.shortAnswers);
       const drained = drainSettledFindings(
-        readApplicationReview(row.applicationReview),
+        review,
+        partitionFindings(review, (itemId) =>
+          itemId === COVER_LETTER_ID
+            ? row.coverLetter
+            : (answers.find((a) => questionId(a.question) === itemId)?.answer ??
+              null),
+        ).settled,
       );
       return {
         key: row.id,
         patch: {
-          proposedDrafts: proposedDraftsPatch(row) as Prisma.JsonValue,
+          relayedDrafts: draftsSnapshot(row) as Prisma.JsonValue,
           ...(drained
             ? { applicationReview: drained as unknown as Prisma.JsonValue }
             : {}),
@@ -453,7 +430,11 @@ export async function settleRelayedApplicationEdits(
   // they live on the Job, and there's no text for a baseline to hold.
   await markUserQuestionsRelayed(
     userId,
-    relays.map((r) => ({ jobId: r.jobId, questions: r.addedQuestions })),
+    relays.map((r) => ({
+      jobId: r.jobId,
+      questions: r.addedQuestions,
+      removed: r.removedQuestions,
+    })),
     nowDate().toISOString(),
   );
 }
@@ -477,9 +458,11 @@ export function renderApplicationEditRelayText(
             ? "deleted what was there"
             : e.change === "added"
               ? "added this question by hand — it wasn't on the form you could read"
-              : "edited your draft";
-      // An added question has no before/after to show, just the question.
-      return e.change === "added"
+              : e.change === "removed"
+                ? "took this question back off the form — it isn't one the form asks, so stop treating it as one"
+                : "edited your draft";
+      // Adding or removing a question has no before/after to show.
+      return e.change === "added" || e.change === "removed"
         ? `- ${e.label} — ${verb}`
         : `- ${e.label} — ${verb}:\n    ${renderWordDiff(e.diff)}`;
     });

@@ -23,7 +23,7 @@ import {
 } from "@/server/entities/jobs/applicationItemId";
 import { loadMergedQuestions } from "@/server/entities/jobs/applicationQuestions";
 import {
-  findingsForItem,
+  partitionFindings,
   readApplicationReview,
 } from "@/server/entities/jobs/applicationReview";
 import { isCoverLetterQuestion, isStockFieldType } from "@/server/scrape/types";
@@ -76,9 +76,11 @@ export type ApplicationItem = {
   // exactly like an edited answer: the form asks something he can't see.
   addedNotRelayed: boolean;
   // What the review couldn't settle about THIS item, in the reviewer's own
-  // words. Only a person can close these out, so they sit against the text they
-  // are about and clear when it's rewritten.
-  findings: string[];
+  // words, sitting against the text it's about and clearing when those words
+  // change. The register follows who wrote the text: an objection to Hank's
+  // draft is something he needs SETTLED, and rendering it as a fault would be
+  // showing the user a warning about writing they didn't do.
+  findings: Array<{ note: string; register: "question" | "note" }>;
 };
 
 export type ApplicationView = {
@@ -111,6 +113,15 @@ export type ApplicationView = {
   openFindingCount: number;
 };
 
+// A form field nobody needs to draft and nobody has written in — a dropdown,
+// a LinkedIn URL. Blank on purpose, so every surface that lists items has to
+// treat it differently from a question still waiting on work: the page tucks
+// these in a collapsed tail, and Hank gets them as one line rather than as a
+// column of empty answers he reads as unfinished.
+export function isStockItem(item: ApplicationItem): boolean {
+  return item.verdict === "skip" && !item.text?.trim();
+}
+
 export async function loadApplicationView(
   userId: string,
   jobId: string,
@@ -126,7 +137,7 @@ export async function loadApplicationView(
       shortAnswers: true,
       shortAnswersReuse: true,
       proposedDrafts: true,
-      draftAuthors: true,
+      relayedDrafts: true,
       applicationReview: true,
       job: {
         select: {
@@ -163,6 +174,23 @@ export async function loadApplicationView(
   }
 
   const review = readApplicationReview(row.applicationReview);
+  const openFindings = partitionFindings(review, (itemId) =>
+    itemId === COVER_LETTER_ID
+      ? row.coverLetter
+      : (readShortAnswers(row.shortAnswers).find(
+          (a) => questionId(a.question) === itemId,
+        )?.answer ?? null),
+  ).open;
+  const findingsFor = (
+    itemId: string,
+    author: DraftAuthor | null,
+  ): Array<{ note: string; register: "question" | "note" }> =>
+    openFindings
+      .filter((f) => f.itemId === itemId)
+      .map((f) => ({
+        note: f.note,
+        register: author === "user" ? ("note" as const) : ("question" as const),
+      }));
   const answers = readShortAnswers(row.shortAnswers);
   const reuseFlags = readReuseFlags(row.shortAnswersReuse);
   const answerByQuestion = new Map(
@@ -194,7 +222,10 @@ export async function loadApplicationView(
         edited: isEdited(row, { kind: "cover_letter" }),
         addedByYou: false,
         addedNotRelayed: false,
-        findings: findingsForItem(review, COVER_LETTER_ID).map((f) => f.note),
+        findings: findingsFor(
+          COVER_LETTER_ID,
+          authorFor(row, { kind: "cover_letter" }),
+        ),
       }),
     );
   }
@@ -225,7 +256,10 @@ export async function loadApplicationView(
         edited: isEdited(row, { kind: "question", question: q.question }),
         addedByYou: q.addedByUserId === userId,
         addedNotRelayed: q.addedByUserId === userId && !q.relayedAt,
-        findings: findingsForItem(review, q.id).map((f) => f.note),
+        findings: findingsFor(
+          q.id,
+          authorFor(row, { kind: "question", question: q.question }),
+        ),
       }),
     );
   }
@@ -251,8 +285,9 @@ export async function loadApplicationView(
         edited: isEdited(row, { kind: "question", question: a.question }),
         addedByYou: false,
         addedNotRelayed: false,
-        findings: findingsForItem(review, questionId(a.question)).map(
-          (f) => f.note,
+        findings: findingsFor(
+          questionId(a.question),
+          authorFor(row, { kind: "question", question: a.question }),
         ),
       }),
     );
@@ -282,7 +317,7 @@ export async function loadApplicationView(
     wantsCoverLetter: merged.formWantsCoverLetter,
     items,
     pendingEditCount: items.filter((i) => i.edited || i.addedNotRelayed).length,
-    openFindingCount: review?.open.length ?? 0,
+    openFindingCount: openFindings.length,
   };
 }
 
@@ -332,7 +367,7 @@ function buildItem(input: {
   edited: boolean;
   addedByYou: boolean;
   addedNotRelayed: boolean;
-  findings: string[];
+  findings: Array<{ note: string; register: "question" | "note" }>;
 }): ApplicationItem {
   const hasText = (input.text ?? "").trim().length > 0;
   // Anything written that Hank didn't write reads as the user's — the same

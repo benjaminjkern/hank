@@ -24,6 +24,11 @@ export type StoredUserQuestion = {
   // hasn't been told, which is what the pending-change chip and the relay key
   // on.
   relayedAt?: string;
+  // Set when the question is removed AFTER he was told about it — he's holding
+  // a form item that no longer exists, so the removal is news. The entry lives
+  // only until the next relay reports it and then goes for good; a removal he
+  // was never told about deletes outright, because there is nothing to correct.
+  removedAt?: string;
 };
 
 export function readStoredUserQuestions(raw: unknown): StoredUserQuestion[] {
@@ -54,12 +59,29 @@ export async function writeStoredUserQuestions(
 // Takes the whole relay rather than one job: a relay settles every open
 // application at once, and per-job it was a read and a write each. One read,
 // one write, flat in the number of jobs.
+// Questions this user removed after Hank had been told they existed. They ride
+// the next relay and are deleted by it.
+export function removedSinceRelayed(
+  raw: unknown,
+  userId: string,
+): StoredUserQuestion[] {
+  return readStoredUserQuestions(raw).filter(
+    (q) => q.addedByUserId === userId && !!q.removedAt,
+  );
+}
+
 export async function markUserQuestionsRelayed(
   userId: string,
-  relayed: ReadonlyArray<{ jobId: string; questions: string[] }>,
+  relayed: ReadonlyArray<{
+    jobId: string;
+    questions: string[];
+    removed: string[];
+  }>,
   at: string,
 ): Promise<void> {
-  const carrying = relayed.filter((r) => r.questions.length > 0);
+  const carrying = relayed.filter(
+    (r) => r.questions.length > 0 || r.removed.length > 0,
+  );
   if (carrying.length === 0) return;
 
   const jobs = await prisma.job.findMany({
@@ -74,14 +96,18 @@ export async function markUserQuestionsRelayed(
     const raw = storedByJob.get(r.jobId);
     if (raw === undefined) return []; // job deleted between relay and settle
     const norms = new Set(r.questions.map((q) => normalizeForCompare(q)));
+    const gone = new Set(r.removed.map((q) => normalizeForCompare(q)));
     let changed = false;
-    const next = readStoredUserQuestions(raw).map((q) => {
-      const mine =
-        q.addedByUserId === userId &&
-        norms.has(normalizeForCompare(q.question));
-      if (!mine) return q;
+    const next = readStoredUserQuestions(raw).flatMap((q) => {
+      const mine = q.addedByUserId === userId;
+      // A removal has now been reported, so the entry has done its only job.
+      if (mine && q.removedAt && gone.has(normalizeForCompare(q.question))) {
+        changed = true;
+        return [];
+      }
+      if (!mine || !norms.has(normalizeForCompare(q.question))) return [q];
       changed = true;
-      return { ...q, relayedAt: at };
+      return [{ ...q, relayedAt: at }];
     });
     return changed
       ? [

@@ -325,6 +325,10 @@ type State = {
   // instead of the caller's. Writes are hidden in the UI and the server
   // refuses any write that carries the param.
   impersonateSessionId: string | null;
+  // Who "you" is on surfaces that mark authorship — the application page puts
+  // this beside the answers the user wrote, opposite Hank's mark. Null on the
+  // impersonation shell, where the viewer isn't the person whose writing it is.
+  viewer: { initial: string; image: string | null } | null;
   // When non-null, the composer should adopt this text and the store clears
   // the field. Used by the ALREADY_STREAMING reject path so the user doesn't
   // lose their typed message when the server bounces a concurrent send.
@@ -434,10 +438,12 @@ type Actions = {
   // client-side navigations, so this module singleton survives them with the
   // previous identity's messages, dashboard and `hydrated` flag intact.
   setImpersonateSessionId: (sessionId: string | null) => void;
+  setViewer: (viewer: { initial: string; image: string | null } | null) => void;
 };
 
 const initial: State = {
   hydrated: false,
+  viewer: null,
   messages: [],
   hasMoreMessages: false,
   loadingOlder: false,
@@ -857,6 +863,9 @@ export const useChatStore = create<State & Actions>((set, get) => ({
     set({ apiKeyBlocker: reason });
   },
 
+  setViewer(viewer) {
+    set({ viewer });
+  },
   setImpersonateSessionId(sessionId) {
     if (get().impersonateSessionId === sessionId) return;
     // Whose data this store holds just changed, so everything in it is stale —

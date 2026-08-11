@@ -512,22 +512,19 @@ model JobInteraction {
   placementVerdict ProposedVerdict?
   coverLetter  String?
   shortAnswers Json? // [{question, answer}]
-  // The application text as HANK last wrote it: {coverLetter, answers:[{question,text}]}.
-  // Divergence from the live coverLetter/shortAnswers above is what marks a user
-  // edit as not-yet-relayed — the same proposal-vs-what's-there test the board
-  // runs on agentVerdict vs placementVerdict, so editing back to Hank's wording
-  // is a no-op rather than a change to report. Relaying (and submit)
-  // re-baselines it. Null entry = the user authored that item outright.
-  // See docs/flows.md → Application drafting.
+  // The application text as HANK last WROTE it: {coverLetter, answers:[{question,text}]}.
+  // ONLY his own writes touch it, which is what makes it the answer to "whose
+  // words are these": text equal to it is his, anything else is the user's. That
+  // also means putting his wording back hands authorship back, because it IS his
+  // again. A `null` entry = he has seen the item empty; a MISSING entry = he
+  // never wrote it. See docs/flows.md → Application drafting.
   proposedDrafts Json?
-  // Who wrote the text that's on the page right now, per item:
-  // {coverLetter:"hank"|"user"|null, answers:[{question, author}]}. Stamped by
-  // whichever write put the text there — persistApplicationAnswer for Hank, the
-  // panel's PATCH for the person. It is NOT derivable: relaying an edit
-  // re-baselines proposedDrafts to the user's words, so divergence forgets who
-  // wrote them a message later. Absent entry = nobody has written that item.
-  // See docs/flows.md → Application drafting.
-  draftAuthors Json?
+  // The application text as Hank last SAW it — same shape, re-stamped by the
+  // panel-edit relay and by submit. Divergence from the live text is what marks
+  // an edit as not yet carried to him. Deliberately NOT the column above: the
+  // two answer different questions, and fusing them meant relaying an edit made
+  // the user's words read as Hank's a message later.
+  relayedDrafts Json?
   // What the recruiter-lens critic concluded on its LAST pass, and what it
   // couldn't get resolved: {outcome:"clean"|"unresolved"|"error",
   // open:[{itemId,label,note}], settled:[…]}. Null = no review has run, which is

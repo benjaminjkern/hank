@@ -70,8 +70,22 @@ export async function* runJobArm(
   // input. Emits the opening once, then waits. No marker (focus is ephemeral) —
   // the user's replies drive it and re-entering the job re-derives what's still
   // pending, so resume is automatic.
+  //
+  // Whatever WAS drafted goes on screen first. The two halves are one pass —
+  // "here's what I wrote, and here's what I couldn't" — and leading with the
+  // ask alone read as though nothing had been written at all.
   if (outcome.askUserItems.length > 0) {
-    return yield* enterCoWrite(outcome.companyDisplay, outcome.askUserItems);
+    const drafted = outcome.hasCoverLetter || outcome.answersCount > 0;
+    if (drafted) {
+      yield* yieldUiEvents(
+        (await buildApplicationEvents(args.userId, jobId)).events,
+      );
+    }
+    return yield* enterCoWrite(
+      outcome.companyDisplay,
+      outcome.askUserItems,
+      drafted,
+    );
   }
 
   // Step 6: wait for submit. Narrate when work happened this pass OR when the
@@ -141,12 +155,16 @@ export async function* runJobArm(
 async function* enterCoWrite(
   companyName: string,
   items: string[],
+  drafted: boolean,
 ): AsyncGenerator<TurnEvent, WalkthroughResult> {
   const list = items.map((i) => `- ${i}`).join("\n");
+  const lead = drafted
+    ? `I've written what I could for ${companyName} — it's on the right. `
+    : "";
   const intro =
     items.length === 1
-      ? `Before I wrap up your ${companyName} application, there's one thing I'd like your input on — I don't have enough to draft it well on my own:`
-      : `Before I wrap up your ${companyName} application, there are a few things I'd like your input on — I don't have enough to draft them well on my own:`;
+      ? `${lead}There's one thing I'd rather not draft until you tell me more, because I'd be guessing:`
+      : `${lead}There are a few things I'd rather not draft until you tell me more, because I'd be guessing:`;
   const closer =
     items.length === 1
       ? `Tell me a bit about it and I'll shape it into a strong answer with you.`
