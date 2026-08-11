@@ -131,7 +131,7 @@ const COMMIT_MATCH_SCHEMA: SubAgentOutputSchema = {
       summaryLabel: {
         type: "string",
         description:
-          "ON A SKIP only: 2-4 words completing 'these roles are all ___' for the company-level summary shown when a walkthrough surfaces nothing — e.g. 'sales roles', 'product roles', 'senior-level positions', 'in Europe', 'in defense'. Bare category, plural, lowercase, NO contrast (that's in `reason`). Omit on a match.",
+          "ON A SKIP only: 2-4 words completing 'N of them were ___' for the company-level summary shown when a walkthrough surfaces nothing — e.g. 'sales roles', 'product roles', 'senior-level positions', 'in Europe', 'in defense'. Bare category, plural, lowercase, NO contrast (that's in `reason`). Skips are TALLIED by this label and every distinct group is reported, so label by the ACTUAL disqualifier for THIS role — a role that's the right job in the wrong city is 'in Europe', never 'sales roles'. Omit on a match.",
       },
     },
     required: ["decision", "reason"],

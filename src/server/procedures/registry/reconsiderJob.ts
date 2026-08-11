@@ -10,8 +10,12 @@
 // re-triaging (and possibly closing) a role the user just asked for. The human
 // choosing it IS the judgment, so the match pass is not re-run to argue back.
 //
-// Decided rows — closed, delisted, applied — aren't on the board at all;
-// undoing a close is a repair (update_job_interaction), not a board move.
+// A row THIS ROUND's filtering closed is markable too, and the mark un-closes it
+// on the way through. That's why the board needs no separate "actually, consider
+// this" button: correcting the filter and ranking a role are the same gesture,
+// so they get the same control. Rows closed by an EARLIER round are decided and
+// off the board entirely — undoing one of those is a repair
+// (update_job_interaction), not a board move.
 
 import {
   JobEventType,
@@ -21,6 +25,7 @@ import {
 import type { RunContext } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
 import { logJobEvent } from "@/server/entities/jobs/logJobEvents";
+import { reviveFilteredJob } from "@/server/entities/jobs/reviveFilteredJob";
 import {
   setBoardStance,
   type BoardStanceMove,
@@ -60,7 +65,27 @@ export async function runReconsiderJob(
     select: { status: true, job: { select: { title: true } } },
   });
   if (!row) return { kind: "not_reconsiderable", title: null, status: null };
-  if (!isStanceable(row.status)) {
+
+  // Marking a filtered row overrules the close first, so the rest of this runs
+  // against a row that's genuinely back in the pool. `reviveFilteredJob` decides
+  // where it lands (NEW when nothing ever read it, SCANNED when something did),
+  // which is what the pull-in test below then reads.
+  const reviving = row.status === JobInteractionStatus.CLOSED;
+  let status = row.status;
+  if (reviving) {
+    const revived = await reviveFilteredJob({
+      userId: args.userId,
+      jobId: args.jobId,
+    });
+    if (!revived.ok) {
+      return {
+        kind: "not_reconsiderable",
+        title: row.job.title,
+        status: row.status,
+      };
+    }
+    status = revived.status;
+  } else if (!isStanceable(row.status)) {
     return {
       kind: "not_reconsiderable",
       title: row.job.title,
@@ -69,7 +94,7 @@ export async function runReconsiderJob(
   }
 
   const pullingIn =
-    row.status === JobInteractionStatus.NEW && wantsARead(args.verdict);
+    status === JobInteractionStatus.NEW && wantsARead(args.verdict);
   let enrichment: EnrichJobBodyOutcome | null = null;
   if (pullingIn) {
     // Give the board and the ranker something to discuss, then promote out of
@@ -95,7 +120,12 @@ export async function runReconsiderJob(
     // A role just pulled in wasn't on the board a moment ago, so there's no
     // "where it was" to hold it in — landing in the chosen group IS the
     // feedback for the click. Every other mark leaves placement alone.
-    ...(pullingIn ? { place: true } : {}),
+    //
+    // A revived row is the exception to that exception: it very much has a
+    // "where it was" — the discard pile the user is looking at — and the revive
+    // pinned it there. Letting the pull-in place it would make the row leap out
+    // from under the cursor, which is the whole reason user marks are pending.
+    ...(pullingIn && !(reviving && args.by === "user") ? { place: true } : {}),
   });
   if (!stance.ok) {
     return {

@@ -16,6 +16,7 @@ import {
   JobCloseReason,
   JobEventType,
   JobInteractionStatus,
+  ProposedVerdict,
 } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 
@@ -67,6 +68,12 @@ export async function reviveFilteredJob(args: {
         status,
         closeReason: null,
         closeNote: null,
+        // Back in the running, still DRAWN in the discard pile it came from.
+        // Un-closing changes the row's status, which would otherwise re-tier it
+        // instantly and make it jump out from under the user mid-review; the
+        // stance that follows is pending like any other user mark, and the
+        // relay settles placement on their next message.
+        placementVerdict: ProposedVerdict.PASS,
       },
     },
   });

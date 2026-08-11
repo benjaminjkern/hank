@@ -1,19 +1,24 @@
-// Collapse a company's per-job close-summary labels into ONE clause the company
-// arm slots after "they're …" — so a company where a walkthrough surfaced
-// nothing gets a specific, defensible reason ("they're sales, product, and
-// recruiting roles") instead of a vague "none line up."
+// Collapse a company's per-job close-summary labels into ONE clause naming what
+// was actually set aside — so a company where a walkthrough surfaced nothing
+// gets a specific, defensible account ("12 were sales roles, 3 were product
+// roles, and 2 were in Europe") instead of a vague "none line up."
 //
 // The input is the structured `closeSummaryLabel` the pre-scan/scan sub-agent
 // emits per skip — a clean 2-4 word phrase ("sales roles", "in Europe", "too
-// senior"), NOT free text to reverse-engineer. So this is a plain tally + list
-// format, nothing more. Closes without a label (older rows, non-scan closes)
-// aren't passed in; an empty list returns null and the caller falls back to the
-// generic message.
+// senior"), NOT free text to reverse-engineer. So this is a plain tally, and it
+// reports every group it has.
+//
+// It reports COUNTS and never a bare category, because the caller renders this
+// after "I went through their N open roles" — and a summary that names one
+// reason there reads as a claim about ALL of them. That was wrong in exactly the
+// case that matters: a company whose roles were mostly the wrong function but
+// where a handful were the right job in the wrong city. Those few are the ones
+// worth revisiting, and dropping them is how "they're all sales roles" gets said
+// about a board that had good roles in it.
 
-// A role-shaped label ends in "role"/"roles"; only these merge into a list
-// ("sales, product, and recruiting roles"). Heterogeneous labels don't compose,
-// so a mix just uses the dominant one.
-const ROLE_TAIL = /\s+roles?$/i;
+// Beyond this, the tail is counted rather than listed — a nine-way breakdown is
+// a wall of text nobody reads, and the long tail is where the labels get noisy.
+const MAX_GROUPS = 4;
 
 export function summarizeCloseRationales(labels: string[]): string | null {
   const tally = new Map<string, number>();
@@ -24,19 +29,14 @@ export function summarizeCloseRationales(labels: string[]): string | null {
   const ranked = [...tally.entries()].sort((a, b) => b[1] - a[1]);
   if (ranked.length === 0) return null;
 
-  const total = ranked.reduce((sum, [, n]) => sum + n, 0);
-  // One label dominates → say it plainly rather than listing near-duplicates.
-  if (ranked.length === 1 || ranked[0][1] / total >= 0.6) return ranked[0][0];
+  // "N were <label>" rather than "N <label>", because the labels aren't all
+  // noun phrases — "in Europe" and "too senior" only read as English with the
+  // verb, and it's also what keeps a group of one from saying "1 sales roles".
+  const shown = ranked.slice(0, MAX_GROUPS);
+  const parts = shown.map(([label, n]) => `${n} were ${label}`);
+  const remainder = ranked.slice(MAX_GROUPS).reduce((sum, [, n]) => sum + n, 0);
+  if (remainder > 0) parts.push(`${remainder} were out for other reasons`);
 
-  // Otherwise name the top few — but only when they're all role-shaped, which
-  // lists cleanly; a heterogeneous mix falls back to the dominant label.
-  const top = ranked.slice(0, 3).map(([label]) => label);
-  if (!top.every((p) => ROLE_TAIL.test(p))) return ranked[0][0];
-  const heads = top.map((p) => p.replace(ROLE_TAIL, "").trim());
-  if (heads.some((h) => h.length < 2)) return ranked[0][0];
-  const list =
-    heads.length === 2
-      ? `${heads[0]} and ${heads[1]}`
-      : `${heads.slice(0, -1).join(", ")}, and ${heads[heads.length - 1]}`;
-  return `${list} roles`;
+  if (parts.length === 1) return parts[0];
+  return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
 }
