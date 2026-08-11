@@ -1,7 +1,7 @@
-// One mark from the discovery panel. Persists immediately (the list is DB truth
-// — a refresh or a second device sees it); the relay to Hank is derived at the
-// user's NEXT chat message (buildPanelEditBlocks snapshots the rows whose
-// userMark has drifted from relayedMark). Never wakes Hank.
+// One checkbox from the discovery panel. Persists immediately (the list is DB
+// truth — a refresh or a second device sees it); the relay to Hank is derived at
+// the user's NEXT chat message (buildPanelEditBlocks snapshots the rows whose
+// live mark has drifted from what he was told). Never wakes Hank.
 //
 // A mark decides nothing on its own: `commit_discovery` is what adds or records
 // anything, which is why a click here can't cost a URL hunt and why the user can
@@ -19,15 +19,15 @@ export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({
   suggestionId: z.string(),
-  // "unmarked" is the un-select — the user clearing their own mark rather than
-  // replacing it. It's a real state (still on the table), not an absence.
-  mark: z.enum(["add", "pass", "unmarked"]),
+  // Binary: the checkbox is on or off. Unchecking writes PASS rather than
+  // clearing the mark, because "not adding this one" is a real answer the
+  // commit acts on — there is no third state to fall back to.
+  mark: z.enum(["add", "pass"]),
 });
 
 const MARK_FOR = {
   add: CompanySuggestionMark.ADD,
   pass: CompanySuggestionMark.PASS,
-  unmarked: null,
 } as const;
 
 export async function POST(req: Request) {
