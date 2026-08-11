@@ -10,6 +10,7 @@ import { JobInteractionStatus } from "@/generated/prisma/client";
 import { statusEvent, yieldUiEvents } from "@/server/agent/contracts";
 import type { TurnEvent } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
+import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { runDraftApplication } from "@/server/procedures/registry/draftApplication";
 import {
   buildApplicationEvents,
@@ -17,6 +18,7 @@ import {
 } from "@/server/views/showEvents";
 
 import { runCompanyArm } from "./companyArm";
+import { narrateApplicationReady } from "./narration";
 
 import type { WalkthroughArgs, WalkthroughResult } from "./types";
 
@@ -30,11 +32,11 @@ export async function* runJobArm(
   // status instead of going silent.
   opts: { freshEntry?: boolean } = {},
 ): AsyncGenerator<TurnEvent, WalkthroughResult> {
-  // Defensive: if the dispatched job is no longer SHORTLISTED (the user
-  // skipped / deferred / applied since it was picked), self-correct — re-
-  // dispatch via the company arm, which picks the next SHORTLISTED. Prevents
-  // the state machine from sitting on a terminal job and doing nothing every
-  // subsequent turn.
+  // Defensive: if the dispatched job is no longer live work (the user skipped /
+  // deferred / applied since it was picked), self-correct — re-dispatch via the
+  // company arm, which picks the next one. Prevents the state machine from
+  // sitting on a terminal job and doing nothing every subsequent turn.
+  // A row already mid-draft (APPLYING) is live: re-entering it resumes.
   const ji = await prisma.jobInteraction.findFirst({
     where: { userId: args.userId, jobId },
     select: {
@@ -42,7 +44,7 @@ export async function* runJobArm(
       job: { select: { companyId: true } },
     },
   });
-  if (!ji || ji.status !== JobInteractionStatus.SHORTLISTED) {
+  if (!ji || !WORKABLE_STATUSES.includes(ji.status)) {
     yield statusEvent(
       "That job is no longer shortlisted — going back to the company.",
     );
@@ -111,21 +113,19 @@ export async function* runJobArm(
           "Tap **I submitted ✓** once you've applied.",
       };
     } else {
-      // Put the application on screen rather than telling them where to look.
+      // Put the application on screen rather than telling them where to look,
+      // then hand over what the reviewer actually said about it.
       yield* yieldUiEvents(
         (await buildApplicationEvents(args.userId, jobId)).events,
       );
-      // A read-back that stopped on something unresolved has to be SAID here.
-      // "Read it over and change anything that doesn't sound like you" is the
-      // line for a draft that came back clean; saying it over a known
-      // contradiction is how one ships.
-      const open = outcome.review?.open.length ?? 0;
       yield {
         type: "text",
-        text:
-          open > 0
-            ? `Your application's on the right. Reading it back against your résumé, ${open === 1 ? "one thing" : `${open} things`} I can't settle on my own — ${open === 1 ? "it's" : "they're"} marked against the answer${open === 1 ? "" : "s"} in question, and ${open === 1 ? "it's" : "they're"} the kind of thing only you can call. Worth a look before you send it.`
-            : "Your application's on the right — read it over and change anything that doesn't sound like you. Tap **I submitted ✓** once you've applied.",
+        text: narrateApplicationReady({
+          note: outcome.note,
+          openFindings: (outcome.review?.open ?? []).map(
+            (f) => `**${f.label}** — ${f.note}`,
+          ),
+        }),
       };
     }
   }

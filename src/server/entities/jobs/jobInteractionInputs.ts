@@ -35,6 +35,16 @@ export const JOB_CLOSE_REASONS = [
 // the shortlist defer-the-rest default is OUTRANKED.
 export const JOB_DEFER_REASONS = ["OUTRANKED", "OTHER"] as const;
 
+// Roles the walkthrough treats as live work: approved and waiting its turn
+// (SHORTLISTED), and the one a drafting pass has started (APPLYING). One list
+// because a dozen places ask the same question — is this role open business —
+// and a status added to only some of them is silent (wrong bucket, never
+// surfaces in what's-next) rather than a type error.
+export const WORKABLE_STATUSES: JobInteractionStatus[] = [
+  JobInteractionStatus.SHORTLISTED,
+  JobInteractionStatus.APPLYING,
+];
+
 // Statuses `update_job_interaction` will set directly — the correction path for
 // a role whose cached status is simply wrong. DELISTED is offered because a user
 // can tell Hank the posting came down, but it's normally system-set from a

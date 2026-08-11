@@ -15,6 +15,7 @@ import {
 import { statusEvent, widgetEvent } from "@/server/agent/contracts";
 import type { TurnEvent } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
+import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { markCompanyReady } from "@/server/entities/companies/markCompanyStatus";
 import { caughtUpCompany } from "@/server/entities/companies/setCompanyAside";
 import { roundStartedAt } from "@/server/entities/jobs/boardStance";
@@ -231,10 +232,7 @@ export async function* runCompanyArm(
           where: {
             userId: args.userId,
             status: {
-              in: [
-                JobInteractionStatus.SHORTLISTED,
-                JobInteractionStatus.DEFERRED,
-              ],
+              in: [...WORKABLE_STATUSES, JobInteractionStatus.DEFERRED],
             },
             job: { companyId },
           },
@@ -407,7 +405,7 @@ async function loadPickableJobs(
     prisma.jobInteraction.findMany({
       where: {
         userId,
-        status: JobInteractionStatus.SHORTLISTED,
+        status: { in: WORKABLE_STATUSES },
         job: { companyId },
       },
       orderBy: { updatedAt: "asc" },

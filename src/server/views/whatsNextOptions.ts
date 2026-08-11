@@ -17,6 +17,7 @@ import {
   OpportunityStatus,
 } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { OWED_JOB_STATUSES } from "@/server/entities/jobs/attention";
 import { nowDate, nowMs } from "@/utils/now";
 
@@ -457,7 +458,7 @@ async function buildActiveCompanySubtitles(
       userId,
       job: { companyId: { in: companyIds } },
       status: {
-        in: [JobInteractionStatus.SHORTLISTED, JobInteractionStatus.SCANNED],
+        in: [...WORKABLE_STATUSES, JobInteractionStatus.SCANNED],
       },
     },
     select: {
@@ -473,7 +474,7 @@ async function buildActiveCompanySubtitles(
     if (!cid) continue;
     const slot = byCompany.get(cid);
     if (!slot) continue;
-    if (r.status === JobInteractionStatus.SHORTLISTED) slot.shortlisted += 1;
+    if (WORKABLE_STATUSES.includes(r.status)) slot.shortlisted += 1;
     if (r.status === JobInteractionStatus.SCANNED) slot.scanned += 1;
   }
   const out = new Map<string, string>();

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { JobInteractionStatus } from "@/generated/prisma/client";
 import { formatFocusRefToken } from "@/lib/focusRefToken";
 import { prisma } from "@/server/db/prisma";
+import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { promoteJobForWork } from "@/server/entities/jobs/setJobAside";
 import { resolveJobBySlug } from "@/server/entities/resolveBySlug";
 import { buildShowEvents } from "@/server/views/showEvents";
@@ -55,8 +56,8 @@ export const workOnJobTool: ToolDef<{ job: string }> = {
       ji != null &&
       (ji.status === JobInteractionStatus.NEW ||
         ji.status === JobInteractionStatus.SCANNED ||
-        ji.status === JobInteractionStatus.SHORTLISTED ||
-        ji.status === JobInteractionStatus.DEFERRED);
+        ji.status === JobInteractionStatus.DEFERRED ||
+        WORKABLE_STATUSES.includes(ji.status));
 
     await promoteJobForWork({ userId: ctx.userId, jobId });
     const { events } = await buildShowEvents(ctx.userId, { jobId });

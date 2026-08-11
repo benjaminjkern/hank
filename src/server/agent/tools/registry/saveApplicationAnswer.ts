@@ -59,10 +59,13 @@ export const saveApplicationAnswerTool: ToolDef<{
     if (!jobResolved.ok) return jobResolved.result;
     const jobId = jobResolved.id;
 
+    // Their exact words, so they own it — and it feeds later drafts, exactly
+    // as if they had typed it into the panel.
     const r = await persistApplicationAnswer(ctx.userId, jobId, {
       coverLetter: input.coverLetter,
       question: input.question,
       answer: input.answer,
+      author: "user",
     });
     if (!r.ok) {
       return toolError(

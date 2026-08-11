@@ -511,6 +511,14 @@ model JobInteraction {
   // re-baselines it. Null entry = the user authored that item outright.
   // See docs/flows.md → Application drafting.
   proposedDrafts Json?
+  // Who wrote the text that's on the page right now, per item:
+  // {coverLetter:"hank"|"user"|null, answers:[{question, author}]}. Stamped by
+  // whichever write put the text there — persistApplicationAnswer for Hank, the
+  // panel's PATCH for the person. It is NOT derivable: relaying an edit
+  // re-baselines proposedDrafts to the user's words, so divergence forgets who
+  // wrote them a message later. Absent entry = nobody has written that item.
+  // See docs/flows.md → Application drafting.
+  draftAuthors Json?
   // What the recruiter-lens critic concluded on its LAST pass, and what it
   // couldn't get resolved: {outcome:"clean"|"unresolved"|"error",
   // open:[{itemId,label,note}], settled:[…]}. Null = no review has run, which is
@@ -566,6 +574,7 @@ enum JobInteractionStatus {
   NEW // surfaced by a scan, no decision yet
   SCANNED // full description read; awaiting shortlist decision
   SHORTLISTED // user approved the pick — ready to apply
+  APPLYING // a drafting pass has started on this one; the application is being written
   CLOSED // user/agent won't pursue — see closeReason
   DEFERRED // "could apply, outranked now"; no timer, revive to act. See deferReason
   APPLIED

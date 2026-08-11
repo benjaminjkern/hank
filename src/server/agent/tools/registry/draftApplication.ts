@@ -95,6 +95,9 @@ export const draftApplicationTool: ToolDef<{
     // The read-back verdict, in Hank's own channel. He has to relay an
     // unresolved finding rather than report a finished draft — the whole point
     // of the reviewer is lost if its conclusion stops here.
+    if (result.note) {
+      parts.push(`The reviewer's line on it: ${result.note}`);
+    }
     const open = result.review?.open ?? [];
     if (open.length > 0) {
       parts.push(

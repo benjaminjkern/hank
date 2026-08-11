@@ -47,6 +47,7 @@ export type DraftedRow = {
   shortAnswers: Prisma.JsonValue | null;
   shortAnswersReuse: Prisma.JsonValue | null;
   proposedDrafts: Prisma.JsonValue | null;
+  draftAuthors: Prisma.JsonValue | null;
 };
 
 export const DRAFTED_ROW_SELECT = {
@@ -55,7 +56,105 @@ export const DRAFTED_ROW_SELECT = {
   shortAnswers: true,
   shortAnswersReuse: true,
   proposedDrafts: true,
+  draftAuthors: true,
 } as const;
+
+// Who wrote the text an item holds right now. Stamped by the write that put it
+// there, because it can't be derived: relaying an edit re-baselines
+// proposedDrafts to the user's words, so one message later the divergence that
+// proved they wrote it is gone.
+export type DraftAuthor = "hank" | "user";
+
+export type DraftAuthors = {
+  coverLetter: DraftAuthor | null;
+  answers: Array<{ question: string; author: DraftAuthor }>;
+};
+
+function asAuthor(v: unknown): DraftAuthor | null {
+  return v === "hank" || v === "user" ? v : null;
+}
+
+export function readDraftAuthors(raw: Prisma.JsonValue | null): DraftAuthors {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { coverLetter: null, answers: [] };
+  }
+  const obj = raw as Record<string, unknown>;
+  const answers = Array.isArray(obj.answers)
+    ? obj.answers.flatMap((e) => {
+        if (!e || typeof e !== "object" || Array.isArray(e)) return [];
+        const rec = e as Record<string, unknown>;
+        const author = asAuthor(rec.author);
+        return typeof rec.question === "string" && author
+          ? [{ question: rec.question, author }]
+          : [];
+      })
+    : [];
+  return { coverLetter: asAuthor(obj.coverLetter), answers };
+}
+
+// Null = nobody has claimed this item: nothing is written, or the text arrived
+// by a path that doesn't stamp.
+export function authorFor(
+  row: Pick<DraftedRow, "draftAuthors">,
+  item: ApplicationItemRef,
+): DraftAuthor | null {
+  const authors = readDraftAuthors(row.draftAuthors);
+  if (item.kind === "cover_letter") return authors.coverLetter;
+  const norm = normalizeForCompare(item.question);
+  return (
+    authors.answers.find((a) => normalizeForCompare(a.question) === norm)
+      ?.author ?? null
+  );
+}
+
+// Stamp one item's author, leaving the others alone. Returns the whole column
+// value — every writer of application text calls this.
+export function draftAuthorsPatch(
+  row: Pick<DraftedRow, "draftAuthors">,
+  item: ApplicationItemRef,
+  author: DraftAuthor,
+): Prisma.InputJsonValue {
+  const authors = readDraftAuthors(row.draftAuthors);
+  if (item.kind === "cover_letter") {
+    return {
+      ...authors,
+      coverLetter: author,
+    } as unknown as Prisma.InputJsonValue;
+  }
+  const norm = normalizeForCompare(item.question);
+  const hit = authors.answers.some(
+    (a) => normalizeForCompare(a.question) === norm,
+  );
+  const answers = hit
+    ? authors.answers.map((a) =>
+        normalizeForCompare(a.question) === norm
+          ? { question: item.question, author }
+          : a,
+      )
+    : [...authors.answers, { question: item.question, author }];
+  return { ...authors, answers } as unknown as Prisma.InputJsonValue;
+}
+
+// Drop an item's stamp — the text it described is gone.
+export function forgetDraftAuthor(
+  row: Pick<DraftedRow, "draftAuthors">,
+  item: ApplicationItemRef,
+): Prisma.InputJsonValue {
+  const authors = readDraftAuthors(row.draftAuthors);
+  if (item.kind === "cover_letter") {
+    return {
+      ...authors,
+      coverLetter: null,
+    } as unknown as Prisma.InputJsonValue;
+  }
+  const norm = normalizeForCompare(item.question);
+  return {
+    ...authors,
+    answers: authors.answers.filter(
+      (a) => normalizeForCompare(a.question) !== norm,
+    ),
+  } as unknown as Prisma.InputJsonValue;
+}
 
 export function readShortAnswers(raw: Prisma.JsonValue | null): ShortAnswer[] {
   if (!Array.isArray(raw)) return [];
@@ -118,31 +217,29 @@ function sameText(a: string | null, b: string | null): boolean {
   return (a ?? "").trim() === (b ?? "").trim();
 }
 
-// Whether the live text is the user's rather than Hank's — either it diverges
-// from what he wrote, or they claimed it via the reuse switch. The critic and
-// any redraft must leave these alone.
+// Whether the live text is the user's rather than Hank's. The critic and any
+// redraft must leave these alone — a critique of someone's own sentences is
+// reported to them, not rewritten.
+//
+// Anything written that Hank didn't write counts, so text with no stamp is
+// theirs by default: the conservative read, and the one that matches "he only
+// rewrites what he can prove he wrote".
 export function isUserOwned(
   row: DraftedRow,
   item: ApplicationItemRef,
 ): boolean {
-  const drafts = readProposedDrafts(row.proposedDrafts);
+  if (!hasText(row, item)) return false;
+  return authorFor(row, item) !== "hank";
+}
+
+function hasText(row: DraftedRow, item: ApplicationItemRef): boolean {
   if (item.kind === "cover_letter") {
-    if (row.coverLetterReuse === true) return true;
-    const base = baselineFor(drafts, item);
-    if (base === undefined) return (row.coverLetter ?? "").trim().length > 0;
-    return !sameText(row.coverLetter, base);
+    return (row.coverLetter ?? "").trim().length > 0;
   }
-  const answers = readShortAnswers(row.shortAnswers);
-  const reuse = readReuseFlags(row.shortAnswersReuse);
   const norm = normalizeForCompare(item.question);
-  const idx = answers.findIndex(
-    (a) => normalizeForCompare(a.question) === norm,
+  return readShortAnswers(row.shortAnswers).some(
+    (a) => normalizeForCompare(a.question) === norm && a.answer.trim() !== "",
   );
-  if (idx < 0) return false;
-  if (reuse[idx] === true) return true;
-  const base = baselineFor(drafts, item);
-  if (base === undefined) return answers[idx].answer.trim().length > 0;
-  return !sameText(answers[idx].answer, base);
 }
 
 export type ApplicationEdit = {
@@ -240,6 +337,7 @@ const RELAYABLE_STATUSES: JobInteractionStatus[] = [
   JobInteractionStatus.NEW,
   JobInteractionStatus.SCANNED,
   JobInteractionStatus.SHORTLISTED,
+  JobInteractionStatus.APPLYING,
   JobInteractionStatus.DEFERRED,
   JobInteractionStatus.PITCHED,
 ];
@@ -264,11 +362,7 @@ export async function listUnrelayedApplicationEdits(
       ],
     },
     select: {
-      coverLetter: true,
-      coverLetterReuse: true,
-      shortAnswers: true,
-      shortAnswersReuse: true,
-      proposedDrafts: true,
+      ...DRAFTED_ROW_SELECT,
       applicationReview: true,
       job: {
         select: {

@@ -10,10 +10,11 @@ import { JobInteractionStatus } from "@/generated/prisma/client";
 import { companyLogoUrl } from "@/lib/companyLogo";
 import { prisma } from "@/server/db/prisma";
 import {
-  isUserOwned,
+  authorFor,
   readProposedDrafts,
   readReuseFlags,
   readShortAnswers,
+  type DraftAuthor,
   type DraftedRow,
 } from "@/server/entities/jobs/applicationDrafts";
 import {
@@ -24,8 +25,6 @@ import { loadMergedQuestions } from "@/server/entities/jobs/applicationQuestions
 import {
   findingsForItem,
   readApplicationReview,
-  reviewState,
-  type ReviewState,
 } from "@/server/entities/jobs/applicationReview";
 import { isCoverLetterQuestion, isStockFieldType } from "@/server/scrape/types";
 import type {
@@ -55,6 +54,9 @@ export type ApplicationItem = {
   source: "scraped" | "user";
   text: string | null;
   reuse: boolean | null;
+  // Who wrote the text that's here, for the page's byline. Null when nothing is
+  // written, or when nothing stamped it.
+  author: DraftAuthor | null;
   status: ApplicationItemStatus;
   // Diverges from what Hank last wrote, so it rides the next chat message.
   edited: boolean;
@@ -100,18 +102,12 @@ export type ApplicationView = {
   items: ApplicationItem[];
   // Items whose text hasn't been relayed to Hank yet.
   pendingEditCount: number;
-  // The last accuracy-and-consistency pass over the whole application. Null
-  // until one has run — which the page shows differently from a clean result,
-  // since "nobody has checked this" and "checked, nothing wrong" are not the
-  // same news.
-  review: {
-    state: ReviewState;
-    // Findings that outlived the revision rounds and aren't attached to any
-    // item still on the form — an answer the user deleted outright. They'd
-    // otherwise vanish silently.
-    orphaned: string[];
-  } | null;
-  // Open findings across every item — what submit asks about.
+  // Open findings across every item — what submit asks about. The page doesn't
+  // report the review's VERDICT: what a pass concluded is news, and news is
+  // said once in chat by whoever ran it rather than displayed indefinitely by a
+  // page that has no way to notice it has gone stale. What survives here is
+  // per-item and self-clearing: a finding sits against the text it objects to
+  // and goes when that text is rewritten.
   openFindingCount: number;
 };
 
@@ -130,6 +126,7 @@ export async function loadApplicationView(
       shortAnswers: true,
       shortAnswersReuse: true,
       proposedDrafts: true,
+      draftAuthors: true,
       applicationReview: true,
       job: {
         select: {
@@ -193,7 +190,7 @@ export async function loadApplicationView(
         reuse: row.coverLetterReuse,
         verdict: decision?.coverLetter?.verdict ?? null,
         note: decision?.coverLetter?.reason ?? null,
-        owned: isUserOwned(row, { kind: "cover_letter" }),
+        author: authorFor(row, { kind: "cover_letter" }),
         edited: isEdited(row, { kind: "cover_letter" }),
         addedByYou: false,
         addedNotRelayed: false,
@@ -224,7 +221,7 @@ export async function loadApplicationView(
         // nobody has drafted yet shows a dropdown and an essay identically.
         verdict: verdict?.verdict ?? (isStockFieldType(q.type) ? "skip" : null),
         note: verdict?.reason ?? null,
-        owned: isUserOwned(row, { kind: "question", question: q.question }),
+        author: authorFor(row, { kind: "question", question: q.question }),
         edited: isEdited(row, { kind: "question", question: q.question }),
         addedByYou: q.addedByUserId === userId,
         addedNotRelayed: q.addedByUserId === userId && !q.relayedAt,
@@ -250,7 +247,7 @@ export async function loadApplicationView(
           answerByQuestion.get(normalizeForCompare(a.question))?.reuse ?? null,
         verdict: null,
         note: null,
-        owned: isUserOwned(row, { kind: "question", question: a.question }),
+        author: authorFor(row, { kind: "question", question: a.question }),
         edited: isEdited(row, { kind: "question", question: a.question }),
         addedByYou: false,
         addedNotRelayed: false,
@@ -285,17 +282,6 @@ export async function loadApplicationView(
     wantsCoverLetter: merged.formWantsCoverLetter,
     items,
     pendingEditCount: items.filter((i) => i.edited || i.addedNotRelayed).length,
-    review: review
-      ? {
-          state: reviewState(
-            review,
-            items.some((i) => i.edited),
-          ),
-          orphaned: review.open
-            .filter((f) => !items.some((i) => i.id === f.itemId))
-            .map((f) => `${f.label}: ${f.note}`),
-        }
-      : null,
     openFindingCount: review?.open.length ?? 0,
   };
 }
@@ -342,17 +328,20 @@ function buildItem(input: {
   reuse: boolean | null;
   verdict: DraftVerdict | null;
   note: string | null;
-  owned: boolean;
+  author: DraftAuthor | null;
   edited: boolean;
   addedByYou: boolean;
   addedNotRelayed: boolean;
   findings: string[];
 }): ApplicationItem {
   const hasText = (input.text ?? "").trim().length > 0;
+  // Anything written that Hank didn't write reads as the user's — the same
+  // default isUserOwned takes, so the page and the critic can't disagree about
+  // whose sentences these are.
   const status: ApplicationItemStatus = hasText
-    ? input.owned
-      ? "written_by_you"
-      : "drafted"
+    ? input.author === "hank"
+      ? "drafted"
+      : "written_by_you"
     : input.verdict === "ask_user"
       ? "needs_you"
       : "empty";
@@ -364,6 +353,7 @@ function buildItem(input: {
     source: input.source,
     text: input.text,
     reuse: input.reuse,
+    author: hasText ? input.author : null,
     status,
     edited: input.edited,
     // A reason only earns space when there's nothing written to read instead.

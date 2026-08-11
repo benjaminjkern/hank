@@ -11,6 +11,7 @@ import {
   JobInteractionStatus,
 } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { WORKABLE_STATUSES } from "./jobInteractionInputs";
 import { refreshCompanyEngagement } from "@/server/entities/companies/engagement";
 import { logJobEvent } from "@/server/entities/jobs/logJobEvents";
 
@@ -88,7 +89,7 @@ export async function markJobApplied(
     const next = await prisma.jobInteraction.findFirst({
       where: {
         userId: args.userId,
-        status: JobInteractionStatus.SHORTLISTED,
+        status: { in: WORKABLE_STATUSES },
         job: { companyId: res.companyId },
       },
       orderBy: { updatedAt: "asc" },

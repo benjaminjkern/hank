@@ -27,9 +27,15 @@ import { nowDate } from "@/utils/now";
 import { normalizeForCompare } from "@/utils/text";
 
 import {
+  draftAuthorsPatch,
+  forgetDraftAuthor,
   proposedDraftsPatch,
+  readDraftAuthors,
   readProposedDrafts,
+  readReuseFlags,
   readShortAnswers,
+  type ApplicationItemRef,
+  type DraftAuthor,
 } from "./applicationDrafts";
 import { COVER_LETTER_ID, questionId } from "./applicationItemId";
 import {
@@ -235,6 +241,133 @@ export type RenameUserQuestionResult =
   | { ok: true; id: string }
   | { ok: false; reason: "not_found" | "not_yours" | "duplicate" };
 
+export type RemoveUserQuestionResult =
+  { ok: true } | { ok: false; reason: "not_found" | "not_yours" };
+
+// Take back a question the user described by hand — it wasn't on the form after
+// all, or it was a duplicate of one that was. Same ownership rule as the reword:
+// a scraped question is what the form says, and someone else's isn't yours to
+// delete.
+//
+// The answer goes with it. A question's wording is the key its answer is stored
+// under, so an answer left behind detaches and resurfaces on the page as an
+// orphan item — which reads as the removal not having worked. Everything else
+// keyed by that wording (Hank's baseline, his verdict, the author stamp, any
+// open review finding) goes for the same reason.
+export async function removeUserQuestion(
+  userId: string,
+  jobId: string,
+  question: string,
+): Promise<RemoveUserQuestionResult> {
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    select: { userAddedQuestions: true },
+  });
+  if (!job) return { ok: false, reason: "not_found" };
+
+  const stored = readStoredUserQuestions(job.userAddedQuestions);
+  const norm = normalizeForCompare(question);
+  const idx = stored.findIndex((q) => normalizeForCompare(q.question) === norm);
+  if (idx < 0) return { ok: false, reason: "not_found" };
+  if (stored[idx].addedByUserId !== userId) {
+    return { ok: false, reason: "not_yours" };
+  }
+
+  const interaction = await prisma.jobInteraction.findUnique({
+    where: { userId_jobId: { userId, jobId } },
+    select: {
+      shortAnswers: true,
+      shortAnswersReuse: true,
+      proposedDrafts: true,
+      draftDecision: true,
+      draftAuthors: true,
+      applicationReview: true,
+    },
+  });
+
+  await prisma.$transaction([
+    prisma.job.update({
+      where: { id: jobId },
+      data: {
+        userAddedQuestions: stored.filter(
+          (_, i) => i !== idx,
+        ) as unknown as Prisma.InputJsonValue,
+      },
+    }),
+    ...(interaction
+      ? [
+          prisma.jobInteraction.update({
+            where: { userId_jobId: { userId, jobId } },
+            data: dropQuestion(interaction, norm, stored[idx].question),
+          }),
+        ]
+      : []),
+  ]);
+  return { ok: true };
+}
+
+// The mirror of rekeyQuestion: unpick every place this user's row names the
+// question by its text, rather than re-pointing them.
+function dropQuestion(
+  row: {
+    shortAnswers: Prisma.JsonValue | null;
+    shortAnswersReuse: Prisma.JsonValue | null;
+    proposedDrafts: Prisma.JsonValue | null;
+    draftDecision: Prisma.JsonValue | null;
+    draftAuthors: Prisma.JsonValue | null;
+    applicationReview: Prisma.JsonValue | null;
+  },
+  norm: string,
+  question: string,
+): Prisma.JobInteractionUpdateInput {
+  const isIt = (entry: { question: string }) =>
+    normalizeForCompare(entry.question) === norm;
+  const data: Prisma.JobInteractionUpdateInput = {};
+
+  // The reuse flags are a parallel array, so the answer and its flag have to be
+  // dropped at the same index or every flag after it shifts onto the wrong
+  // answer.
+  const answers = readShortAnswers(row.shortAnswers);
+  const at = answers.findIndex(isIt);
+  if (at >= 0) {
+    const flags = readReuseFlags(row.shortAnswersReuse);
+    while (flags.length < answers.length) flags.push(null);
+    data.shortAnswers = answers.filter((_, i) => i !== at);
+    data.shortAnswersReuse = flags.filter((_, i) => i !== at);
+  }
+
+  const drafts = readProposedDrafts(row.proposedDrafts);
+  if (drafts?.answers.some(isIt)) {
+    data.proposedDrafts = {
+      ...drafts,
+      answers: drafts.answers.filter((a) => !isIt(a)),
+    } as unknown as Prisma.InputJsonValue;
+  }
+
+  const authors = readDraftAuthors(row.draftAuthors);
+  if (authors.answers.some(isIt)) {
+    data.draftAuthors = forgetDraftAuthor(row, { kind: "question", question });
+  }
+
+  const decision = row.draftDecision as {
+    questions?: { question: string }[];
+  } | null;
+  if (decision?.questions?.some(isIt)) {
+    data.draftDecision = {
+      ...decision,
+      questions: decision.questions.filter((q) => !isIt(q)),
+    } as unknown as Prisma.InputJsonValue;
+  }
+
+  const cleared = clearFindingsForItem(
+    readApplicationReview(row.applicationReview),
+    questionId(question),
+  );
+  if (cleared) data.applicationReview = cleared;
+
+  return data;
+}
+
 // Reword a question the user described by hand. Only the person who added it
 // may — a scraped question is what the form actually says, and someone else's
 // wording isn't yours to change.
@@ -293,7 +426,12 @@ export async function renameUserQuestion(
 
   const interaction = await prisma.jobInteraction.findUnique({
     where: { userId_jobId: { userId, jobId } },
-    select: { shortAnswers: true, proposedDrafts: true, draftDecision: true },
+    select: {
+      shortAnswers: true,
+      proposedDrafts: true,
+      draftDecision: true,
+      draftAuthors: true,
+    },
   });
 
   await prisma.$transaction([
@@ -321,6 +459,7 @@ function rekeyQuestion(
     shortAnswers: Prisma.JsonValue | null;
     proposedDrafts: Prisma.JsonValue | null;
     draftDecision: Prisma.JsonValue | null;
+    draftAuthors: Prisma.JsonValue | null;
   },
   currentNorm: string,
   nextQuestion: string,
@@ -347,6 +486,16 @@ function rekeyQuestion(
     } as unknown as Prisma.InputJsonValue;
   }
 
+  const authors = readDraftAuthors(row.draftAuthors);
+  if (
+    authors.answers.some((a) => normalizeForCompare(a.question) === currentNorm)
+  ) {
+    data.draftAuthors = {
+      ...authors,
+      answers: authors.answers.map(rename),
+    } as unknown as Prisma.InputJsonValue;
+  }
+
   const decision = row.draftDecision as {
     questions?: { question: string }[];
   } | null;
@@ -364,16 +513,24 @@ function rekeyQuestion(
   return data;
 }
 
-// The merge-upsert for an application answer written BY HANK: replaces the cover
-// letter and/or upserts one short answer WITHOUT disturbing siblings, and sets
-// the item's reuse flag to FALSE — a Hank-authored/overwritten draft is never
-// reuse-eligible until the user opts it in (copy / edit / flip the switch). Only
-// the user marks reuse=true (frontend). Shared by save_application_answer and
-// draft_application_question.
+// The merge-upsert for one application item: replaces the cover letter and/or
+// upserts one short answer WITHOUT disturbing siblings.
+//
+// `author` says whose words these are, and it drives both side-effects. Hank's
+// text stamps "hank" and sets reuse FALSE — nothing he drafts feeds his next
+// draft until the user opts it in. The user's own words (dictated in chat and
+// saved verbatim by save_application_answer) stamp "user" and set reuse TRUE,
+// the same as typing them into the panel: which surface they came through
+// isn't the question the flag answers.
 export async function persistApplicationAnswer(
   userId: string,
   jobId: string,
-  input: { coverLetter?: string; question?: string; answer?: string },
+  input: {
+    coverLetter?: string;
+    question?: string;
+    answer?: string;
+    author: DraftAuthor;
+  },
 ): Promise<
   | { ok: true; applied: string[]; jobSlug: string }
   | { ok: false; reason: "no_job_interaction" }
@@ -384,6 +541,7 @@ export async function persistApplicationAnswer(
       coverLetter: true,
       shortAnswers: true,
       shortAnswersReuse: true,
+      draftAuthors: true,
       applicationReview: true,
       job: { select: { slug: true } },
     },
@@ -391,6 +549,7 @@ export async function persistApplicationAnswer(
   if (!jobInteraction) return { ok: false, reason: "no_job_interaction" };
   const jobSlug = jobInteraction.job?.slug ?? jobId;
 
+  const byUser = input.author === "user";
   const applied: string[] = [];
   const data: {
     coverLetter?: string;
@@ -398,8 +557,21 @@ export async function persistApplicationAnswer(
     shortAnswers?: Prisma.InputJsonValue;
     shortAnswersReuse?: Prisma.InputJsonValue;
     proposedDrafts?: Prisma.InputJsonValue;
+    draftAuthors?: Prisma.InputJsonValue;
     applicationReview?: Prisma.InputJsonValue;
   } = {};
+
+  // Each stamp is folded onto the last, so writing the cover letter and an
+  // answer in one call leaves both recorded.
+  let authors: Prisma.JsonValue = jobInteraction.draftAuthors;
+  const stampAuthor = (item: ApplicationItemRef) => {
+    authors = draftAuthorsPatch(
+      { draftAuthors: authors },
+      item,
+      input.author,
+    ) as Prisma.JsonValue;
+    data.draftAuthors = authors as Prisma.InputJsonValue;
+  };
 
   // Rewriting an item settles what the review had open against it, same as a
   // user edit — the text it objected to is gone. A revision round clears here
@@ -414,7 +586,8 @@ export async function persistApplicationAnswer(
 
   if (input.coverLetter?.trim()) {
     data.coverLetter = input.coverLetter;
-    data.coverLetterReuse = false;
+    data.coverLetterReuse = byUser;
+    stampAuthor({ kind: "cover_letter" });
     settleFindings(COVER_LETTER_ID);
     applied.push("cover letter");
   }
@@ -453,13 +626,14 @@ export async function persistApplicationAnswer(
     );
     if (idx >= 0) {
       existing[idx] = { question: canonical, answer: input.answer };
-      reuse[idx] = false; // Hank overwrote it → not reusable until the user opts in
+      reuse[idx] = byUser;
     } else {
       existing.push({ question: canonical, answer: input.answer });
-      reuse.push(false);
+      reuse.push(byUser);
     }
     data.shortAnswers = existing;
     data.shortAnswersReuse = reuse;
+    stampAuthor({ kind: "question", question: canonical });
     settleFindings(questionId(canonical));
     applied.push("short answer");
   }

@@ -66,6 +66,7 @@ import { markJobAppliedTool } from "@/server/agent/tools/registry/markJobApplied
 import { readApplicationDraftsTool } from "@/server/agent/tools/registry/readApplicationDrafts";
 import { readJobDescriptionTool } from "@/server/agent/tools/registry/readJobDescription";
 import { readMemoryTool } from "@/server/agent/tools/registry/readMemory";
+import { reviewApplicationTool } from "@/server/agent/tools/registry/reviewApplication";
 import { saveApplicationAnswerTool } from "@/server/agent/tools/registry/saveApplicationAnswer";
 import { scrapeJobsForCompanyTool } from "@/server/agent/tools/registry/scrapeJobsForCompany";
 import { updateCompanyInteractionTool } from "@/server/agent/tools/registry/updateCompanyInteraction";
@@ -235,6 +236,7 @@ const HANK_TOOLS: AnyToolDef[] = [
   // collaborative drafting flow doesn't clobber sibling answers and the job arm
   // can auto-detect completion. Resolves its job by slug and touches only that
   // job's answers, so there's nothing for it to corrupt from an unrelated turn.
+  reviewApplicationTool as AnyToolDef,
   saveApplicationAnswerTool as AnyToolDef,
 ];
 
