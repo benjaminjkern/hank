@@ -293,15 +293,24 @@ function itemsFromPage(value: unknown, recipe: BoardRecipe): RecipeItem[] {
   }
   if (recipe.list.kind === "sitemap") {
     const xml = typeof value === "string" ? value : "";
-    const needle = recipe.list.pathContains;
+    const { pathContains, pathPrefix } = recipe.list;
     return sitemapLocs(xml)
-      .filter((loc) => loc.includes(needle))
+      .filter((loc) => loc.includes(pathContains) && inPrefix(loc, pathPrefix))
       .slice(0, LIST_CAP)
       .map((loc) => ({ value: { url: loc } }));
   }
   const found = readPath(value, recipe.itemsPath);
   if (!Array.isArray(found)) return [];
   return found.map((v) => ({ value: v }));
+}
+
+function inPrefix(loc: string, pathPrefix: string | undefined): boolean {
+  if (!pathPrefix || pathPrefix === "/") return true;
+  try {
+    return new URL(loc).pathname.startsWith(pathPrefix);
+  } catch {
+    return false;
+  }
 }
 
 // -- item → job --------------------------------------------------------------

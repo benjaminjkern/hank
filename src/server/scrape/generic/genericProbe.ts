@@ -29,7 +29,12 @@ import {
   looksLikeJobArray,
   type JobArrayMatch,
 } from "./jobShape";
-import { findJobsViaSitemap, isDisallowed, fetchRobots } from "./sitemap";
+import {
+  boardPathScope,
+  fetchRobots,
+  findJobsViaSitemap,
+  isDisallowed,
+} from "./sitemap";
 import { wellKnownUrls } from "./wellKnown";
 
 import type { BoardRecipe, ListSource } from "../recipe/types";
@@ -293,6 +298,7 @@ async function trySitemap(
   tried: string[],
   budget: TimeBudget,
 ): Promise<ProbeOutcome | null> {
+  const scope = boardPathScope(boardUrl);
   const found = await findJobsViaSitemap(boardUrl, budget);
   tried.push(
     found ? `sitemap (${found.jobUrls.length} job URLs)` : "sitemap (none)",
@@ -314,6 +320,9 @@ async function trySitemap(
       kind: "sitemap",
       url: found.sitemapUrl,
       pathContains: found.pathContains,
+      // Carried into the recipe, not just used during discovery — otherwise
+      // the stored plan selects a wider set than the one that was verified.
+      ...(scope === "/" ? {} : { pathPrefix: scope }),
     },
     itemsPath: "",
     fields: {

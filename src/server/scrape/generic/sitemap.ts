@@ -12,9 +12,12 @@ import { fetchText } from "../ats/shared";
 
 import type { TimeBudget } from "./budget";
 
-// Path fragments that mark a job DETAIL url. Ordered by how specific they are —
-// the first one with enough hits wins, so `/job/` beats `/careers/` on a site
-// that has both.
+// Path fragments that mark a job DETAIL url.
+//
+// `/careers/` and `/career/` are deliberately ABSENT. They name a SECTION, not
+// a posting, so everything marketing publishes under one matches: Rippling's
+// `/careers/eng-interview-kit` in four locales read as 52 postings. A fragment
+// belongs here only if a URL containing it is a job or nothing.
 const JOB_PATH_FRAGMENTS = [
   "/job/",
   "/jobs/",
@@ -26,8 +29,6 @@ const JOB_PATH_FRAGMENTS = [
   "/positions/",
   "/role/",
   "/opportunity/",
-  "/career/",
-  "/careers/",
 ];
 
 // A detail URL ends in a slug, not a bare section. `/jobs/` is the index;
@@ -58,6 +59,41 @@ export type SitemapFind = {
   truncated: boolean;
 };
 
+// The part of the board's path every posting must live under.
+//
+// A sitemap is found at the ORIGIN, but a board is not always AT the origin —
+// on a multi-tenant host one path scopes to one company
+// (`ycombinator.com/companies/shaped/jobs`), and the origin's sitemap covers
+// every OTHER company on it too. Without this, Shaped resolved to Y
+// Combinator's own pages: same host, so the domain check passed, and the
+// postings would have been filed under the wrong company.
+//
+// The scope is the board's OWN path, not its parent directory. Which segment
+// carries the tenant isn't knowable — it's the middle one in
+// `/companies/shaped/jobs` and the last in `/companies/fixie-ai` — so anything
+// that tries to strip a level gets one of them wrong, and both were observed.
+// The board's full path is the one prefix every posting on that board must
+// share, whichever shape the host uses.
+//
+// A board at the origin keeps the whole origin as scope: there, the HOST is the
+// company, so there are no siblings to steal from.
+//
+// The cost is a false NEGATIVE — a board at `/careers` whose postings sit at
+// `/job/123` is now out of this tier's reach. That's the right side to err on:
+// the other probe tiers still cover it, and the failure this replaces filed
+// another company's pages under your company.
+export function boardPathScope(boardUrl: string): string {
+  let path: string;
+  try {
+    path = new URL(boardUrl).pathname;
+  } catch {
+    return "/";
+  }
+  const segments = path.split("/").filter(Boolean);
+  if (segments.length === 0) return "/";
+  return `/${segments.join("/")}/`;
+}
+
 // Sitemap discovery walks several documents in sequence, so it takes the
 // probe's budget and stops rather than spending what's left of the scrape.
 export async function findJobsViaSitemap(
@@ -71,6 +107,7 @@ export async function findJobsViaSitemap(
     return null;
   }
 
+  const scope = boardPathScope(boardUrl);
   const robots = await fetchRobots(origin);
   if (budget.expired()) return null;
   const candidates = [
@@ -85,7 +122,7 @@ export async function findJobsViaSitemap(
     if (seen.has(candidate)) continue;
     if (budget.expired()) return null;
     seen.add(candidate);
-    const found = await scanSitemap(candidate, robots, seen, budget);
+    const found = await scanSitemap(candidate, robots, seen, budget, scope);
     if (found) return found;
   }
   return null;
@@ -96,6 +133,7 @@ async function scanSitemap(
   robots: RobotsRules,
   seen: Set<string>,
   budget: TimeBudget,
+  scope: string,
   depth = 0,
 ): Promise<SitemapFind | null> {
   if (budget.expired()) return null;
@@ -108,7 +146,7 @@ async function scanSitemap(
   const locs = sitemapLocs(res.text);
   if (locs.length === 0) return null;
 
-  const direct = pickJobUrls(locs);
+  const direct = pickJobUrls(locs, scope);
   if (direct) return { sitemapUrl, ...direct };
 
   // A sitemap index: follow the children whose names suggest jobs first, so a
@@ -120,7 +158,14 @@ async function scanSitemap(
     .slice(0, MAX_INDEX_FOLLOWS);
   for (const child of children) {
     seen.add(child);
-    const found = await scanSitemap(child, robots, seen, budget, depth + 1);
+    const found = await scanSitemap(
+      child,
+      robots,
+      seen,
+      budget,
+      scope,
+      depth + 1,
+    );
     if (found) return found;
   }
   return null;
@@ -132,9 +177,20 @@ function jobbiness(url: string): number {
 
 function pickJobUrls(
   locs: string[],
+  scope: string,
 ): { pathContains: string; jobUrls: string[]; truncated: boolean } | null {
+  const inScope =
+    scope === "/"
+      ? locs
+      : locs.filter((loc) => {
+          try {
+            return new URL(loc).pathname.startsWith(scope);
+          } catch {
+            return false;
+          }
+        });
   for (const fragment of JOB_PATH_FRAGMENTS) {
-    const matches = locs.filter((loc) => isDetailUrl(loc, fragment));
+    const matches = inScope.filter((loc) => isDetailUrl(loc, fragment));
     if (matches.length < MIN_JOB_URLS) continue;
     return {
       pathContains: fragment,

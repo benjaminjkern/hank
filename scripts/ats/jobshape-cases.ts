@@ -16,6 +16,7 @@ import {
 } from "../../src/server/scrape/generic/jobShape";
 import { parseFeedItems } from "../../src/server/scrape/generic/feed";
 import { harvestBlobs } from "../../src/server/scrape/generic/blobs";
+import { boardPathScope } from "../../src/server/scrape/generic/sitemap";
 
 type Case = {
   name: string;
@@ -263,6 +264,51 @@ const NEXT_DATA_FIXTURE = `<!doctype html><html><body>
 <script>window.__NUXT__ = {"state":{"openings":${JSON.stringify(jobs(3))}}};</script>
 </body></html>`;
 
+// The multi-tenant guard. A sitemap lives at the ORIGIN, but on a VC or
+// accelerator job board one PATH is one company — so a board scoped to a path
+// must never collect its neighbours' postings. Both of these were observed
+// filing another company's jobs under the wrong company before the scope
+// existed, so they're pinned here.
+const SCOPE_CASES: Array<{ url: string; expect: string }> = [
+  // Host is the company and the board is AT the origin → no siblings to steal
+  // from, so the whole origin is in scope.
+  { url: "https://jobs.wordpress.net/", expect: "/" },
+  { url: "https://careers.example.com", expect: "/" },
+  // A single path segment is genuinely ambiguous — it's a section of the
+  // company's own site here, but a tenant on `board.com/acme`. It scopes,
+  // because the two failure modes are not symmetric: scoping too tightly makes
+  // this tier decline and the others still try, while scoping too loosely files
+  // someone else's postings under this company and nothing later notices.
+  { url: "https://example.com/careers", expect: "/careers/" },
+  // Multi-tenant. The tenant segment is LAST here and MIDDLE in the next one —
+  // which is why the scope is the board's whole path and never a parent of it.
+  {
+    url: "https://jobs.madrona.com/companies/fixie-ai",
+    expect: "/companies/fixie-ai/",
+  },
+  {
+    url: "https://www.ycombinator.com/companies/shaped/jobs",
+    expect: "/companies/shaped/jobs/",
+  },
+  { url: "not a url", expect: "/" },
+];
+
+function runScopeChecks(): { pass: number; fail: number } {
+  let pass = 0;
+  let fail = 0;
+  for (const c of SCOPE_CASES) {
+    const got = boardPathScope(c.url);
+    if (got === c.expect) {
+      pass++;
+      console.log(`  PASS  ${c.url} → ${got}`);
+    } else {
+      fail++;
+      console.log(`  FAIL  ${c.url} → ${got}, expected ${c.expect}`);
+    }
+  }
+  return { pass, fail };
+}
+
 function runExtractionChecks(): { pass: number; fail: number } {
   let pass = 0;
   let fail = 0;
@@ -351,6 +397,11 @@ function main(): void {
   const extraction = runExtractionChecks();
   pass += extraction.pass;
   fail += extraction.fail;
+
+  console.log("\nsitemap path scope\n");
+  const scope = runScopeChecks();
+  pass += scope.pass;
+  fail += scope.fail;
 
   console.log(`\n${pass} passed, ${fail} failed\n`);
   if (fail > 0) process.exit(1);

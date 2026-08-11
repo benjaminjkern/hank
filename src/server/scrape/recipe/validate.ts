@@ -27,6 +27,11 @@ const MAX_BAD_ROW_RATIO = 0.2;
 const MIN_TITLE_CHARS = 3;
 const MAX_TITLE_CHARS = 200;
 const MIN_BODY_CHARS = 40;
+// Title-repetition guard. Set well below what a genuine board hits — a board
+// that posts one title in five cities still clears 0.4 easily — so this only
+// fires on wholesale duplication.
+const MIN_DISTINCT_TITLE_RATIO = 0.4;
+const MIN_ROWS_FOR_TITLE_RATIO = 5;
 // A board that genuinely publishes no body still has to yield the title line
 // and its attributes, which is what the list-only providers produce.
 const MIN_LIST_ONLY_BODY_CHARS = 20;
@@ -92,13 +97,25 @@ export function validateRecipeRun(
     kept.push(job);
   }
 
-  // Every title identical is the signature of a selector that matched page
-  // chrome instead of the row's own heading — structurally valid, entirely
-  // wrong, and invisible to the per-row checks above.
+  // Repeated titles are the signature of a locator that matched something other
+  // than postings — page chrome, or the same marketing page in every locale
+  // (Rippling's `/careers/eng-interview-kit` × 4 languages read as 52 roles,
+  // all with distinct URLs, so nothing else caught it).
+  //
+  // A real board DOES repeat a title — "Software Engineer" in five cities — so
+  // the bar is a ratio, not uniqueness, and it only applies once there are
+  // enough rows for the ratio to mean anything.
   const distinctTitles = new Set(kept.map((j) => j.title.trim().toLowerCase()));
   if (kept.length >= 2 && distinctTitles.size === 1) {
     errors.push(
       `every posting has the same title ("${kept[0].title.trim()}") — the title locator is matching page chrome, not the row`,
+    );
+  } else if (
+    kept.length >= MIN_ROWS_FOR_TITLE_RATIO &&
+    distinctTitles.size < kept.length * MIN_DISTINCT_TITLE_RATIO
+  ) {
+    errors.push(
+      `only ${distinctTitles.size} distinct titles across ${kept.length} postings — the list is repeating a small set of pages (locale variants or a template), not enumerating roles`,
     );
   }
 

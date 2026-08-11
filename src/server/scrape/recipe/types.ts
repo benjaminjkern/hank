@@ -49,7 +49,14 @@ export type ListSource =
   | { kind: "feed"; url: string }
   // A sitemap whose <loc> entries ARE the postings. Carries no fields of its
   // own, so a `detail` strategy is mandatory — validate.ts enforces that.
-  | { kind: "sitemap"; url: string; pathContains: string };
+  //
+  // `pathPrefix` is what keeps a multi-tenant host honest: a sitemap lives at
+  // the ORIGIN, but on a VC/accelerator job board one path is one company and
+  // the sitemap covers every other company too. It must be part of the RECIPE,
+  // not just of discovery — a stored plan that carried only `pathContains`
+  // re-broadened on execution and pulled a sibling company's postings, having
+  // "verified" cleanly on a narrower set.
+  | { kind: "sitemap"; url: string; pathContains: string; pathPrefix?: string };
 
 export type EmbeddedBlob =
   // <script id="__NEXT_DATA__" type="application/json">{…}</script>
