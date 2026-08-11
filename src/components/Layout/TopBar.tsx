@@ -5,8 +5,10 @@ import styled from "styled-components";
 
 import { useChatStore } from "@/lib/chatStore";
 
+import { GitHubMark } from "../GitHubMark";
 import { HankLogo } from "../HankLogo";
 
+import { iconAction } from "./iconAction";
 import { ThemeToggle } from "./ThemeToggle";
 import { UserMenu } from "./UserMenu";
 
@@ -108,6 +110,15 @@ const AdminLink = styled(Link)`
   }
 `;
 
+// View-source affordance, sharing the ThemeToggle's icon chrome so the two
+// sit as a matched pair. Icon-only: the bar is width-constrained on phones,
+// and the title carries the meaning.
+const SourceLink = styled.a`
+  ${iconAction}
+  text-decoration: none;
+  flex-shrink: 0;
+`;
+
 export interface TopBarUser {
   id: string;
   email: string | null;
@@ -156,6 +167,15 @@ export function TopBar({ user }: { user: TopBarUser }) {
       <Spacer />
       <Right>
         {user.isAdmin && <AdminLink href="/admin">Admin</AdminLink>}
+        <SourceLink
+          href="https://github.com/benjaminjkern/hank"
+          target="_blank"
+          rel="noreferrer"
+          title="Hank is open source — view on GitHub"
+          aria-label="Hank is open source — view on GitHub"
+        >
+          <GitHubMark />
+        </SourceLink>
         <ThemeToggle />
         <UserMenu user={user} />
       </Right>

@@ -4,6 +4,8 @@ import styled from "styled-components";
 
 import { useThemeMode, type ThemeMode } from "@/lib/themeMode";
 
+import { iconAction } from "./iconAction";
+
 const NEXT: Record<ThemeMode, ThemeMode> = {
   system: "light",
   light: "dark",
@@ -17,21 +19,7 @@ const LABEL: Record<ThemeMode, string> = {
 };
 
 const Button = styled.button`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: ${({ theme }) => theme.radius.sm};
-  color: ${({ theme }) => theme.colors.textMuted};
-  transition:
-    background 120ms ease,
-    color 120ms ease;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.bgHover};
-    color: ${({ theme }) => theme.colors.text};
-  }
+  ${iconAction}
 `;
 
 function SunIcon() {

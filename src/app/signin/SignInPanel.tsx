@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 
+import { GitHubMark } from "@/components/GitHubMark";
 import { HankLogo } from "@/components/HankLogo";
 
 import { HankRain } from "./HankRain";
@@ -143,6 +144,30 @@ const Notice = styled.div`
   line-height: 1.5;
 `;
 
+// Sits below the sign-in controls in both auth modes — it's about the project,
+// not about getting in. Deliberately no GitHub mark: in oauth mode it would sit
+// directly under "Continue with GitHub" and read as a second way to sign in.
+// Points at the upstream repo; a fork that modifies Hank and serves it owes its
+// own users ITS source, not this one (see docs/self-hosting.md).
+const SourceLink = styled.a`
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: ${({ theme }) => theme.space.xs};
+  color: ${({ theme }) => theme.colors.textMuted};
+  font-size: 12px;
+  text-decoration: none;
+  padding-top: ${({ theme }) => theme.space.xs};
+  border-top: 1px solid ${({ theme }) => theme.colors.border};
+  width: 100%;
+  justify-content: center;
+  margin-top: ${({ theme }) => theme.space.xs};
+
+  &:hover {
+    color: ${({ theme }) => theme.colors.text};
+  }
+`;
+
 const ChuteButton = styled.button`
   position: fixed;
   bottom: ${({ theme }) => theme.space.lg};
@@ -192,17 +217,6 @@ function GoogleMark() {
       <path
         fill="#1976D2"
         d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.7l6.5 5.3C40.9 35.6 44 30.3 44 24c0-1.2-.1-2.3-.4-3.5z"
-      />
-    </svg>
-  );
-}
-
-function GitHubMark() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden>
-      <path
-        fill="currentColor"
-        d="M12 .5C5.6.5.5 5.6.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.4-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.2-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2.9-.3 2-.4 3-.4s2.1.1 3 .4c2.3-1.5 3.3-1.2 3.3-1.2.7 1.6.2 2.8.1 3.1.8.8 1.2 1.9 1.2 3.2 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.6 18.4.5 12 .5z"
       />
     </svg>
   );
@@ -323,6 +337,13 @@ export function SignInPanel({
             ) : null}
           </>
         )}
+        <SourceLink
+          href="https://github.com/benjaminjkern/hank"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Hank is open source — view on GitHub
+        </SourceLink>
       </Card>
       <ChuteButton type="button" onClick={openChute} disabled={groundDisabled}>
         {groundDisabled ? "chute open…" : "open chute"}
