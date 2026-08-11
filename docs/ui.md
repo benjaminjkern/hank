@@ -91,7 +91,7 @@ Use [`statusColor(theme, status)`](../src/lib/statusColors.ts) for any pill and 
 
 | Tone         | Color        | When                                                                                                            |
 | ------------ | ------------ | ------------------------------------------------------------------------------------------------------------- |
-| `focusNow`   | brand purple | Mid-flight work the user drives — PITCHED, SCANNED, SHORTLISTED, APPLYING, IN_PROCESS, OPEN, INTERVIEW_DEBRIEF, OFFERED. Carries the brand color. |
+| `focusNow`   | brand purple | Mid-flight work the user drives — PITCHED, SCANNED, SHORTLISTED, SHORTLISTING, APPLYING, IN_PROCESS, OPEN, INTERVIEW_DEBRIEF, OFFERED. Carries the brand color. |
 | `notStarted` | dark grey    | Surfaced, not triaged — NEW, READY.                                                                            |
 | `resting`    | green        | Ball's in their court / scheduled — APPLIED, IN_FLIGHT, RESPONDED, INTERVIEW_SCHEDULED, AWAITING.              |
 | `watching`   | teal         | On the watchlist, nothing actionable — CAUGHT_UP.                                                              |

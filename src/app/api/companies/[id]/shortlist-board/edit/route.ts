@@ -17,11 +17,13 @@ export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({
   jobId: z.string(),
-  // "undecided" is the un-select — the user clearing their own (or Hank's)
-  // mark rather than replacing it. A row this round's filtering closed takes
-  // the same four values as any other: marking it is what un-closes it, so
-  // there is no separate revive verb.
-  verdict: z.enum(["pick", "borderline", "pass", "undecided"]),
+  // One of three, always. There is no un-select: Defer already means "don't
+  // close it, don't commit to it", and a fourth no-opinion value made
+  // `userVerdict = null` mean both "I accept Hank's" and "I cleared this", so a
+  // clear was indistinguishable from an acceptance and never reported.
+  // A row this round's filtering closed takes the same three — marking it is
+  // what un-closes it (at relay), so there is no separate revive verb.
+  verdict: z.enum(["pick", "borderline", "pass"]),
   reason: z.string().optional(),
 });
 
@@ -29,7 +31,6 @@ const VERDICT_FOR = {
   pick: ProposedVerdict.PICK,
   borderline: ProposedVerdict.BORDERLINE,
   pass: ProposedVerdict.PASS,
-  undecided: null,
 } as const;
 
 export async function POST(

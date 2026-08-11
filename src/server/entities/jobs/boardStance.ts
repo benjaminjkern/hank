@@ -17,6 +17,7 @@ import {
 } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 
+import { reviveFilteredJobs } from "./reviveFilteredJobs";
 import { onBoardWhere } from "./shortlistPool";
 
 export const STANCE_WORDS: Record<ProposedVerdict, string> = {
@@ -121,7 +122,9 @@ export type BoardEditRelay = {
   jobId: string;
   title: string;
   companyName: string | null;
-  // The stance the user landed on. Null = they cleared it back to undecided.
+  // The stance the row now holds. Null only where Hank never ranked it and the
+  // user hasn't either — there is no way for them to clear a mark back to
+  // no-opinion.
   verdict: ProposedVerdict | null;
   // What Hank had proposed, so the relay can say what they moved it FROM —
   // "you had this as a pass" is the half he needs to respond to.
@@ -176,6 +179,12 @@ export async function listUnrelayedBoardEdits(
 // chat pass" that lets them re-file into their new groups. Grouped by target
 // stance so the write is a fixed number of statements (four at most),
 // never one per row.
+//
+// This is also where a filtered row gets UN-CLOSED. A mark on one is a proposal
+// like any other, so nothing structural happens until Hank has seen it — which
+// is what makes discarding unrelayed marks a pure stance clear, and what stops a
+// mark-then-unmark from leaving a REVIVED event behind for something that never
+// really changed.
 export async function settleRelayedBoardEdits(
   userId: string,
   edits: BoardEditRelay[],
@@ -195,6 +204,70 @@ export async function settleRelayedBoardEdits(
       }),
     ),
   );
+
+  // Only a mark that wants the role back re-opens it — a pass on an already
+  // closed row is agreement, and leaves it closed.
+  const reopening = edits
+    .filter(
+      (e) =>
+        e.verdict === ProposedVerdict.PICK ||
+        e.verdict === ProposedVerdict.BORDERLINE,
+    )
+    .map((e) => e.jobId);
+  if (reopening.length > 0) {
+    await reviveFilteredJobs({ userId, jobIds: reopening });
+  }
+}
+
+// Undo every unrelayed mark: put each row's live stance back to where it's
+// DRAWN, which is by definition the last thing Hank saw. Marks are the only
+// thing to undo — the un-close waits for the relay, so a discarded row never
+// left the pile it's sitting in.
+//
+// A row Hank proposed keeps his verdict (userVerdict cleared to null); a row he
+// never ranked goes back to no mark at all.
+export async function discardUnrelayedBoardEdits(
+  userId: string,
+): Promise<number> {
+  const rows = await prisma.jobInteraction.findMany({
+    where: { userId, ...onBoardWhere() },
+    select: {
+      id: true,
+      status: true,
+      deferReason: true,
+      agentVerdict: true,
+      agentReason: true,
+      userVerdict: true,
+      placementVerdict: true,
+    },
+  });
+  const pending = rows.filter(isPending);
+  if (pending.length === 0) return 0;
+
+  // Two shapes at most: back to Hank's verdict (null), or back to a placement he
+  // set that his own verdict no longer matches.
+  const toAgent = pending.filter((r) => placedVerdict(r) === r.agentVerdict);
+  const toPlacement = pending.filter(
+    (r) => placedVerdict(r) !== r.agentVerdict,
+  );
+  await prisma.$transaction([
+    ...(toAgent.length > 0
+      ? [
+          prisma.jobInteraction.updateMany({
+            where: { id: { in: toAgent.map((r) => r.id) } },
+            data: { userVerdict: null },
+          }),
+        ]
+      : []),
+    ...toPlacement.map((r) =>
+      prisma.jobInteraction.update({
+        where: { id: r.id },
+        data: { userVerdict: placedVerdict(r) },
+        select: { id: true },
+      }),
+    ),
+  ]);
+  return pending.length;
 }
 
 // The model-facing prose for a relay — rendered once at write time and
@@ -203,7 +276,7 @@ export function renderBoardEditRelayText(edits: BoardEditRelay[]): string {
   const lines = edits.map((e) => {
     const to = e.verdict
       ? `moved it to ${STANCE_WORDS[e.verdict]}`
-      : "cleared it back to undecided";
+      : "left it unranked";
     // What he had it as is the half he can actually respond to — "they moved
     // your pass to a pick" is a disagreement; "it's a pick now" is just state.
     const from = e.agentVerdict

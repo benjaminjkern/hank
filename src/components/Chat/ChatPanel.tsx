@@ -531,6 +531,19 @@ const ChipClose = styled.button`
   }
 `;
 
+// The second half of the dismiss: × arms it, this confirms. Destructive enough
+// to earn the danger colour and a deliberate second click — the marks it throws
+// away can't be recovered from the UI.
+const ChipConfirm = styled.button`
+  color: ${({ theme }) => theme.colors.danger};
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  &:hover {
+    text-decoration: underline;
+  }
+`;
+
 // Outer row — just provides breathing room around the pod. The pod itself
 // owns the visual chrome (bg, border, radius, focus ring).
 const InputBar = styled.div`
@@ -1057,6 +1070,10 @@ export function ChatPanel() {
   const send = useChatStore((s) => s.send);
   const pendingAttachments = useChatStore((s) => s.pendingAttachments);
   const pendingBoardEditCount = useChatStore((s) => s.pendingBoardEditCount);
+  const discardBoardEdits = useChatStore((s) => s.discardBoardEdits);
+  // Arms the confirm on the board chip's ×. Local because it's a transient
+  // gesture, and it resets on its own once the count reaches zero.
+  const [discardingBoard, setDiscardingBoard] = useState(false);
   const pendingDiscoveryMarkCount = useChatStore(
     (s) => s.pendingDiscoveryMarkCount,
   );
@@ -1424,15 +1441,48 @@ export function ChatPanel() {
         )}
         {pendingBoardEditCount > 0 && (
           <AttachmentRow>
-            {/* Display-only: the edits are already saved on the board; the
-                server attaches them to whatever the user sends next. */}
+            {/* The edits are already saved on the board; the server attaches
+                them to whatever the user sends next. Dismissing UNDOES them —
+                see discardBoardEdits. */}
             <PendingChip $status="uploaded">
               ☰{" "}
               <PendingName>
-                {pendingBoardEditCount} shortlist change
-                {pendingBoardEditCount === 1 ? "" : "s"} — send to hand
-                {pendingBoardEditCount === 1 ? " it" : " them"} over
+                {discardingBoard
+                  ? `Discard ${pendingBoardEditCount} shortlist change${
+                      pendingBoardEditCount === 1 ? "" : "s"
+                    }?`
+                  : `${pendingBoardEditCount} shortlist change${
+                      pendingBoardEditCount === 1 ? "" : "s"
+                    } — send to hand ${
+                      pendingBoardEditCount === 1 ? "it" : "them"
+                    } over`}
               </PendingName>
+              {discardingBoard ? (
+                <>
+                  <ChipConfirm
+                    onClick={() => {
+                      setDiscardingBoard(false);
+                      void discardBoardEdits();
+                    }}
+                  >
+                    Discard
+                  </ChipConfirm>
+                  <ChipClose
+                    onClick={() => setDiscardingBoard(false)}
+                    aria-label="keep my shortlist changes"
+                  >
+                    ×
+                  </ChipClose>
+                </>
+              ) : (
+                <ChipClose
+                  onClick={() => setDiscardingBoard(true)}
+                  aria-label="discard my shortlist changes"
+                  title="Discard these changes — your marks go back to what Hank last saw"
+                >
+                  ×
+                </ChipClose>
+              )}
             </PendingChip>
           </AttachmentRow>
         )}

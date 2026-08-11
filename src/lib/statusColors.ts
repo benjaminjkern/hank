@@ -47,16 +47,20 @@ export function statusTone(status: string): StatusTone {
     case "PITCHED": // recruiter pitched it; user owes a triage
     case "SCANNED": // Hank's proposal awaiting shortlist approval
     case "SHORTLISTED": // user approved; ready to apply
-    case "APPLYING": // walkthrough in progress at this company (CompanyStatus, was ACTIVE)
+    case "SHORTLISTING": // board open, waiting on the user's marks — their turn
+    case "APPLYING": // shortlist committed; working the roles that survived
     case "IN_PROCESS": // employer engaged — recruiter replied / interview scheduled; the promising, prep-worthy state
     case "OPEN": // fresh lead, no call scheduled yet
     case "INTERVIEW_DEBRIEF": // interview happened; ask how it went
     case "OFFERED": // offer letter in hand; user owes a decision
       return "focusNow";
 
-    // Surfaced but not yet triaged.
+    // Surfaced but not yet triaged. SCANNING sits here rather than with the
+    // focus states because nothing is being asked of the user while it reads —
+    // it's work in progress, not their turn.
     case "NEW": // newly added (job or company); user hasn't looked yet
     case "READY": // company scanned + prescanned, awaiting walkthrough start
+    case "SCANNING": // CompanyStatus — entered, reading the board
       return "notStarted";
 
     // Applied / scheduled — the ball's in their court ("In flight" bucket).
@@ -103,7 +107,9 @@ export function statusTone(status: string): StatusTone {
 // match").
 const STATUS_LABELS: Record<string, string> = {
   DELISTED: "No longer listed",
-  APPLYING: "Applying", // CompanyStatus — walkthrough in progress (was ACTIVE)
+  SCANNING: "Reading their board", // CompanyStatus — entered, triaging roles
+  SHORTLISTING: "Your call", // CompanyStatus — board open, waiting on the user
+  APPLYING: "Applying", // CompanyStatus — shortlist committed, working the survivors
   IN_FLIGHT: "In flight", // CompanyStatus — application(s) submitted, awaiting reply
   IN_PROCESS: "In process", // CompanyStatus — employer engaged (recruiter reply / interview)
   PAUSED: "Paused", // CompanyStatus — set aside for now (was DEFERRED)

@@ -130,7 +130,14 @@ export type DashboardCompany = {
   // Live statuses only — CLOSED / PAUSED / BLOCKED are pre-split server-side
   // onto `DashboardView.closed` / `.paused` / `.blocked`.
   status:
-    "NEW" | "READY" | "APPLYING" | "IN_FLIGHT" | "IN_PROCESS" | "CAUGHT_UP";
+    | "NEW"
+    | "READY"
+    | "SCANNING"
+    | "SHORTLISTING"
+    | "APPLYING"
+    | "IN_FLIGHT"
+    | "IN_PROCESS"
+    | "CAUGHT_UP";
   // ISO timestamp of the most recent successful scrape, or null if never
   // scanned. Drives the dashboard's empty-row label.
   lastScrapedJobsAt: string | null;
@@ -395,9 +402,11 @@ type Actions = {
   editShortlistBoard: (
     companyId: string,
     jobId: string,
-    verdict: "pick" | "borderline" | "pass" | "undecided",
+    verdict: "pick" | "borderline" | "pass",
     reason?: string,
   ) => Promise<void>;
+  // Undo every unsent board mark, everywhere — the composer chip's dismiss.
+  discardBoardEdits: () => Promise<void>;
   // The discovery list's equivalent: POSTs one candidate's mark, which decides
   // nothing until Hank's commit_discovery.
   markSuggestion: (
@@ -1095,6 +1104,31 @@ export const useChatStore = create<State & Actions>((set, get) => ({
           ? { viewedBoard: data }
           : {}),
       }));
+    } catch {
+      // ignore — the board re-derives from the server on the next refresh
+    }
+  },
+
+  // Throw away every unsent board mark. This is a real undo, not a "skip this
+  // message": leaving marks parked for a later send is exactly the hidden
+  // behaviour the chip exists to remove, and it stops the user cleanly changing
+  // the subject after a round of marking.
+  async discardBoardEdits() {
+    if (get().impersonateSessionId) return;
+    try {
+      const res = await fetch("/api/shortlist-board/discard", {
+        method: "POST",
+      });
+      if (!res.ok) return;
+      set({ pendingBoardEditCount: 0 });
+      // Repaint whatever board is on screen from the server's copy — the marks
+      // it's drawing are the ones that just went away.
+      const companyId = get().viewedBoard?.companyId;
+      if (!companyId) return;
+      const fresh = await fetch(
+        `/api/companies/${companyId}/shortlist-board`,
+      ).then((r) => (r.ok ? (r.json() as Promise<ShortlistBoardView>) : null));
+      if (fresh) set({ viewedBoard: fresh });
     } catch {
       // ignore — the board re-derives from the server on the next refresh
     }

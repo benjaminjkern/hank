@@ -14,6 +14,7 @@
 import { statusEvent, yieldUiEvents } from "@/server/agent/contracts";
 import type { RunContext, TurnEvent } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
+import { markCompanyShortlisting } from "@/server/entities/companies/markCompanyStatus";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {
@@ -147,6 +148,9 @@ export async function* runShortlist(
     candidates: context.input.candidates,
     picks,
   });
+  // The board is now open and waiting on the user — the one stretch of a
+  // company's life where the next move is theirs, so it says so.
+  await markCompanyShortlisting(companyId, userId);
 
   const { events } = await buildShortlistBoardEvents(userId, companyId);
   yield* yieldUiEvents(events);

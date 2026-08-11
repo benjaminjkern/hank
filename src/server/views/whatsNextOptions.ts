@@ -114,7 +114,19 @@ async function loadImmediate(userId: string): Promise<NextOptionRow[]> {
   const now = nowDate();
   const [active, openOpps, owedJobs, dueOpps, waitingJobs] = await Promise.all([
     prisma.companyInteraction.findMany({
-      where: { userId, status: CompanyStatus.APPLYING },
+      // Every mid-walkthrough state, not just the post-commit one: a board left
+      // open (SHORTLISTING) is the most owed thing there is, and a company that
+      // stalled mid-read (SCANNING) still has work parked in it.
+      where: {
+        userId,
+        status: {
+          in: [
+            CompanyStatus.SHORTLISTING,
+            CompanyStatus.APPLYING,
+            CompanyStatus.SCANNING,
+          ],
+        },
+      },
       orderBy: { lastDiscussedAt: { sort: "asc", nulls: "first" } },
       take: MAX_IMMEDIATE,
       select: {

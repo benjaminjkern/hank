@@ -5,15 +5,18 @@
 // the commit would close (marked pass, or ruled out by the automatic filtering
 // before the shortlist ever saw it).
 //
-// Every row carries the SAME three marks (Shortlist / Defer / Close),
-// pre-selected to where it stands — so agreeing with Hank costs no clicks, and
-// a filtered row shows Close already set. That's why there's no separate
-// "actually, consider this": marking a filtered row Shortlist or Defer un-closes
-// it, and clicking its set Close puts it back on the table undecided.
+// Every row carries the SAME three marks (Shortlist / Defer / Close) and exactly
+// one is set, so agreeing with Hank costs no clicks and a filtered row shows
+// Close already selected. Re-clicking the set mark does nothing: there is no
+// no-opinion state to clear to — Defer already means "don't close it, don't
+// commit to it". That's also why there's no separate "actually, consider this":
+// marking a filtered row Shortlist or Defer is what un-closes it.
 //
 // A row the user re-marks KEEPS its position, flagged pending, until their next
-// chat message relays it — including a revived one, which stays in the pile it
-// came from. Rows never move out from under the cursor. Roles decided in an
+// chat message relays it — rows never move out from under the cursor, and the
+// order within a group never depends on when a row was written. Nothing
+// structural happens until that relay either: a mark on a filtered row is a
+// proposal, and the un-close waits for Hank to see it. Roles decided in an
 // EARLIER round aren't here at all; the company page's never-pursued list is
 // where those live. Nothing is final until Hank commits the board in chat.
 
@@ -276,7 +279,6 @@ function stanceOf(
   tier: ShortlistBoardTier,
 ): StanceValue | null {
   if (row.verdict) return STANCE_OF_VERDICT[row.verdict] ?? null;
-  if (row.pending) return null; // cleared to undecided, not yet settled
   if (tier === "picks") return "pick";
   if (tier === "borderline") return "borderline";
   if (tier === "pass") return "pass";
@@ -287,17 +289,14 @@ function stanceOf(
   return null;
 }
 
-// What the mark does from here, said in the row's own terms. On a row the
-// filtering closed, the already-set Close isn't a mark the user made — so
-// "click again to leave it undecided" would describe undoing something they
-// never did. What they'd actually be doing is overruling the filter.
+// What the mark does from here, said in the row's own terms.
 function markTitle(label: string, active: boolean, filtered: boolean): string {
   if (!active) {
     return filtered ? `${label} — this puts it back on the table` : label;
   }
-  return filtered
-    ? "Ruled out before the shortlist — click to put it back on the table"
-    : `${label} — click again to leave it undecided`;
+  // The set mark states where the row stands rather than offering an action:
+  // re-clicking it does nothing.
+  return filtered ? "Ruled out before the shortlist" : `${label} — current`;
 }
 
 type PlacedRow = { tier: ShortlistBoardTier; row: ShortlistBoardRow };
@@ -319,20 +318,15 @@ function BoardRow({
   const stance = stanceOf(row, tier);
   const filtered = tier === "filteredThisRound";
 
-  // Clicking the mark a row already carries clears it — that's the un-select,
-  // and it lands the row in Undecided rather than forcing a choice. On a
-  // filtered row that gesture reads as "actually, put this back on the table":
-  // Close is the mark it carries, so clicking it un-closes to undecided, and
-  // the server revives the row whichever of the three is pressed.
+  // Every row carries exactly one of the three, so re-clicking the mark it
+  // already has is a no-op rather than an un-select. Defer is the "leave it
+  // alone" answer; a fourth no-opinion state made a cleared mark and an accepted
+  // proposal indistinguishable to the diff.
   async function mark(next: StanceValue) {
-    if (busy) return;
+    if (busy || next === stance) return;
     setBusy(true);
     try {
-      await editShortlistBoard(
-        companyId,
-        row.jobId,
-        next === stance ? "undecided" : next,
-      );
+      await editShortlistBoard(companyId, row.jobId, next);
     } finally {
       setBusy(false);
     }

@@ -16,11 +16,13 @@ import { companyStatusFields } from "@/server/entities/companies/companyStatusFi
 import { logCompanyEvent } from "@/server/entities/companies/logCompanyEvent";
 
 // Statuses these helpers are allowed to overwrite — the pre-walkthrough /
-// re-check states. Won't touch APPLYING / IN_FLIGHT / IN_PROCESS / PAUSED (live
-// work or a user-driven set-aside) rows.
+// re-check states. Won't touch SHORTLISTING / APPLYING / IN_FLIGHT / IN_PROCESS
+// / PAUSED (live work or a user-driven set-aside) rows. SCANNING is overwritable
+// because these helpers ARE what a scan lands on when it finishes.
 const OVERWRITABLE = [
   CompanyStatus.NEW,
   CompanyStatus.READY,
+  CompanyStatus.SCANNING,
   CompanyStatus.CAUGHT_UP,
   CompanyStatus.BLOCKED,
   CompanyStatus.CLOSED,
@@ -56,6 +58,33 @@ async function markCompanyCaughtUp(
       notes: "Caught up — nothing actionable right now.",
     });
   }
+}
+
+// Entered and reading the board. Distinct from APPLYING, which now means the
+// shortlist has been committed — a company mid-scrape is not one the user is
+// applying to, and the dashboard was saying it was.
+export async function markCompanyScanning(
+  companyId: string,
+  userId: string,
+): Promise<void> {
+  await prisma.companyInteraction.updateMany({
+    where: { userId, companyId, status: { in: [...OVERWRITABLE] } },
+    data: companyStatusFields({ status: CompanyStatus.SCANNING }),
+  });
+}
+
+// The board is seeded and waiting on the user's marks — their turn, which is
+// what makes this worth its own status rather than a phase of SCANNING. Set from
+// the seed regardless of the current status: a company reaches it by being
+// worked, so there is nothing to protect it from.
+export async function markCompanyShortlisting(
+  companyId: string,
+  userId: string,
+): Promise<void> {
+  await prisma.companyInteraction.updateMany({
+    where: { userId, companyId },
+    data: companyStatusFields({ status: CompanyStatus.SHORTLISTING }),
+  });
 }
 
 // Land a company after a filtering pass over its board: anything left to look at

@@ -74,8 +74,8 @@ export async function dispatchNextCompanyPicker(args: {
         where: {
           userId_companyId: { userId, companyId: submission.companyId },
         },
-        // Full clear-on-transition (was hand-nulling only pauseReason/pauseNote).
-        data: companyStatusFields({ status: CompanyStatus.APPLYING }),
+        // Entering means reading the board, not applying -- see markCompanyScanning.
+        data: companyStatusFields({ status: CompanyStatus.SCANNING }),
       });
     }
     return {

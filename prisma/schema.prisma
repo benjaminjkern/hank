@@ -295,7 +295,9 @@ model CompanyInteraction {
 enum CompanyStatus {
   NEW // on the watchlist, no scan yet
   READY // scanned, has survivors, awaiting walkthrough ("Not started" bucket with NEW)
-  APPLYING // walkthrough in progress; manually held (job events don't auto-move it)
+  SCANNING // entered: reading the board and triaging roles. Nothing asked of the user yet.
+  SHORTLISTING // the board is open and waiting on the user's marks — their turn
+  APPLYING // shortlist committed; working the roles that survived it
   IN_FLIGHT // auto-derived: an application submitted and live, awaiting reply
   IN_PROCESS // auto-derived: employer engaged (reply / interview); outranks IN_FLIGHT
   CAUGHT_UP // auto-derived tail: worked through, nothing to do; NOT a dead-end judgment
