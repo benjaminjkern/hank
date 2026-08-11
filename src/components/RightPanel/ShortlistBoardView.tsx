@@ -21,6 +21,8 @@ import { useState } from "react";
 import styled from "styled-components";
 
 import { useChatStore } from "@/lib/chatStore";
+
+import { PanelRowCard, PanelSendChangesButton } from "./shared/PanelRowCard";
 import type {
   ShortlistBoardView as ShortlistBoardData,
   ShortlistBoardRow,
@@ -38,30 +40,6 @@ const Header = styled.div`
   flex-direction: column;
   gap: ${({ theme }) => theme.space.xs};
   align-items: flex-start;
-`;
-
-// The "I'm done here" handoff. Sends a plain user message — the marks ride
-// along like any other panel edit — whose whole job is to spare a round trip:
-// it says the board is settled AND that Hank should go ahead if he agrees, so
-// he can commit instead of asking "want me to lock it in?".
-const SendChangesButton = styled.button`
-  align-self: flex-start;
-  font-size: 12px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  border: 1px solid ${({ theme }) => theme.colors.accent};
-  color: ${({ theme }) => theme.colors.accent};
-  background: transparent;
-  cursor: pointer;
-  margin-bottom: ${({ theme }) => theme.space.xs};
-
-  &:hover:not(:disabled) {
-    background: ${({ theme }) => theme.colors.bgHover};
-  }
-  &:disabled {
-    cursor: default;
-    opacity: 0.5;
-  }
 `;
 
 const H2 = styled.h2`
@@ -109,22 +87,6 @@ const TierCount = styled.span`
   font-size: 12px;
   color: ${({ theme }) => theme.colors.textSubtle};
   font-family: ${({ theme }) => theme.font.mono};
-`;
-
-// Not a click target and not hover-lit: navigation is the explicit "View role"
-// button in the footer, and the marks are their own buttons. A card that lights
-// up under the cursor promises a click that isn't there.
-const RowCard = styled.div<{ $pending?: boolean }>`
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: ${({ theme }) => theme.space.sm} ${({ theme }) => theme.space.md};
-  border: 1px solid
-    ${({ theme, $pending }) =>
-      $pending ? theme.colors.accent : theme.colors.border};
-  border-radius: ${({ theme }) => theme.radius.md};
-  background: ${({ theme }) => theme.colors.bgPanel};
-  min-width: 0;
 `;
 
 const RowTop = styled.div`
@@ -377,7 +339,7 @@ function BoardRow({
   }
 
   return (
-    <RowCard $pending={row.pending}>
+    <PanelRowCard $pending={row.pending}>
       <RowTop>
         <RowTitle>{row.title}</RowTitle>
       </RowTop>
@@ -414,7 +376,7 @@ function BoardRow({
           View role →
         </ViewRoleButton>
       </StanceRow>
-    </RowCard>
+    </PanelRowCard>
   );
 }
 
@@ -466,7 +428,7 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
     <Root>
       <Header>
         {board.open && !readOnly && (
-          <SendChangesButton
+          <PanelSendChangesButton
             disabled={streaming}
             onClick={() =>
               void send(
@@ -477,7 +439,7 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
             }
           >
             {pending > 0 ? "Send my changes" : "Looks good to me"}
-          </SendChangesButton>
+          </PanelSendChangesButton>
         )}
         <H2>{board.companyName} — shortlist</H2>
         {!board.open && (

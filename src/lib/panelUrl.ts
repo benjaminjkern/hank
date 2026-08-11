@@ -9,6 +9,7 @@
 //   /dashboard                               dashboard, panel open
 //   /dashboard/documents[/<sub-page>]        documents
 //   /dashboard/analytics                     analytics
+//   /dashboard/discovery                     discovery
 //   /dashboard/<company>                     company page
 //   /dashboard/<company>/shortlist           shortlist board
 //   /dashboard/<company>/<job>               job page
@@ -44,6 +45,7 @@ export type PanelPath =
   | { kind: "dashboard"; open: boolean }
   | { kind: "documents"; subPage: DocumentsSubPage }
   | { kind: "analytics" }
+  | { kind: "discovery" }
   | { kind: "entity"; entity: string }
   | { kind: "shortlist"; company: string }
   | { kind: "job"; company: string; job: string }
@@ -72,6 +74,9 @@ export function parsePanelUrl(pathname: string): PanelPath {
   }
   if (first === "analytics") {
     return second === undefined ? { kind: "analytics" } : dashboard;
+  }
+  if (first === "discovery") {
+    return second === undefined ? { kind: "discovery" } : dashboard;
   }
 
   if (second === undefined) return { kind: "entity", entity: first };
@@ -127,6 +132,8 @@ export function panelUrl(panel: PanelUrlState): string | null {
     }
     case "analytics":
       return path("analytics");
+    case "discovery":
+      return path("discovery");
     case "company-context":
       return panel.viewedCompany && path(panel.viewedCompany.slug);
     case "shortlist-board":

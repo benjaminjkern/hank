@@ -28,4 +28,8 @@ export type EntryTarget =
   // infra"), or absent to work from the user's thesis alone. This is a
   // discriminated union, so a variant carrying no id is fine: every consumer
   // narrows on `kind` first.
-  | { kind: "discovery"; direction?: string };
+  | { kind: "discovery"; direction?: string }
+  // Settle the discovery list the user has been marking up. Its own variant
+  // rather than a flag on `discovery`, because it enters a different arm: one
+  // SEARCHES, the other COMMITS what the searching produced.
+  | { kind: "discovery_commit" };

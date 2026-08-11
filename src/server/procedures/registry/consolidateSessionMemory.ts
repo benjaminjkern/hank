@@ -2,7 +2,7 @@
 //
 // The pairing of "which slice of the transcript" + the consolidation sub-agent,
 // shared by the two procedures that wrap up a stretch of conversation
-// (runWrapCompanySegment, runCommitProfile). Everything that touches the store
+// (runWrapSegment, runCommitProfile). Everything that touches the store
 // lives here rather than in the sub-agent: reading the ChatMessage rows, loading
 // the memory inventory the sub-agent judges against, and performing the writes
 // it proposes. That split is what lets the audit harness drive the sub-agent

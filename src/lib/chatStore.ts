@@ -14,6 +14,7 @@ import type {
   ShortAnswer,
 } from "@/server/agent/tools/lib/types";
 import type { ApplicationView } from "@/server/views/application";
+import type { DiscoveryListView } from "@/server/views/discoveryList";
 import type { PanelView } from "@/server/views/panelView";
 import type { ShortlistBoardView } from "@/server/views/shortlistBoard";
 
@@ -278,9 +279,13 @@ type State = {
   viewedOpportunity: FocusedOpportunityView;
   viewedBoard: ShortlistBoardView | null;
   viewedApplication: ApplicationView | null;
+  viewedDiscovery: DiscoveryListView | null;
   // Board rows the user changed since their last chat message — rendered as a
   // composer chip; the server derives the authoritative relay at send time.
   pendingBoardEditCount: number;
+  // Same, for discovery marks. Kept as its own count rather than folded into
+  // the board's: the composer names which surface the pending edits are on.
+  pendingDiscoveryMarkCount: number;
   panelMode: PanelMode;
   // Who moved the panel last, which is what decides whether the URL writer
   // pushes a history entry or rewrites the current one: a user gesture is a
@@ -393,6 +398,12 @@ type Actions = {
     verdict: "pick" | "borderline" | "pass" | "undecided",
     reason?: string,
   ) => Promise<void>;
+  // The discovery list's equivalent: POSTs one candidate's mark, which decides
+  // nothing until Hank's commit_discovery.
+  markSuggestion: (
+    suggestionId: string,
+    mark: "add" | "pass" | "unmarked",
+  ) => Promise<void>;
   // Optimistic patch for the currently-viewed job's JobInteraction fields.
   // Used by JobDetailView's edit-in-place so the textarea reflects the latest
   // value while the PATCH round-trips. Replaced with canonical state when the
@@ -434,8 +445,10 @@ const initial: State = {
   viewedJob: null,
   viewedOpportunity: null,
   viewedBoard: null,
+  viewedDiscovery: null,
   viewedApplication: null,
   pendingBoardEditCount: 0,
+  pendingDiscoveryMarkCount: 0,
   panelMode: "dashboard",
   panelMovedBy: "user",
   documentsNav: { subPage: "index", expandedArtifacts: [] },
@@ -902,6 +915,8 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       viewedJob: view.job,
       viewedOpportunity: view.opportunity,
       viewedBoard: view.board,
+      viewedDiscovery: view.discovery,
+      pendingDiscoveryMarkCount: view.discovery?.pendingMarks ?? 0,
       viewedApplication: view.application,
       pendingBoardEditCount: view.board?.pendingEdits ?? 0,
       documentsNav: { ...s.documentsNav, subPage: view.documentsSubPage },
@@ -1025,6 +1040,28 @@ export const useChatStore = create<State & Actions>((set, get) => ({
         panelMode: "shortlist-board",
         panelMovedBy: "user",
         pendingBoardEditCount: data.pendingEdits,
+      });
+    } catch {
+      // ignore
+    }
+  },
+
+  // One discovery mark. Persists immediately and repaints from the server's
+  // copy — the mark decides nothing until Hank's commit_discovery, so this is
+  // free to fire on every click.
+  async markSuggestion(suggestionId, mark) {
+    if (get().impersonateSessionId) return;
+    try {
+      const res = await fetch("/api/discovery/edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ suggestionId, mark }),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as DiscoveryListView;
+      set({
+        viewedDiscovery: data,
+        pendingDiscoveryMarkCount: data.pendingMarks,
       });
     } catch {
       // ignore
@@ -1669,6 +1706,7 @@ type LoopEventJson =
             opportunity: ServerFocusedOpportunityView | null;
             board: ShortlistBoardView | null;
             application: ApplicationView | null;
+            discovery: DiscoveryListView | null;
           }
         | { type: "panel_mode"; mode: PanelMode };
     }
@@ -1854,6 +1892,8 @@ function applyEvent(
           viewedOpportunity: inner.opportunity,
           viewedBoard: inner.board ?? null,
           viewedApplication: inner.application ?? null,
+          viewedDiscovery: inner.discovery ?? null,
+          pendingDiscoveryMarkCount: inner.discovery?.pendingMarks ?? 0,
           // Mid-turn change while the user is on the chat tab → badge the
           // right tab so they know there's something to look at. The end-of-
           // turn `done` handler decides whether to auto-flip.

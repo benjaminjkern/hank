@@ -1057,6 +1057,9 @@ export function ChatPanel() {
   const send = useChatStore((s) => s.send);
   const pendingAttachments = useChatStore((s) => s.pendingAttachments);
   const pendingBoardEditCount = useChatStore((s) => s.pendingBoardEditCount);
+  const pendingDiscoveryMarkCount = useChatStore(
+    (s) => s.pendingDiscoveryMarkCount,
+  );
   const stageFiles = useChatStore((s) => s.stageFiles);
   const removePending = useChatStore((s) => s.removePending);
   const activePanel = useChatStore((s) => s.activePanel);
@@ -1256,7 +1259,10 @@ export function ChatPanel() {
   const canSend =
     canChat &&
     !busy &&
-    (Boolean(text.trim()) || anyUploaded || pendingBoardEditCount > 0);
+    (Boolean(text.trim()) ||
+      anyUploaded ||
+      pendingBoardEditCount > 0 ||
+      pendingDiscoveryMarkCount > 0);
 
   function submit() {
     if (!canSend) return;
@@ -1402,6 +1408,20 @@ export function ChatPanel() {
         )
       )}
       <Composer key="composer" $centered={isEmpty}>
+        {pendingDiscoveryMarkCount > 0 && (
+          <AttachmentRow>
+            {/* Display-only: the marks are already saved on the discovery list;
+                the server attaches them to whatever the user sends next. */}
+            <PendingChip $status="uploaded">
+              ☰{" "}
+              <PendingName>
+                {pendingDiscoveryMarkCount} company mark
+                {pendingDiscoveryMarkCount === 1 ? "" : "s"} — send to hand
+                {pendingDiscoveryMarkCount === 1 ? " it" : " them"} over
+              </PendingName>
+            </PendingChip>
+          </AttachmentRow>
+        )}
         {pendingBoardEditCount > 0 && (
           <AttachmentRow>
             {/* Display-only: the edits are already saved on the board; the

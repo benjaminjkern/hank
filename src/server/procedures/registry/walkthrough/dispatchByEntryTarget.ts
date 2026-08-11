@@ -2,7 +2,7 @@ import { statusEvent } from "@/server/agent/contracts";
 import type { TurnEvent } from "@/server/agent/contracts";
 
 import { runCompanyArm } from "./companyArm";
-import { runDiscoveryArm } from "./discoveryArm";
+import { runDiscoveryArm, runDiscoveryCommitArm } from "./discoveryArm";
 import { runJobArm } from "./jobArm";
 import { runOpportunityArm } from "./opportunityArm";
 
@@ -31,6 +31,9 @@ export async function* dispatchByEntryTarget(
   }
   if (target?.kind === "discovery") {
     return yield* runDiscoveryArm(target.direction, args);
+  }
+  if (target?.kind === "discovery_commit") {
+    return yield* runDiscoveryCommitArm(args);
   }
   // No focus — typically after a skip/defer/caught-up wrap clears it. The
   // runner will call handleWhatsNext upstream and render the next-company

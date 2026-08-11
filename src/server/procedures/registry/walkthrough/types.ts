@@ -17,7 +17,7 @@ export type WalkthroughResult = {
   wrappedUp: boolean;
   // Set when this pass ENDED a company (a close / pause / block / caught-up
   // bundled action ran). The chat runner reads it to run the segment wrap once
-  // per message — see procedures/registry/wrapCompanySegment.ts. Deliberately
+  // per message — see procedures/registry/wrapSegment.ts. Deliberately
   // separate from `wrappedUp`: half the paths that set that flag just want the
   // what's-next chooser and must NOT compact (revive declined, a job-gone
   // fallback, the no-target dispatch branch).

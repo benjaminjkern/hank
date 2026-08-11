@@ -22,14 +22,17 @@ export function AddMoreCompaniesWidget({ payload }: Props) {
   const send = useChatStore((s) => s.send);
   const [submitting, setSubmitting] = useState(false);
 
+  const added = payload.addedThisBatch;
+  const settled = added.length + (payload.passedCount ?? 0);
+
   async function answer(value: "yes" | "no") {
     if (submitting) return;
     setSubmitting(true);
-    const label = value === "yes" ? "[Add more]" : "[Done adding]";
+    const label = value === "yes" ? "[Find more]" : "[Done adding]";
     try {
       await send(
         buildWidgetSubmissionMessage(
-          { kind: "add_more_companies", answer: value },
+          { kind: "add_more_companies", answer: value, settled },
           label,
         ),
       );
@@ -38,36 +41,36 @@ export function AddMoreCompaniesWidget({ payload }: Props) {
     }
   }
 
-  const added = payload.addedThisBatch;
-
   return (
     <WidgetShell
-      title="Add more?"
+      title={added.length > 0 ? `Added ${added.length}` : "Nothing added"}
       minimizable
       disabled={submitting}
-      minimizedSummary="Add more?"
+      minimizedSummary="Done adding?"
       footer={
         <ButtonRow>
           <SecondaryButton
-            onClick={() => void answer("no")}
-            disabled={submitting}
-          >
-            Done
-          </SecondaryButton>
-          <PrimaryButton
             onClick={() => void answer("yes")}
             disabled={submitting}
           >
-            Add more
+            Find more
+          </SecondaryButton>
+          {/* Primary is LEAVING discovery: finishing an add should point at the
+              work, not invite another lap. */}
+          <PrimaryButton
+            onClick={() => void answer("no")}
+            disabled={submitting}
+          >
+            Done adding
           </PrimaryButton>
         </ButtonRow>
       }
     >
       <Meta>
         {added.length === 0
-          ? "Nothing added this round."
-          : `Added: ${added.join(", ")}.`}{" "}
-        Want to keep going or wrap up?
+          ? "Nothing new landed this round."
+          : `${added.join(", ")} ${added.length === 1 ? "is" : "are"} on your list.`}{" "}
+        Ready to start working through them, or want more options first?
       </Meta>
     </WidgetShell>
   );

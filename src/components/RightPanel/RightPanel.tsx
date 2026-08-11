@@ -14,6 +14,7 @@ import { DashboardView } from "./DashboardView";
 import { DocumentsView } from "./DocumentsView";
 import { JobDetailView } from "./JobDetailView";
 import { OpportunityDetailView } from "./OpportunityDetailView";
+import { DiscoveryView } from "./DiscoveryView";
 import { ShortlistBoardView } from "./ShortlistBoardView";
 
 // Mirrors theme.breakpoints.narrow — inlined because matchMedia runs outside
@@ -117,6 +118,7 @@ export function RightPanel() {
   const viewedJob = useChatStore((s) => s.viewedJob);
   const viewedOpportunity = useChatStore((s) => s.viewedOpportunity);
   const viewedBoard = useChatStore((s) => s.viewedBoard);
+  const viewedDiscovery = useChatStore((s) => s.viewedDiscovery);
   const viewedApplication = useChatStore((s) => s.viewedApplication);
   const documentsSubPage = useChatStore((s) => s.documentsNav.subPage);
   const dashboard = useChatStore((s) => s.dashboard);
@@ -145,6 +147,8 @@ export function RightPanel() {
       <OpportunityDetailView opportunity={viewedOpportunity} />
     ) : panelMode === "company-context" && viewedCompany ? (
       <CompanyContextView company={viewedCompany} />
+    ) : panelMode === "discovery" && viewedDiscovery ? (
+      <DiscoveryView discovery={viewedDiscovery} />
     ) : panelMode === "shortlist-board" && viewedBoard ? (
       <ShortlistBoardView board={viewedBoard} />
     ) : panelMode === "application" && viewedApplication ? (

@@ -13,9 +13,9 @@ export type WidgetKind =
   // shortlist board panel replaced the widget. The kind survives because
   // persisted `pipeline_widget` blocks in old sessions carry it verbatim.
   | "shortlist_proposal"
-  // Emitted by the find_companies tool: a checklist of candidate companies to
-  // add to the watchlist. Picks commit via the top-level company_checklist
-  // dispatcher (runUserMessage), so it works from any flow.
+  // REPLAY-ONLY (docs/INCOMPLETE_MIGRATIONS.md): nothing emits it — the
+  // discovery panel replaced the checklist. The kind survives because persisted
+  // `pipeline_widget` blocks in old sessions carry it verbatim.
   | "company_checklist"
   // Emitted once a checklist add has finished: names what landed and asks
   // whether to keep hunting. "yes" re-enters the search, "no" falls through to

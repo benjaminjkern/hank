@@ -23,6 +23,7 @@ import type {
 } from "@/server/agent/contracts";
 import { buildHankSystem } from "@/server/agent/hank";
 import { loadHankProfileContext } from "@/server/agent/hank/profileContext";
+import { loadHankDiscoveryContext } from "@/server/agent/hank/discoveryContext";
 import { loadHankShortlistBoardContext } from "@/server/agent/hank/shortlistBoardContext";
 import { loadHankWatchlistContext } from "@/server/agent/hank/watchlistContext";
 import {
@@ -206,13 +207,19 @@ async function buildTurnSystem(
   profileIntake: boolean,
   transcript: TranscriptInfo,
 ) {
-  const [watchlist, recentClientErrors, profileContext, shortlistBoards] =
-    await Promise.all([
-      loadHankWatchlistContext(args.userId),
-      loadRecentClientErrors(args.sessionId),
-      loadHankProfileContext(args.userId),
-      loadHankShortlistBoardContext(args.userId),
-    ]);
+  const [
+    watchlist,
+    recentClientErrors,
+    profileContext,
+    shortlistBoards,
+    discoveryList,
+  ] = await Promise.all([
+    loadHankWatchlistContext(args.userId),
+    loadRecentClientErrors(args.sessionId),
+    loadHankProfileContext(args.userId),
+    loadHankShortlistBoardContext(args.userId),
+    loadHankDiscoveryContext(args.userId),
+  ]);
   return buildHankSystem({
     profileIntake,
     profileGaps: args.profileGaps,
@@ -221,6 +228,7 @@ async function buildTurnSystem(
     recentClientErrors,
     profileContext,
     shortlistBoards,
+    discoveryList,
     // The "picking up where we left off" banner — on iff the session already has
     // an assistant turn. (There's no "current focus" block anymore; focus is
     // ephemeral, so Hank works from the conversation + the clickable chips.)

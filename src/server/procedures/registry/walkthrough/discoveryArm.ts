@@ -1,18 +1,20 @@
-import { widgetEvent } from "@/server/agent/contracts";
+import { yieldUiEvents } from "@/server/agent/contracts";
 import type { TurnEvent } from "@/server/agent/contracts";
+import { runCommitDiscovery } from "@/server/procedures/registry/commitDiscovery";
 import { runFindCompanies } from "@/server/procedures/registry/findCompanies";
+import { buildDiscoveryEvents } from "@/server/views/showEvents";
 
 import type { WalkthroughArgs, WalkthroughResult } from "./types";
 
-// Find companies worth adding and put the checklist on screen. Entered by the
-// `find_companies` handoff; `direction` is Hank's free-text steer (absent = work
-// from the user's thesis alone).
+// Find companies worth adding and put them on the discovery panel. Entered by
+// the `find_companies` handoff; `direction` is Hank's free-text steer (absent =
+// work from the user's thesis alone).
 //
-// Re-entry always searches. Candidates the user never answered aren't lost by
+// Re-entry always searches. Candidates the user never marked aren't lost by
 // that — they're carried into the search's own input and re-emitted when the new
 // direction still supports them (entities/companies/companySuggestions.ts), so
 // the list that comes back is the same names filtered against what the user just
-// said, rather than a replay of a batch they'd already walked away from.
+// said rather than a replay of a batch they'd walked away from.
 export async function* runDiscoveryArm(
   direction: string | undefined,
   args: WalkthroughArgs,
@@ -36,13 +38,31 @@ export async function* runDiscoveryArm(
     return { wrappedUp: false };
   }
 
-  yield widgetEvent("company_checklist", {
-    suggestions: r.candidates.map((c) => ({
-      name: c.name,
-      reasoning: c.oneLineReason,
-      url: c.url,
-    })),
-    ...(r.provenance ? { provenance: r.provenance } : {}),
-  });
+  // The panel is the surface, so the only chat line is the pointer to it. The
+  // names themselves are on screen and Hank is told not to re-list them.
+  yield {
+    type: "text",
+    text: `Put ${r.candidates.length} ${r.candidates.length === 1 ? "company" : "companies"} on the right — mark the ones worth tracking and send when you're ready. Tell me what's off about them and I'll look again.`,
+  };
+  yield* yieldUiEvents((await buildDiscoveryEvents(args.userId)).events);
+  return { wrappedUp: false };
+}
+
+// Settle the marks: add what's marked ADD, record what's marked PASS, and put
+// the refreshed list back on screen. Entered by the `commit_discovery` handoff.
+export async function* runDiscoveryCommitArm(
+  args: WalkthroughArgs,
+): AsyncGenerator<TurnEvent, WalkthroughResult> {
+  const result = yield* runCommitDiscovery(args);
+  if (result.empty) {
+    yield {
+      type: "text",
+      text: "Nothing's marked yet — tap Add or Pass on the ones you've got a view on, then send.",
+    };
+    return { wrappedUp: false };
+  }
+  // Refresh the panel so the settled rows drop into their tails rather than
+  // sitting in the open list until something else repaints.
+  yield* yieldUiEvents((await buildDiscoveryEvents(args.userId)).events);
   return { wrappedUp: false };
 }

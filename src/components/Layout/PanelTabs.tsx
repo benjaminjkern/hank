@@ -130,6 +130,8 @@ function rightTabLabel(args: {
       return "Documents";
     case "analytics":
       return "Analytics";
+    case "discovery":
+      return "Companies";
     case "company-context":
       return args.companyName ?? "Company";
     case "job-detail":

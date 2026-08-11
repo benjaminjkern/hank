@@ -19,7 +19,7 @@ import type {
 } from "@/server/agent/contracts";
 import { listUnrelayedBoardEdits } from "@/server/entities/jobs/boardStance";
 import { flipDueInterviewsToDebrief } from "@/server/entities/jobs/flipDueInterviews";
-import { runWrapCompanySegment } from "@/server/procedures/registry/wrapCompanySegment";
+import { runWrapSegment } from "@/server/procedures/registry/wrapSegment";
 import { buildShowEvents } from "@/server/views/showEvents";
 import { dispatchTopLevelSubmission } from "@/server/widgets/dispatchTopLevelSubmission";
 import {
@@ -113,7 +113,7 @@ export async function* runChat(args: ChatArgs): AsyncGenerator<TurnEvent> {
     let wrappedUp = false;
     // Set when this turn ended a company. The segment wrap runs HERE, once,
     // rather than inside each bundled mutation — see
-    // procedures/registry/wrapCompanySegment.ts for why.
+    // procedures/registry/wrapSegment.ts for why.
     let endedCompanyId: string | undefined;
     let stopped = false;
     // eslint-disable-next-line no-await-in-loop -- streaming a turn's events as they happen — the point is to relay each one before the next
@@ -149,7 +149,7 @@ export async function* runChat(args: ChatArgs): AsyncGenerator<TurnEvent> {
       // eslint-disable-next-line no-await-in-loop -- a silent transition only exists because the previous turn wrapped
       yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
       // eslint-disable-next-line no-await-in-loop -- the wrap reads the state the turn above it just wrote
-      await runWrapCompanySegment(args);
+      await runWrapSegment({ ...args, subject: "company" });
     }
     if (!wrappedUp) return;
     // Wrapped — a company segment closed, an application finished, or profile

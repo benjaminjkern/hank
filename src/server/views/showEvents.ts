@@ -8,6 +8,7 @@ import { getFocusedJobView } from "@/server/views/getFocusedJob";
 import { getFocusedOpportunityView } from "@/server/views/getFocusedOpportunity";
 
 import { loadApplicationView, type ApplicationView } from "./application";
+import { loadDiscoveryList, type DiscoveryListView } from "./discoveryList";
 import { loadShortlistBoard, type ShortlistBoardView } from "./shortlistBoard";
 
 // Which entity to put on screen. An empty target ({}) is the dashboard.
@@ -65,6 +66,7 @@ export async function buildShowEvents(
         opportunity,
         board: null,
         application: null,
+        discovery: null,
       },
       { type: "panel_mode", mode },
     ],
@@ -94,10 +96,36 @@ export async function buildShortlistBoardEvents(
         opportunity: null,
         board,
         application: null,
+        discovery: null,
       },
       { type: "panel_mode", mode: "shortlist-board" },
     ],
     board,
+  };
+}
+
+// Sibling builder for the discovery list. Separate for a stronger version of
+// the board's reason: discovery names no entity AT ALL — a list of companies
+// that aren't on the watchlist yet is exactly what buildShowEvents has nothing
+// to key on.
+export async function buildDiscoveryEvents(
+  userId: string,
+): Promise<{ events: UiEvent[]; discovery: DiscoveryListView }> {
+  const discovery = await loadDiscoveryList(userId);
+  return {
+    events: [
+      {
+        type: "show",
+        company: null,
+        job: null,
+        opportunity: null,
+        board: null,
+        application: null,
+        discovery,
+      },
+      { type: "panel_mode", mode: "discovery" },
+    ],
+    discovery,
   };
 }
 
@@ -119,6 +147,7 @@ export async function buildApplicationEvents(
         opportunity: null,
         board: null,
         application,
+        discovery: null,
       },
       { type: "panel_mode", mode: "application" },
     ],
