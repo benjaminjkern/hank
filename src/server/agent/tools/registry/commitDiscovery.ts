@@ -2,10 +2,11 @@ import { z } from "zod";
 
 import type { ToolDef } from "../lib/types";
 
-// commit_discovery — settle the company list the user has been marking on the
-// discovery panel: ADDs go onto the watchlist (URL hunt → scrape → prescan),
-// PASSes are recorded so the search stops proposing them, and unmarked rows are
-// left alone (they stay on the table and ride into the next search).
+// commit_discovery — settle the company list on the discovery panel: everything
+// still checked goes onto the watchlist (URL hunt → scrape → prescan), and
+// everything the user unchecked is recorded so the search stops proposing it.
+// The whole batch settles, because every row arrives checked and there is no
+// third state to leave behind.
 //
 // The board's `commit_shortlist` in every respect that matters: a handoff that
 // also WRITES, because settling the list IS entering the continuation — the
@@ -16,7 +17,7 @@ export const commitDiscoveryTool: ToolDef<Record<string, never>> = {
   name: "commit_discovery",
   handoff: true,
   description:
-    "Act on the company list on the user's screen: add everything they marked to add, record everything they marked pass. Call this when their marks (which arrive at the head of their message) are what they want acted on — that IS the ask, so a message that's only marks means call it. Also call it when they say it in words ('add those', 'yeah go ahead', 'those two look right'). Unmarked rows are untouched and stay on the list, so this never forces a verdict on anything. Do NOT call it when they're still reacting to the list ('these are all too big', 'anything smaller?') — that's find_companies again with what they said as the direction. Takes no arguments: it reads the marks. Calling this ends your turn, so say anything you want to say BEFORE it.",
+    "Act on the company list on the user's screen: add every company still checked, record the ones they unchecked. **Every company you found starts CHECKED** — surfacing it is the proposal that it's worth tracking — so the user's job is to uncheck what they don't want and tell you to go. Call this the moment they do: any go-ahead ('add those', 'yeah go ahead', 'looks good', 'that's right') means call it, and so does a message that is only checkbox changes, since changing the list IS the ask. Do NOT call it when they're still reacting to the batch ('these are all too big', 'anything smaller?') — that's find_companies again with what they said as the direction. This settles the whole list, so don't call it while they're mid-thought. Takes no arguments: it reads what's on screen. Calling this ends your turn, so say anything you want to say BEFORE it.",
   inputSchema: { type: "object", properties: {} },
   parser: z.object({}),
   handle() {

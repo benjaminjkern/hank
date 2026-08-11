@@ -1,134 +1,100 @@
-// The discovery list view — companies the search has proposed that the user
-// hasn't settled, plus what the recent rounds already decided. Feeds the
-// panel's discovery screen (GET /api/discovery), Hank's discovery context
-// block, and the find_companies arm's show event.
+// The discovery list view — the companies the LAST search proposed, and nothing
+// else. Feeds the panel's discovery screen (GET /api/discovery), Hank's
+// discovery context block, and the find_companies arm's show event.
+//
+// **One run, not the whole pool.** Older unsettled candidates stay in the table
+// as input to the next search (companySuggestions.ts) — they are how walking
+// away from a list stops being lost work — but drawing them would put names on
+// screen from a batch the user has forgotten, and would make the arm's "found
+// you N companies" line disagree with what they can count. So the panel shows
+// exactly one run: whichever produced the newest open row. A carried-forward
+// name is re-recorded under the current run when the search re-proposes it, so
+// it appears here on its own merits rather than as a leftover.
 //
 // The columns this reads are written elsewhere: the search (recordSuggestions),
 // the panel clicks (setSuggestionMark), and the commit that settles them
 // (procedures/registry/commitDiscovery).
 
-import {
-  CompanySuggestionMark,
-  CompanySuggestionVerdict,
-} from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
-import { MARK_WORDS } from "@/server/entities/companies/suggestionMark";
-import { nowMs } from "@/utils/now";
+import {
+  isMarkPending,
+  liveMark,
+  MARK_WORDS,
+} from "@/server/entities/companies/suggestionMark";
 
 export type DiscoveryRow = {
   id: string;
   name: string;
   reason: string;
   url: string | null;
-  // Null = unmarked, which is a real state, not a missing one: the candidate
-  // stays on the table and the next search can re-offer it.
-  mark: "add" | "pass" | null;
-};
-
-export type DiscoverySettledRow = {
-  id: string;
-  name: string;
-  reason: string;
-  verdict: "added" | "declined";
+  // Every candidate is proposed as "add"; false means the user unchecked it.
+  checked: boolean;
 };
 
 export type DiscoveryListView = {
-  // Still open: the pool, newest proposal first.
-  open: DiscoveryRow[];
-  // Collapsed tails, so a round is legible afterwards and a mis-tapped pass is
-  // visible rather than simply gone.
-  added: DiscoverySettledRow[];
-  passed: DiscoverySettledRow[];
-  // How many open rows carry a mark Hank hasn't been told about — what the
+  rows: DiscoveryRow[];
+  // How many rows the user has changed since Hank last heard — what the
   // composer's pending chip counts.
   pendingMarks: number;
-};
-
-// How far back the settled tails reach. The open pool has its own (longer)
-// window in companySuggestions.ts; this is only about how much history the
-// panel is worth showing.
-const SETTLED_WINDOW_DAYS = 7;
-const SETTLED_LIMIT = 40;
-
-const MARK_NAME: Record<CompanySuggestionMark, "add" | "pass"> = {
-  [CompanySuggestionMark.ADD]: "add",
-  [CompanySuggestionMark.PASS]: "pass",
 };
 
 export async function loadDiscoveryList(
   userId: string,
 ): Promise<DiscoveryListView> {
-  const since = new Date(nowMs() - SETTLED_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-  const [openRows, settledRows] = await Promise.all([
-    prisma.companySuggestion.findMany({
-      where: { userId, verdict: null },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        name: true,
-        nameKey: true,
-        reason: true,
-        url: true,
-        userMark: true,
-        relayedMark: true,
-      },
-    }),
-    prisma.companySuggestion.findMany({
-      where: { userId, verdict: { not: null }, decidedAt: { gte: since } },
-      orderBy: { decidedAt: "desc" },
-      take: SETTLED_LIMIT,
-      select: {
-        id: true,
-        name: true,
-        nameKey: true,
-        reason: true,
-        verdict: true,
-      },
-    }),
-  ]);
+  const open = await prisma.companySuggestion.findMany({
+    where: { userId, verdict: null },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      name: true,
+      nameKey: true,
+      reason: true,
+      url: true,
+      runId: true,
+      createdAt: true,
+      userMark: true,
+      relayedMark: true,
+    },
+  });
+  if (open.length === 0) return { rows: [], pendingMarks: 0 };
 
-  // Newest row wins per name. recordSuggestions keeps one open row per name, so
-  // a duplicate here predates that — still worth folding rather than drawing
-  // the same company twice.
+  // The newest open row names the current batch. Keyed on runId when there is
+  // one; a null runId (a hand-driven or replayed write) can't be told apart
+  // from any other, so those rows only ever form a batch among themselves.
+  const newest = open[0];
+  const batch = open.filter((r) =>
+    newest.runId === null ? r.runId === null : r.runId === newest.runId,
+  );
+
+  // One row per name — recordSuggestions keeps it that way, so a duplicate here
+  // predates that and is still worth folding rather than drawing twice.
   const seen = new Set<string>();
-  const open: DiscoveryRow[] = [];
+  const rows: DiscoveryRow[] = [];
   let pendingMarks = 0;
-  for (const r of openRows) {
+  for (const r of batch) {
     if (seen.has(r.nameKey)) continue;
     seen.add(r.nameKey);
-    if (r.userMark !== r.relayedMark) pendingMarks += 1;
-    open.push({
+    if (isMarkPending(r)) pendingMarks += 1;
+    rows.push({
       id: r.id,
       name: r.name,
       reason: r.reason,
       url: r.url,
-      mark: r.userMark ? MARK_NAME[r.userMark] : null,
+      checked: liveMark(r.userMark) === "ADD",
     });
   }
-
-  const added: DiscoverySettledRow[] = [];
-  const passed: DiscoverySettledRow[] = [];
-  for (const r of settledRows) {
-    const row = { id: r.id, name: r.name, reason: r.reason };
-    if (r.verdict === CompanySuggestionVerdict.ADDED) {
-      added.push({ ...row, verdict: "added" });
-    } else {
-      passed.push({ ...row, verdict: "declined" });
-    }
-  }
-
-  return { open, added, passed, pendingMarks };
+  return { rows, pendingMarks };
 }
 
 // The same list as plain text for Hank's per-turn context. Marks included —
-// negotiating over the list means knowing which ones the user already touched.
+// negotiating over the list means knowing which ones the user has unchecked.
 export function renderDiscoveryListText(view: DiscoveryListView): string {
-  if (view.open.length === 0) return "";
+  if (view.rows.length === 0) return "";
   const line = (r: DiscoveryRow) =>
-    `- ${r.name}${r.mark ? ` [${MARK_WORDS[r.mark === "add" ? CompanySuggestionMark.ADD : CompanySuggestionMark.PASS]}]` : ""} — ${r.reason}`;
+    `- ${r.name} [${r.checked ? MARK_WORDS.ADD : MARK_WORDS.PASS}] — ${r.reason}`;
   return [
     "# Companies on the user's screen right now, waiting on a decision",
-    "Marked rows are what they've clicked; unmarked ones they haven't ruled on. Nothing here is committed — `commit_discovery` is what makes the marks real (adds the ADDs, records the PASSes). Don't re-list these in chat; they're already on screen.",
-    view.open.map(line).join("\n"),
+    "Every one you found is checked to add by default; the user unchecks what they don't want. Nothing here is committed — `commit_discovery` adds everything still checked and records the rest. Don't re-list these in chat; they're already on screen.",
+    view.rows.map(line).join("\n"),
   ].join("\n");
 }

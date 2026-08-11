@@ -400,10 +400,7 @@ type Actions = {
   ) => Promise<void>;
   // The discovery list's equivalent: POSTs one candidate's mark, which decides
   // nothing until Hank's commit_discovery.
-  markSuggestion: (
-    suggestionId: string,
-    mark: "add" | "pass" | "unmarked",
-  ) => Promise<void>;
+  markSuggestion: (suggestionId: string, mark: "add" | "pass") => Promise<void>;
   // Optimistic patch for the currently-viewed job's JobInteraction fields.
   // Used by JobDetailView's edit-in-place so the textarea reflects the latest
   // value while the PATCH round-trips. Replaced with canonical state when the
@@ -1046,9 +1043,9 @@ export const useChatStore = create<State & Actions>((set, get) => ({
     }
   },
 
-  // One discovery mark. Persists immediately and repaints from the server's
-  // copy — the mark decides nothing until Hank's commit_discovery, so this is
-  // free to fire on every click.
+  // One discovery checkbox. Persists immediately and repaints from the server's
+  // copy — it decides nothing until Hank's commit_discovery, so this is free to
+  // fire on every click.
   async markSuggestion(suggestionId, mark) {
     if (get().impersonateSessionId) return;
     try {

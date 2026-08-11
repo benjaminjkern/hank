@@ -14,6 +14,6 @@ export async function loadHankDiscoveryContext(
   userId: string,
 ): Promise<string | undefined> {
   const view = await loadDiscoveryList(userId);
-  if (view.open.length === 0) return undefined;
+  if (view.rows.length === 0) return undefined;
   return renderDiscoveryListText(view) || undefined;
 }

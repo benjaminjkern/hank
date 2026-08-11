@@ -2,7 +2,10 @@ import { yieldUiEvents } from "@/server/agent/contracts";
 import type { TurnEvent } from "@/server/agent/contracts";
 import { runCommitDiscovery } from "@/server/procedures/registry/commitDiscovery";
 import { runFindCompanies } from "@/server/procedures/registry/findCompanies";
-import { buildDiscoveryEvents } from "@/server/views/showEvents";
+import {
+  buildDiscoveryEvents,
+  buildShowEvents,
+} from "@/server/views/showEvents";
 
 import type { WalkthroughArgs, WalkthroughResult } from "./types";
 
@@ -42,7 +45,7 @@ export async function* runDiscoveryArm(
   // names themselves are on screen and Hank is told not to re-list them.
   yield {
     type: "text",
-    text: `Put ${r.candidates.length} ${r.candidates.length === 1 ? "company" : "companies"} on the right — mark the ones worth tracking and send when you're ready. Tell me what's off about them and I'll look again.`,
+    text: `Put ${r.candidates.length} ${r.candidates.length === 1 ? "company" : "companies"} on the right — they're all set to add, so uncheck any you don't want and send. Tell me what's off about them and I'll look again instead.`,
   };
   yield* yieldUiEvents((await buildDiscoveryEvents(args.userId)).events);
   return { wrappedUp: false };
@@ -57,12 +60,13 @@ export async function* runDiscoveryCommitArm(
   if (result.empty) {
     yield {
       type: "text",
-      text: "Nothing's marked yet — tap Add or Pass on the ones you've got a view on, then send.",
+      text: "There's no company list on screen right now — say the word and I'll go find some.",
     };
     return { wrappedUp: false };
   }
-  // Refresh the panel so the settled rows drop into their tails rather than
-  // sitting in the open list until something else repaints.
-  yield* yieldUiEvents((await buildDiscoveryEvents(args.userId)).events);
+  // The list is fully settled, so leaving it up would offer a surface with
+  // nothing left to decide. Back to the dashboard, where the companies that
+  // just landed are — same move the shortlist board makes on commit.
+  yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
   return { wrappedUp: false };
 }
