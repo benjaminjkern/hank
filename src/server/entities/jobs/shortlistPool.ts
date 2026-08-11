@@ -58,6 +58,18 @@ export function isStanceable(status: JobInteractionStatus): boolean {
   return CONSIDERED_STATUSES.includes(status);
 }
 
+// Whether a row can hold a board stance. Wider than the pool by exactly one
+// status: a role the automatic filtering CLOSED is markable from the board, and
+// the mark is what un-closes it — which happens when the mark is relayed, not
+// when it's clicked, so the row is genuinely still CLOSED while it carries one.
+//
+// WHICH closed rows the board offers is the view's call (only this round's), and
+// the edit route gates on a proposal being open. This predicate only says the
+// combination is representable.
+export function canHoldStance(status: JobInteractionStatus): boolean {
+  return isStanceable(status) || status === JobInteractionStatus.CLOSED;
+}
+
 // Companies with an open negotiation for this user, most recently touched
 // first. Drives Hank's board context block and the dashboard's "shortlist in
 // progress" chips.

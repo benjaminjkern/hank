@@ -44,6 +44,8 @@ export type CompanyEventView = {
 export type CompanyStatusName =
   | "NEW"
   | "READY"
+  | "SCANNING"
+  | "SHORTLISTING"
   | "APPLYING"
   | "IN_FLIGHT"
   | "IN_PROCESS"

@@ -15,9 +15,16 @@
 // their next message relays the change.
 //
 // Any role the board still considers can take a stance — including a still-NEW
-// one, because marking it is not the same as reading it. Whether to ALSO read
-// and promote the role is the caller's call (runReconsiderJob does it for
-// interest, never for a rejection).
+// one, because marking it is not the same as reading it, and including one this
+// round's filtering CLOSED, because the mark is what un-closes it. Whether to
+// ALSO read, promote, or un-close the role is the caller's call
+// (runReconsiderJob does the read for interest, never for a rejection; the
+// un-close waits for the relay, so a mark stays a pure proposal).
+//
+// `userVerdict = null` means exactly one thing: "whatever Hank said". There is
+// no user-facing way to clear a row to no-opinion — Defer already means "don't
+// close it, don't commit to it" — and that is what keeps the null unambiguous,
+// so a user's change can never read as an acceptance.
 
 import { prisma } from "@/server/db/prisma";
 import {
@@ -25,7 +32,7 @@ import {
   ProposedVerdict,
 } from "@/generated/prisma/client";
 
-import { isStanceable } from "./shortlistPool";
+import { canHoldStance } from "./shortlistPool";
 
 export type SetBoardStanceResult =
   | { ok: true; title: string; priorVerdict: ProposedVerdict | null }
@@ -64,7 +71,7 @@ export async function setBoardStance(
     },
   });
   if (!row) return { ok: false, code: "NOT_FOUND", status: null, title: null };
-  if (!isStanceable(row.status)) {
+  if (!canHoldStance(row.status)) {
     return {
       ok: false,
       code: "NOT_ON_BOARD",

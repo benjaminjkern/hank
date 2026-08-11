@@ -26,8 +26,8 @@ import {
   type PlaceableRow,
 } from "@/server/entities/jobs/boardStance";
 import {
+  canHoldStance,
   CONSIDERED_STATUSES,
-  isStanceable,
 } from "@/server/entities/jobs/shortlistPool";
 
 export type ShortlistBoardTier =
@@ -212,7 +212,15 @@ export async function loadShortlistBoard(
         },
       },
     },
-    orderBy: { updatedAt: "desc" },
+    // Strongest read first, then alphabetical — and NOTHING here may derive from
+    // a write timestamp. `updatedAt` is `@updatedAt`, so ordering by it made
+    // every mark bump its own row to the top of the group: the button moved out
+    // from under the cursor the instant it was pressed.
+    orderBy: [
+      { matchBucket: { sort: "asc", nulls: "last" } },
+      { matchScore: { sort: "desc", nulls: "last" } },
+      { job: { title: "asc" } },
+    ],
   });
 
   // A proposal is on the table iff some row carries a stance. Committing clears
@@ -228,14 +236,20 @@ export async function loadShortlistBoard(
     const pending = isPending(r);
 
     if (pending) pendingEdits++;
+    // On an overridden row the rationale moves to `overriddenAgentReason`, which
+    // renders it attributed to Hank. Leaving it here too printed one string
+    // twice — the plain line and "Hank had this as X — <same string>".
+    const overridden = isOverridden(r);
     const reason =
       r.status === JobInteractionStatus.CLOSED
         ? r.closeNote
-        : onBoard
-          ? r.agentReason
-          : r.status === JobInteractionStatus.DEFERRED
-            ? r.deferNote
-            : null;
+        : overridden
+          ? null
+          : onBoard
+            ? r.agentReason
+            : r.status === JobInteractionStatus.DEFERRED
+              ? r.deferNote
+              : null;
     const list = byTier.get(tier) ?? [];
     list.push({
       jobId: r.job.id,
@@ -253,17 +267,15 @@ export async function loadShortlistBoard(
       verdict: liveVerdict(r),
       // Hank's side, shown only when the user has overruled him — on an
       // untouched row his reason IS the row's reason, above.
-      overriddenAgentVerdict: isOverridden(r) ? r.agentVerdict : null,
-      overriddenAgentReason: isOverridden(r) ? r.agentReason : null,
+      overriddenAgentVerdict: overridden ? r.agentVerdict : null,
+      overriddenAgentReason: overridden ? r.agentReason : null,
       pending,
       // Only while a proposal is open: a committed board is a record, not a
       // working surface. Changing a decided role is a conversation with Hank
       // ("actually, close that one"), not a click here. This round's filtered
       // rows are included — correcting the filtering is the point of showing
       // it, and committing closes that door with the rest of the board.
-      markable:
-        open &&
-        (isStanceable(r.status) || r.status === JobInteractionStatus.CLOSED),
+      markable: open && canHoldStance(r.status),
     });
     byTier.set(tier, list);
   }

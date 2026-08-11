@@ -10,12 +10,15 @@
 // re-triaging (and possibly closing) a role the user just asked for. The human
 // choosing it IS the judgment, so the match pass is not re-run to argue back.
 //
-// A row THIS ROUND's filtering closed is markable too, and the mark un-closes it
-// on the way through. That's why the board needs no separate "actually, consider
-// this" button: correcting the filter and ranking a role are the same gesture,
-// so they get the same control. Rows closed by an EARLIER round are decided and
-// off the board entirely — undoing one of those is a repair
-// (update_job_interaction), not a board move.
+// A row THIS ROUND's filtering closed is markable too — that's why the board
+// needs no separate "actually, consider this" button: correcting the filter and
+// ranking a role are the same gesture, so they get the same control. The
+// un-closing itself happens at RELAY, not here, which is what keeps a mark a
+// pure proposal: nothing structural moves until Hank has seen it, so discarding
+// unrelayed marks is just clearing stances and the row never left CLOSED.
+//
+// Rows closed by an EARLIER round are decided and off the board entirely —
+// undoing one of those is a repair (update_job_interaction), not a board move.
 
 import {
   JobEventType,
@@ -25,12 +28,11 @@ import {
 import type { RunContext } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
 import { logJobEvent } from "@/server/entities/jobs/logJobEvents";
-import { reviveFilteredJob } from "@/server/entities/jobs/reviveFilteredJob";
 import {
   setBoardStance,
   type BoardStanceMove,
 } from "@/server/entities/jobs/setBoardStance";
-import { isStanceable } from "@/server/entities/jobs/shortlistPool";
+import { canHoldStance } from "@/server/entities/jobs/shortlistPool";
 import {
   runEnrichJobBody,
   type EnrichJobBodyOutcome,
@@ -66,26 +68,7 @@ export async function runReconsiderJob(
   });
   if (!row) return { kind: "not_reconsiderable", title: null, status: null };
 
-  // Marking a filtered row overrules the close first, so the rest of this runs
-  // against a row that's genuinely back in the pool. `reviveFilteredJob` decides
-  // where it lands (NEW when nothing ever read it, SCANNED when something did),
-  // which is what the pull-in test below then reads.
-  const reviving = row.status === JobInteractionStatus.CLOSED;
-  let status = row.status;
-  if (reviving) {
-    const revived = await reviveFilteredJob({
-      userId: args.userId,
-      jobId: args.jobId,
-    });
-    if (!revived.ok) {
-      return {
-        kind: "not_reconsiderable",
-        title: row.job.title,
-        status: row.status,
-      };
-    }
-    status = revived.status;
-  } else if (!isStanceable(row.status)) {
+  if (!canHoldStance(row.status)) {
     return {
       kind: "not_reconsiderable",
       title: row.job.title,
@@ -93,8 +76,11 @@ export async function runReconsiderJob(
     };
   }
 
+  // A CLOSED row stays closed while it carries the mark, so it isn't in the pool
+  // and there's nothing to pull in yet — the relay's un-close is what promotes
+  // it, and that's where the read gets paid for.
   const pullingIn =
-    status === JobInteractionStatus.NEW && wantsARead(args.verdict);
+    row.status === JobInteractionStatus.NEW && wantsARead(args.verdict);
   let enrichment: EnrichJobBodyOutcome | null = null;
   if (pullingIn) {
     // Give the board and the ranker something to discuss, then promote out of
@@ -120,12 +106,7 @@ export async function runReconsiderJob(
     // A role just pulled in wasn't on the board a moment ago, so there's no
     // "where it was" to hold it in — landing in the chosen group IS the
     // feedback for the click. Every other mark leaves placement alone.
-    //
-    // A revived row is the exception to that exception: it very much has a
-    // "where it was" — the discard pile the user is looking at — and the revive
-    // pinned it there. Letting the pull-in place it would make the row leap out
-    // from under the cursor, which is the whole reason user marks are pending.
-    ...(pullingIn && !(reviving && args.by === "user") ? { place: true } : {}),
+    ...(pullingIn ? { place: true } : {}),
   });
   if (!stance.ok) {
     return {

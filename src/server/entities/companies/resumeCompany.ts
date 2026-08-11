@@ -41,12 +41,12 @@ export async function switchToCompany(args: {
   if (ci.status === CompanyStatus.BLOCKED) {
     return { ok: false, reason: "unreadable_board" };
   }
-  if (ci.status !== CompanyStatus.APPLYING) {
+  if (ci.status !== CompanyStatus.SCANNING) {
     await prisma.companyInteraction.update({
       where: {
         userId_companyId: { userId: args.userId, companyId: args.companyId },
       },
-      data: companyStatusFields({ status: CompanyStatus.APPLYING }),
+      data: companyStatusFields({ status: CompanyStatus.SCANNING }),
     });
   }
   return { ok: true };
@@ -76,7 +76,7 @@ export async function reviveCompany(args: {
       userId_companyId: { userId: args.userId, companyId: args.companyId },
     },
     data: {
-      ...companyStatusFields({ status: CompanyStatus.APPLYING }),
+      ...companyStatusFields({ status: CompanyStatus.SCANNING }),
       // Force the walkthrough's on-entry scrape to fire (isScrapeStale(null) ===
       // true) so a revive looks for genuinely-new postings. Deliberately does
       // NOT mass-flip the company's CLOSED roles back to NEW: on a long-worked
