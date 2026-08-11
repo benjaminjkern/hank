@@ -13,11 +13,23 @@
 //
 //   sourceUrl IS THE ONE THAT CANNOT BE WRONG. It's `Job.sourceUrl @unique`,
 //   the global dedupe key — a wrong or unstable URL doesn't degrade, it
-//   permanently orphans rows and can hand a posting to the wrong company. So it
-//   gets the strictest checks: absolute, same registrable domain as the board,
-//   fully distinct, no volatile query params.
+//   permanently orphans rows and can hand a posting to the wrong company.
+//
+//   Its host check has to answer a question domain-matching alone gets wrong in
+//   BOTH directions, which is how it shipped broken twice:
+//     - A DIFFERENT host is usually fine. A company site fronting a third-party
+//       ATS (`shade.inc/careers` → `jobs.ashbyhq.com/…`) is the single most
+//       common shape out here, and rejecting it threw away working boards.
+//     - The SAME host is not automatically fine. On a multi-tenant board one
+//       PATH is one company, so `jobs.madrona.com/companies/fixie-ai` sits
+//       beside every other portfolio company and passes any domain test.
+//   So: a different host is allowed when it's a RECOGNIZED ATS, and the same
+//   host is constrained to the board's own path scope.
 
 import { urlHost } from "@/utils/url";
+
+import { detectAts } from "../ats";
+import { boardPathScope } from "../generic/sitemap";
 
 import type { BoardRecipe } from "./types";
 import type { ScrapedJob } from "../types";
@@ -71,6 +83,7 @@ export function validateRecipeRun(
   }
 
   const boardDomain = registrableDomain(boardUrl);
+  const scope = boardPathScope(boardUrl);
   const minBody = recipe.listOnly ? MIN_LIST_ONLY_BODY_CHARS : MIN_BODY_CHARS;
 
   const kept: ScrapedJob[] = [];
@@ -85,7 +98,7 @@ export function validateRecipeRun(
       noteBad("title missing or implausible length");
       continue;
     }
-    const urlProblem = sourceUrlProblem(job.sourceUrl, boardDomain);
+    const urlProblem = sourceUrlProblem(job.sourceUrl, boardDomain, scope);
     if (urlProblem) {
       noteBad(urlProblem);
       continue;
@@ -150,6 +163,7 @@ export function validateRecipeRun(
 function sourceUrlProblem(
   sourceUrl: string | undefined,
   boardDomain: string | null,
+  scope: string,
 ): string | null {
   if (!sourceUrl) return "sourceUrl missing";
   let u: URL;
@@ -172,12 +186,22 @@ function sourceUrlProblem(
       return `sourceUrl carries the volatile query param "${key}"`;
     }
   }
-  // Cross-domain URLs are how a bad locator hands postings to another company.
-  // The board itself is often on a different host than the company site, so we
-  // anchor on the board URL rather than the company's domain.
   const jobDomain = registrableDomain(sourceUrl);
-  if (boardDomain && jobDomain && jobDomain !== boardDomain) {
-    return `sourceUrl host ${jobDomain} doesn't match the board's ${boardDomain}`;
+  const sameHost = !boardDomain || !jobDomain || jobDomain === boardDomain;
+
+  if (!sameHost) {
+    // A recognized ATS is where a company's postings are SUPPOSED to live when
+    // its own site only fronts the board. Asking the provider registry means
+    // there's no second list of ATS hosts to drift from the real one.
+    if (detectAts(sourceUrl)) return null;
+    return `sourceUrl host ${jobDomain} is neither the board's (${boardDomain}) nor a recognized ATS`;
+  }
+
+  // Same host, so the only thing that can be wrong is WHICH tenant. A board
+  // scoped to a path must not collect its neighbours' postings — this is the
+  // aggregator/portfolio-board case, and it passes every domain test.
+  if (scope !== "/" && !u.pathname.startsWith(scope)) {
+    return `sourceUrl path ${u.pathname} is outside the board's own scope ${scope} — it belongs to another company on this host`;
   }
   return null;
 }

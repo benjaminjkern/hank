@@ -23,6 +23,9 @@
 //   pnpm tsx scripts/ats/retry-blocked-boards.ts --recon        # dry run, probe + recon
 //   pnpm tsx scripts/ats/retry-blocked-boards.ts --recon --apply
 //   pnpm tsx scripts/ats/retry-blocked-boards.ts --limit 5 --apply
+//   pnpm tsx scripts/ats/retry-blocked-boards.ts --recon --apply --force-recon
+//     ^ after a fix to the reader/recon code: ignores the 14-day cooldown that
+//       would otherwise skip every board a previous run already gave up on.
 
 import "dotenv/config";
 
@@ -43,6 +46,10 @@ import { probeGenericBoard } from "../../src/server/scrape/generic/genericProbe"
 
 const APPLY = process.argv.includes("--apply");
 const WITH_RECON = process.argv.includes("--recon");
+// Recon remembers a failure for 14 days so a dead board isn't re-bought on
+// every staleness tick. That cooldown also silently no-ops a re-run after a
+// FIX, which is the one time you do want the work redone.
+const FORCE_RECON = process.argv.includes("--force-recon");
 const LIMIT =
   Number(process.argv[process.argv.indexOf("--limit") + 1] || "0") || 0;
 
@@ -58,7 +65,7 @@ type Outcome =
 async function main() {
   // Both populations, in one pass. Which branch a company takes is decided per
   // row by whether it has a url — see the header.
-  const blocked = await prisma.companyInteraction.findMany({
+  const rows = await prisma.companyInteraction.findMany({
     where: {
       status: CompanyStatus.BLOCKED,
       blockReason: {
@@ -72,14 +79,40 @@ async function main() {
         select: { id: true, name: true, slug: true, sourceUrl: true },
       },
     },
-    ...(LIMIT > 0 ? { take: LIMIT } : {}),
   });
-  const urlless = blocked.filter((r) => !r.company.sourceUrl).length;
+
+  // One entry per COMPANY, not per watchlist row. A board is global, so
+  // hunting and reconning it is global work — with several users on one
+  // watchlist the same company otherwise gets the whole expensive chain run
+  // once per user. Reviving stays per-user, so every affected row is kept.
+  const byCompany = new Map<
+    string,
+    { company: (typeof rows)[number]["company"]; userIds: string[] }
+  >();
+  for (const row of rows) {
+    const entry = byCompany.get(row.company.id);
+    if (entry) entry.userIds.push(row.userId);
+    else
+      byCompany.set(row.company.id, {
+        company: row.company,
+        userIds: [row.userId],
+      });
+  }
+  const blocked = [...byCompany.values()].slice(
+    0,
+    LIMIT > 0 ? LIMIT : undefined,
+  );
+  const urlless = blocked.filter((b) => !b.company.sourceUrl).length;
+  const sharedRows = rows.length - blocked.length;
 
   console.log(
     `\n${blocked.length} blocked compan${blocked.length === 1 ? "y" : "ies"}` +
       ` (${blocked.length - urlless} with a URL on file, ${urlless} without)` +
-      `\nmode: ${APPLY ? "APPLY (writes)" : "dry run"}${WITH_RECON ? " + recon" : " (probe only)"}\n`,
+      (sharedRows > 0
+        ? `\n${sharedRows} extra watchlist row${sharedRows === 1 ? "" : "s"} share these companies — each board is worked once, every row revived`
+        : "") +
+      `\nmode: ${APPLY ? "APPLY (writes)" : "dry run"}${WITH_RECON ? " + recon" : " (probe only)"}` +
+      `${FORCE_RECON ? " + force (ignoring cooldown)" : ""}\n`,
   );
   if (urlless > 0 && !WITH_RECON) {
     console.log(
@@ -89,16 +122,18 @@ async function main() {
   }
 
   let readable = 0;
-  for (const row of blocked) {
-    const { company, userId } = row;
-    const url = company.sourceUrl;
+  for (const entry of blocked) {
+    const { company, userIds } = entry;
 
     const outcome = await tryCompany({
       companyId: company.id,
       companyName: company.name,
       companySlug: company.slug,
-      userId,
-      url,
+      // The board work is global; `userIds[0]` only decides whose credential
+      // pays for the LLM call and whose memory a hunt writes to.
+      userId: userIds[0],
+      userIds,
+      url: company.sourceUrl,
     });
     if (
       outcome.kind === "wired" ||
@@ -108,7 +143,9 @@ async function main() {
     ) {
       readable++;
     }
-    console.log(`${company.name.padEnd(28)} ${describe(outcome)}`);
+    console.log(
+      `${company.name.padEnd(28)}${userIds.length > 1 ? ` (${userIds.length} users)` : ""} ${describe(outcome)}`,
+    );
   }
 
   console.log(
@@ -125,8 +162,22 @@ async function tryCompany(args: {
   companyName: string;
   companySlug: string;
   userId: string;
+  // Everyone watching this company. The board is read once; the set-aside is
+  // per-user, so every one of them gets cleared.
+  userIds: string[];
   url: string | null;
 }): Promise<Outcome> {
+  // The cooldown lives on the reader row, and the hunt path reaches recon
+  // through enrichOne, which (rightly) never forces. Clearing the anchor is how
+  // an operator says "redo this" without threading a force flag down a chain
+  // that should not have one.
+  if (FORCE_RECON && APPLY) {
+    await prisma.boardReader.updateMany({
+      where: { companies: { some: { id: args.companyId } } },
+      data: { reconnedAt: null },
+    });
+  }
+
   // No board on file at all: the HUNT is what failed, so re-run it. It now
   // escalates to recon against the careers page it gets furthest with, which is
   // the only way this class of company is reachable — nothing downstream can
@@ -141,12 +192,7 @@ async function tryCompany(args: {
   if (detectAts(args.url)) {
     const check = await testScrape(args.url);
     if (check.ok && check.jobCount >= MIN_REAL_JOBS) {
-      if (APPLY) {
-        await reviveCompany({
-          userId: args.userId,
-          companyId: args.companyId,
-        });
-      }
+      if (APPLY) await reviveAll(args);
       return {
         kind: "wired",
         jobs: check.jobCount,
@@ -218,6 +264,16 @@ async function tryCompany(args: {
   }
 }
 
+async function reviveAll(args: {
+  companyId: string;
+  userIds: string[];
+}): Promise<void> {
+  for (const userId of args.userIds) {
+    // eslint-disable-next-line no-await-in-loop -- a handful of users at most, and reviveCompany is a per-user transaction
+    await reviveCompany({ userId, companyId: args.companyId });
+  }
+}
+
 // Re-run the URL hunt for a company that never got a board. `force` because
 // basicInfoHuntedAt is already stamped from the failed hunt — without it the
 // chain would skip straight past.
@@ -226,6 +282,7 @@ async function rehunt(args: {
   companyName: string;
   companySlug: string;
   userId: string;
+  userIds: string[];
 }): Promise<Outcome> {
   if (!WITH_RECON) {
     return {
@@ -265,7 +322,7 @@ async function rehunt(args: {
     // The hunt (or the recon behind it) landed a board. Clear the set-aside —
     // leaving it BLOCKED with a working URL would be a lie the user has to
     // undo by hand.
-    await reviveCompany({ userId: args.userId, companyId: args.companyId });
+    await reviveAll(args);
     return { kind: "rehunt", sourceUrl: outcome.sourceUrl };
   }
   return {

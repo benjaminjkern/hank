@@ -31,7 +31,7 @@ const parser = z.object({
 export const testRecipeTool: ToolDef<{ recipe: unknown; boardUrl?: string }> = {
   name: "test_recipe",
   description:
-    "Run a candidate board recipe against the live board and report what it produced: job count, sample titles, sample URLs, whether the board came back partial, and any validation errors. Free (no LLM) and writes nothing. This is how you CHECK a recipe — never report one you haven't run through here. Expect to iterate: a wrong itemsPath returns 0 postings, a wrong title locator returns identical titles, a wrong URL locator returns duplicate or cross-domain URLs. Each error names what failed so you can fix that one field and re-run.",
+    "Run a candidate board recipe against the live board and report what it produced: job count, sample titles, sample URLs, whether the board came back partial, and any validation errors. Free (no LLM) and writes nothing. It SAMPLES — a small number of postings is a pass, not a truncated board. This is how you CHECK a recipe — never report one you haven't run through here. Expect to iterate: a wrong itemsPath returns 0 postings, a wrong title locator returns identical titles, a wrong URL locator returns duplicate or cross-domain URLs. Each error names what failed so you can fix that one field and re-run.",
   inputSchema: {
     type: "object",
     properties: {
@@ -51,7 +51,13 @@ export const testRecipeTool: ToolDef<{ recipe: unknown; boardUrl?: string }> = {
   parser,
   async handle({ recipe, boardUrl }, ctx) {
     const result = await withScrapeSignal(ctx.signal, () =>
-      runBoardRecipe(recipe as BoardRecipe, boardUrl ? { boardUrl } : {}),
+      runBoardRecipe(recipe as BoardRecipe, {
+        ...(boardUrl ? { boardUrl } : {}),
+        // Samples rather than scraping the whole board: this answers "does the
+        // plan locate postings", and the caller runs it in full once before
+        // storing anything.
+        sample: true,
+      }),
     );
     ctx.signal?.throwIfAborted();
 

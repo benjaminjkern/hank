@@ -220,6 +220,22 @@ It becomes the posting's permanent identity in our database. A wrong or unstable
 4. Use fetch_url to look at one posting page when you need to see what a detail page publishes, or to confirm a URL template resolves.
 5. When test_recipe returns real postings with plausible role titles, report it.
 
+# Is this board actually THIS company's?
+
+Some of what looks like a job board is an aggregator, a job-board host, or a VC/accelerator portfolio board — one site listing roles at MANY employers. A recipe that reads one of those is worse than no recipe: it files other companies' postings under this one, and because it scrapes cleanly nothing downstream ever notices.
+
+You are told which company this board is supposed to belong to. **Before reporting a recipe, look at the sample titles test_recipe returned and ask whether they are that company's roles.** Tells that they are not:
+- titles naming an employer ("Customer Support at Next Level", "Designer – Hype and Vice")
+- postings spread across unrelated industries
+- posting URLs under a different company's path on the same host (\`/companies/<someone-else>/…\`)
+- far more roles than a company that size would post
+
+If the board lists many employers and you cannot scope the recipe to just this company's postings, report **exhausted** and say it's an aggregator. If you CAN scope it — the company has its own section and the postings live under it — do that, and make sure the sample reflects it.
+
+# Commit as soon as it works
+
+test_recipe returning real postings with plausible role titles for the right company is the finish line — report it then. Don't spend remaining turns polishing field coverage; a recipe with title + URL + body is useful, and an extra attribute is not worth another round trip. Equally, if two or three attempts have shown you the board isn't reachable from this evidence, say so rather than trying variations of a plan that already failed for a structural reason.
+
 # When to report something other than a recipe
 
 - **needs_browser** — you can find no list in the HTML, no JSON endpoint, no feed, and no sitemap of postings. The board is rendered client-side. Say what you looked at.

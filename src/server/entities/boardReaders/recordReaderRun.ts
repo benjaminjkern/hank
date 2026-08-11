@@ -10,6 +10,7 @@ import { prisma } from "@/server/db/prisma";
 import { boardMatchKey } from "@/server/scrape/recipe/matchKey";
 import { nowDate } from "@/utils/now";
 
+import { boardIdentifiesCompany } from "./boardIdentity";
 import { nextHealth, type ReaderRunOutcome } from "./readerHealth";
 
 import type { BoardRecipe } from "@/server/scrape/recipe/types";
@@ -32,6 +33,9 @@ export async function saveBoardReader(args: {
   sourceUrl: string;
   recipe: BoardRecipe | null;
   origin: BoardReaderOrigin;
+  // A few of the postings the recipe produced. Used only to check the board is
+  // this company's — see boardIdentity.ts. Omit for a verdict row (no recipe).
+  sampleJobUrls?: string[];
   // Set when the board only yields postings to a rendered browser, which prod
   // can't do. The row is the record of that, so a human can author a recipe
   // locally with scripts/ats/research-board.ts.
@@ -41,37 +45,88 @@ export async function saveBoardReader(args: {
   const matchKey = boardMatchKey(args.sourceUrl);
   if (!matchKey) return null;
 
+  // The one gate a learned reader cannot be persisted around. Enforced HERE
+  // rather than at each call site because there are three of them (the probe
+  // path, recon, and the operator backfill) and a reader that reads someone
+  // else's board is not a thing any of them may store.
+  if (args.recipe) {
+    const company = await prisma.company.findUnique({
+      where: { id: args.companyId },
+      select: { name: true },
+    });
+    const identity = boardIdentifiesCompany({
+      companyName: company?.name ?? "",
+      boardUrl: args.sourceUrl,
+      ...(args.sampleJobUrls ? { sampleJobUrls: args.sampleJobUrls } : {}),
+    });
+    if (!identity.ok) {
+      // Store the REFUSAL, not the recipe: it starts the cooldown so this isn't
+      // re-derived every pass, and the reason shows up on /admin/board-readers
+      // where a human can overrule it.
+      return await writeReader({
+        matchKey,
+        familyKey: null,
+        sourceUrl: args.sourceUrl,
+        recipe: null,
+        origin: args.origin,
+        needsBrowser: false,
+        reconNote: `rejected: ${identity.reason}`,
+        companyId: args.companyId,
+        stampRecon: true,
+      });
+    }
+  }
+
+  return await writeReader({
+    matchKey,
+    familyKey: args.recipe?.familyKey ?? null,
+    sourceUrl: args.sourceUrl,
+    recipe: args.recipe,
+    origin: args.origin,
+    needsBrowser: args.needsBrowser ?? false,
+    reconNote: args.reconNote ?? null,
+    companyId: args.companyId,
+    // A recon attempt is stamped whether or not it produced a plan — the
+    // cooldown has to remember the failures, which are exactly the expensive
+    // case.
+    stampRecon: args.origin === BoardReaderOrigin.RECON,
+  });
+}
+
+// The one upsert. Both the success path and the identity refusal above land
+// here, so a refusal is stored exactly as deliberately as a working plan.
+async function writeReader(args: {
+  matchKey: string;
+  familyKey: string | null;
+  sourceUrl: string;
+  recipe: BoardRecipe | null;
+  origin: BoardReaderOrigin;
+  needsBrowser: boolean;
+  reconNote: string | null;
+  companyId: string;
+  stampRecon: boolean;
+}): Promise<string> {
   const recipeJson = (args.recipe ?? Prisma.DbNull) as Prisma.InputJsonValue;
-  const familyKey = args.recipe?.familyKey ?? null;
-  // A recon attempt is stamped whether or not it produced a plan — the cooldown
-  // has to remember the failures, which are exactly the expensive case.
-  const reconnedAt =
-    args.origin === BoardReaderOrigin.RECON ? nowDate() : undefined;
+  const reconnedAt = args.stampRecon ? nowDate() : undefined;
+  const shared = {
+    familyKey: args.familyKey,
+    sourceUrl: args.sourceUrl,
+    recipe: recipeJson,
+    origin: args.origin,
+    needsBrowser: args.needsBrowser,
+    reconNote: args.reconNote,
+    ...(reconnedAt ? { reconnedAt } : {}),
+  };
 
   const reader = await prisma.boardReader.upsert({
-    where: { matchKey },
-    create: {
-      matchKey,
-      familyKey,
-      sourceUrl: args.sourceUrl,
-      recipe: recipeJson,
-      origin: args.origin,
-      needsBrowser: args.needsBrowser ?? false,
-      reconNote: args.reconNote ?? null,
-      ...(reconnedAt ? { reconnedAt } : {}),
-    },
+    where: { matchKey: args.matchKey },
+    create: { matchKey: args.matchKey, ...shared },
     update: {
-      familyKey,
-      sourceUrl: args.sourceUrl,
-      recipe: recipeJson,
-      origin: args.origin,
+      ...shared,
       // A fresh plan clears the record of the old one's failures — that's what
       // re-authoring means.
       health: "HEALTHY",
       consecutiveFailures: 0,
-      needsBrowser: args.needsBrowser ?? false,
-      reconNote: args.reconNote ?? null,
-      ...(reconnedAt ? { reconnedAt } : {}),
     },
     select: { id: true },
   });

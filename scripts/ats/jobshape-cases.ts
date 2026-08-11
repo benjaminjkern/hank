@@ -16,6 +16,7 @@ import {
 } from "../../src/server/scrape/generic/jobShape";
 import { parseFeedItems } from "../../src/server/scrape/generic/feed";
 import { harvestBlobs } from "../../src/server/scrape/generic/blobs";
+import { boardIdentifiesCompany } from "../../src/server/entities/boardReaders/boardIdentity";
 import { boardPathScope } from "../../src/server/scrape/generic/sitemap";
 
 type Case = {
@@ -309,6 +310,81 @@ function runScopeChecks(): { pass: number; fail: number } {
   return { pass, fail };
 }
 
+// The aggregator guard. Every URL here came out of a real backfill run — the
+// rejected ones were stored as working readers before this existed, and one of
+// them was filing other employers' jobs under a watchlisted company.
+const IDENTITY_CASES: Array<{
+  name: string;
+  url: string;
+  samples?: string[];
+  accept: boolean;
+}> = [
+  { name: "Betches Media", url: "https://careers.betches.com/", accept: true },
+  { name: "Liner", url: "https://liner.com/careers/jobs", accept: true },
+  {
+    name: "Uber",
+    url: "https://www.uber.com/global/en/careers/list/",
+    accept: true,
+  },
+  // The host is a job-board host, but the PATH names the company, which is what
+  // a per-company section on a shared host looks like.
+  {
+    name: "The Female Quotient",
+    url: "https://jenniejohnson.com/company/the-female-quotient",
+    accept: true,
+  },
+  // Company site fronting Ashby: the postings live on a host that never
+  // mentions the company, and that's normal — the ATS carve-out covers it.
+  {
+    name: "Shade Inc.",
+    url: "https://shade.inc/careers",
+    samples: ["https://jobs.ashbyhq.com/shade-inc/abc"],
+    accept: true,
+  },
+  {
+    name: "Sourcegraph",
+    url: "https://boards.greenhouse.io/sourcegraph91",
+    samples: ["https://boards.greenhouse.io/sourcegraph91/jobs/1"],
+    accept: true,
+  },
+  // THE FAILURE THIS EXISTS FOR: a LatAm aggregator listing many employers.
+  // Same host, postings under the board's own path, distinct URLs, real titles
+  // — every other check passes, and the jobs belong to other companies.
+  {
+    name: "Whym",
+    url: "https://worklatam.com/jobs",
+    samples: ["https://worklatam.com/jobs/532869450-customer-support"],
+    accept: false,
+  },
+  {
+    name: "Acme",
+    url: "https://jobs.example-aggregator.com/jobs",
+    accept: false,
+  },
+];
+
+function runIdentityChecks(): { pass: number; fail: number } {
+  let pass = 0;
+  let fail = 0;
+  for (const c of IDENTITY_CASES) {
+    const r = boardIdentifiesCompany({
+      companyName: c.name,
+      boardUrl: c.url,
+      ...(c.samples ? { sampleJobUrls: c.samples } : {}),
+    });
+    if (r.ok === c.accept) {
+      pass++;
+      console.log(`  PASS  ${c.name} — ${r.ok ? "accepted" : "rejected"}`);
+    } else {
+      fail++;
+      console.log(
+        `  FAIL  ${c.name} — ${r.ok ? "accepted" : "rejected"}, expected ${c.accept ? "accept" : "reject"}`,
+      );
+    }
+  }
+  return { pass, fail };
+}
+
 function runExtractionChecks(): { pass: number; fail: number } {
   let pass = 0;
   let fail = 0;
@@ -402,6 +478,11 @@ function main(): void {
   const scope = runScopeChecks();
   pass += scope.pass;
   fail += scope.fail;
+
+  console.log("\nboard identity (aggregator guard)\n");
+  const identity = runIdentityChecks();
+  pass += identity.pass;
+  fail += identity.fail;
 
   console.log(`\n${pass} passed, ${fail} failed\n`);
   if (fail > 0) process.exit(1);

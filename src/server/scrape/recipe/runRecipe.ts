@@ -40,9 +40,15 @@ const DETAIL_CAP = 60;
 const DETAIL_CONCURRENCY = 5;
 const MAX_PAGES = 20;
 
+// `sample` answers "does this plan locate postings?" rather than "what is on
+// this board?" — it caps the detail fan-out hard. A verification call inside a
+// recon loop asks the first question up to eight times, and answering it with a
+// full 60-page crawl each time is what made recon take minutes per company.
+const SAMPLE_DETAIL_CAP = 6;
+
 export async function runBoardRecipe(
   recipe: BoardRecipe,
-  opts: { boardUrl?: string } = {},
+  opts: { boardUrl?: string; sample?: boolean } = {},
 ): Promise<ScrapeResult> {
   const structural = recipeStructureErrors(recipe);
   if (structural.length > 0) {
@@ -53,7 +59,11 @@ export async function runBoardRecipe(
   const list = await fetchListItems(recipe, boardUrl);
   if (!list.ok) return { ok: false, error: list.error };
 
-  const cap = recipe.detail ? DETAIL_CAP : LIST_CAP;
+  const cap = recipe.detail
+    ? opts.sample
+      ? SAMPLE_DETAIL_CAP
+      : DETAIL_CAP
+    : LIST_CAP;
   const capped = list.items.slice(0, cap);
 
   const jobs = recipe.detail

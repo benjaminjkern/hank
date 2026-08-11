@@ -19,6 +19,7 @@ import { reconOnCooldown } from "@/server/entities/boardReaders/readerHealth";
 import { saveBoardReader } from "@/server/entities/boardReaders/recordReaderRun";
 import { withTraceSpan } from "@/server/platform/trace/span";
 import { boardMatchKey } from "@/server/scrape/recipe/matchKey";
+import { runBoardRecipe } from "@/server/scrape/recipe/runRecipe";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import { boardRecipeSubAgent } from "@/server/subagents/registry/boardRecipe";
 import { nowDate } from "@/utils/now";
@@ -46,6 +47,14 @@ export type ReconBoardResult =
   | { kind: "exhausted"; note: string }
   // Didn't run. Not a verdict about the board.
   | { kind: "skipped"; why: "cooldown" | "no_match_key" | "failed" };
+
+async function readerHasRecipe(readerId: string): Promise<boolean> {
+  const row = await prisma.boardReader.findUnique({
+    where: { id: readerId },
+    select: { recipe: true },
+  });
+  return row?.recipe != null;
+}
 
 export async function runReconBoard(
   args: ReconBoardArgs,
@@ -82,14 +91,49 @@ export async function runReconBoard(
 
   const outcome = run.output;
   if (outcome.outcome === "recipe") {
-    await saveBoardReader({
+    // Run it ONCE, in full, before it's stored. The sub-agent verified with a
+    // SAMPLING `test_recipe`, which is the right trade inside its loop but is
+    // not proof the stored plan reads the board — and a recipe that only works
+    // in sample mode would fail silently on every future scrape.
+    const verified = await runBoardRecipe(outcome.recipe, {
+      boardUrl: args.sourceUrl,
+    });
+    if (!verified.ok) {
+      await saveBoardReader({
+        companyId: args.companyId,
+        sourceUrl: args.sourceUrl,
+        recipe: null,
+        origin: BoardReaderOrigin.RECON,
+        reconNote: `recipe failed its full run: ${verified.error}`,
+      });
+      return {
+        kind: "exhausted",
+        note: `recipe didn't hold up: ${verified.error}`,
+      };
+    }
+    const saved = await saveBoardReader({
       companyId: args.companyId,
       sourceUrl: args.sourceUrl,
       recipe: outcome.recipe,
       origin: BoardReaderOrigin.RECON,
       reconNote: outcome.note,
+      sampleJobUrls: verified.data.jobs.slice(0, 5).map((j) => j.sourceUrl),
     });
-    return { kind: "learned", jobCount: outcome.jobCount, note: outcome.note };
+    // saveBoardReader refuses a board that isn't this company's and stores the
+    // refusal instead, so re-read whether a recipe actually landed rather than
+    // reporting success on a row that holds none.
+    const stored = saved ? await readerHasRecipe(saved) : false;
+    if (!stored) {
+      return {
+        kind: "exhausted",
+        note: "the board it found isn't this company's — see /admin/board-readers",
+      };
+    }
+    return {
+      kind: "learned",
+      jobCount: verified.data.jobs.length,
+      note: outcome.note,
+    };
   }
 
   // A verdict, not a crash: write the row with no recipe. That row IS the

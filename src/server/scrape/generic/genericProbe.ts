@@ -40,7 +40,15 @@ import { wellKnownUrls } from "./wellKnown";
 import type { BoardRecipe, ListSource } from "../recipe/types";
 import type { ScrapedCompany } from "../types";
 
+// Full budget: the scrape path, where this runs ONCE per company and a board
+// found here is a board we never pay for again.
 const PROBE_BUDGET_MS = 25_000;
+// Short budget, for callers that probe speculatively and repeatedly — the URL
+// hunter runs `test_scrape` several times per company, so a full budget there
+// is multiplied by its turn count and dominates the whole hunt. The cheap
+// high-yield tiers (well-known endpoints, state blobs) fit inside this; the
+// sitemap crawl doesn't, and that's the intended cut.
+export const QUICK_PROBE_BUDGET_MS = 8_000;
 // Well under fetchText's 20s default. Every request here is speculative, so a
 // slow host must cost us a couple of seconds, not a fifth of the scrape's whole
 // budget — one hanging candidate used to push a probe past 30s on its own.
@@ -56,8 +64,9 @@ export type ProbeOutcome =
 
 export async function probeGenericBoard(
   boardUrl: string,
+  opts: { budgetMs?: number } = {},
 ): Promise<ProbeOutcome> {
-  const budget = withTimeBudget(PROBE_BUDGET_MS);
+  const budget = withTimeBudget(opts.budgetMs ?? PROBE_BUDGET_MS);
   const tried: string[] = [];
 
   // Fetched at most once and shared by the blob, script-URL and JSON-LD tiers.

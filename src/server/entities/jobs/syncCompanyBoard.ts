@@ -130,6 +130,7 @@ export async function syncCompanyBoard(args: {
         sourceUrl: args.sourceUrl,
         recipe: learnedRecipe,
         origin: BoardReaderOrigin.PROBE,
+        sampleJobUrls: scrape.data.jobs.slice(0, 5).map((j) => j.sourceUrl),
       })
     : reader?.id;
 

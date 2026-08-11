@@ -35,7 +35,10 @@ import { assertPublicUrl } from "@/server/platform/net/assertPublicUrl";
 
 import { extractWorkdayBoardUrlFromHtml } from "./ats";
 import { MIN_REAL_JOBS } from "./ats/shared";
-import { probeGenericBoard } from "./generic/genericProbe";
+import {
+  probeGenericBoard,
+  QUICK_PROBE_BUDGET_MS,
+} from "./generic/genericProbe";
 import { scrapeFetchSignal } from "./scrapeSignal";
 
 import { testScrape } from "./index";
@@ -102,7 +105,12 @@ export async function resolveBoardFromCareersPage(
   // Nothing named matched — try to work the board out from first principles.
   // The probe verifies its own result by running the recipe it inferred, so a
   // hit here is as real as a named-ATS one.
-  const probed = await probeGenericBoard(url);
+  // Short budget on purpose: this sits on `test_scrape`'s miss path, which the
+  // URL hunter calls several times per company, so whatever it costs is paid
+  // per TURN. The full-budget probe runs once per company on the scrape path.
+  const probed = await probeGenericBoard(url, {
+    budgetMs: QUICK_PROBE_BUDGET_MS,
+  });
   if (probed.ok && probed.data.jobs.length >= MIN_REAL_JOBS) {
     return {
       ok: true,
