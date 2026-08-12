@@ -498,10 +498,22 @@ const PANEL_NOUN: Record<NegotiationPanel, string> = {
   application: "application",
 };
 
-function panelEditLabel(panel: NegotiationPanel, count: number): string {
-  const noun =
-    panel === "discovery" ? "company mark" : `${PANEL_NOUN[panel]} change`;
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+// "Stripe shortlist · 2 changes" — the surface named by what it's ABOUT, not
+// just by its type. A count on its own leaves the user guessing which of three
+// screens (and which company) the × would throw away, and the instructions that
+// used to make up the difference cost more room than the answer does.
+//
+// `scope` comes off the viewed payload the count came from, so the two are as
+// fresh as each other by construction; null where the surface has no single
+// subject (discovery is the whole proposed list) or where nothing is loaded.
+function panelEditLabel(
+  panel: NegotiationPanel,
+  count: number,
+  scope: string | null,
+): string {
+  const noun = panel === "discovery" ? "mark" : `${PANEL_NOUN[panel]} change`;
+  const what = `${count} ${noun}${count === 1 ? "" : "s"}`;
+  return scope ? `${scope} · ${what}` : what;
 }
 
 const AttachmentRow = styled.div`
@@ -1087,6 +1099,20 @@ export function ChatPanel() {
   const send = useChatStore((s) => s.send);
   const pendingAttachments = useChatStore((s) => s.pendingAttachments);
   const pendingPanelEdits = useChatStore((s) => s.pendingPanelEdits);
+  // Both halves of the chip come from the same payload fetch, so a stale name
+  // beside a live count isn't reachable: `newChat` is the only thing that drops
+  // a viewed payload, and it zeroes the counts in the same set().
+  const boardScope = useChatStore((s) => s.viewedBoard?.companyName ?? null);
+  const applicationScope = useChatStore((s) =>
+    s.viewedApplication ? s.viewedApplication.jobTitle : null,
+  );
+  const panelScope: Record<NegotiationPanel, string | null> = {
+    "shortlist-board": boardScope,
+    application: applicationScope,
+    // The discovery list is every company the last search proposed — there is
+    // no one subject to name.
+    discovery: null,
+  };
   const discardPanelEdits = useChatStore((s) => s.discardPanelEdits);
   // Which chip has its × armed. One at a time is enough — arming is a transient
   // gesture aimed at a specific chip — and it resets on its own when that
@@ -1447,14 +1473,19 @@ export function ChatPanel() {
               {/* The changes are already saved on the panel; the server attaches
                   them to whatever the user sends next. Dismissing UNDOES them —
                   see discardPanelEdits. */}
-              <PendingChip $status="uploaded">
+              <PendingChip
+                $status="uploaded"
+                title="Send a message and Hank picks these up. The × throws them away."
+              >
                 ☰{" "}
                 <PendingName>
                   {discarding === panel
-                    ? `Discard ${panelEditLabel(panel, pendingPanelEdits[panel])}?`
-                    : `${panelEditLabel(panel, pendingPanelEdits[panel])} — send to hand ${
-                        pendingPanelEdits[panel] === 1 ? "it" : "them"
-                      } over`}
+                    ? `Discard ${panelEditLabel(panel, pendingPanelEdits[panel], panelScope[panel])}?`
+                    : panelEditLabel(
+                        panel,
+                        pendingPanelEdits[panel],
+                        panelScope[panel],
+                      )}
                 </PendingName>
                 {discarding === panel ? (
                   <>

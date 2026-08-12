@@ -34,11 +34,19 @@ import { logCompanyEvent } from "./logCompanyEvent";
 
 export type CommitShortlistResult =
   | { ok: false; code: "NO_OPEN_BOARD" }
+  // The board would close a role whose application the user had already started
+  // writing. Reported rather than done: everything else a commit does is
+  // reversible in a sentence, and this one throws away work in progress, so it
+  // asks first. Hank re-calls with `confirmed` once the user says go.
+  | { ok: false; code: "CONFIRM_CLOSING_STARTED"; startedTitles: string[] }
   | { ok: true; picked: number; setAside: number; closed: number };
 
 export async function commitShortlist(args: {
   userId: string;
   companyId: string;
+  // Set only after the user has agreed to close a role they'd started applying
+  // to. Leave unset on the first call.
+  confirmed?: boolean;
 }): Promise<CommitShortlistResult> {
   const { userId, companyId } = args;
   // Every row on the board, including ones the user cleared to undecided —
@@ -54,9 +62,28 @@ export async function commitShortlist(args: {
       agentVerdict: true,
       agentReason: true,
       userVerdict: true,
+      job: { select: { title: true } },
     },
   });
   if (rows.length === 0) return { ok: false, code: "NO_OPEN_BOARD" };
+
+  // Ask before throwing away a draft. A started application is the one thing on
+  // a board that can't be restored by re-marking a row: the text survives on the
+  // record, but the role is closed and out of every pool that would surface it.
+  // Deferring one is fine unasked — it stays in the pool and the draft is
+  // untouched.
+  const closingStarted = rows.filter(
+    (r) =>
+      r.status === JobInteractionStatus.APPLYING &&
+      (r.userVerdict ?? r.agentVerdict) === ProposedVerdict.PASS,
+  );
+  if (closingStarted.length > 0 && !args.confirmed) {
+    return {
+      ok: false,
+      code: "CONFIRM_CLOSING_STARTED",
+      startedTitles: closingStarted.map((r) => r.job.title),
+    };
+  }
 
   const now = new Date();
   const eventItems: LogJobEventInput[] = [];
@@ -94,7 +121,13 @@ export async function commitShortlist(args: {
     switch (row.userVerdict ?? row.agentVerdict) {
       case ProposedVerdict.PICK: {
         picked++;
-        if (row.status === JobInteractionStatus.SHORTLISTED) {
+        // APPLYING as well as SHORTLISTED: picking a role whose application is
+        // already being written is agreement, not a fresh selection, and writing
+        // SHORTLISTED over it would say "queued" about the one in progress.
+        if (
+          row.status === JobInteractionStatus.SHORTLISTED ||
+          row.status === JobInteractionStatus.APPLYING
+        ) {
           noOpUpdates.push({ id: row.id, data: { ...clearStance } });
         } else {
           eventItems.push({

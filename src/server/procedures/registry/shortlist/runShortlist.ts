@@ -22,11 +22,16 @@ import {
   type ShortlistCandidate,
   type ShortlistJobsOutput,
 } from "@/server/subagents/registry/shortlistJobs";
-import type { ShortlistBoardView } from "@/server/views/shortlistBoard";
+import {
+  countBoard,
+  type BoardCounts,
+  type ShortlistBoardView,
+} from "@/server/views/shortlistBoard";
 import { buildShortlistBoardEvents } from "@/server/views/showEvents";
 
 import { loadShortlistJobsInput } from "./loadShortlistJobsInput";
-import { seedBoardStances, type SeedTallies } from "./seedBoardStances";
+import { seedBoardStances } from "./seedBoardStances";
+import { seedFilteredStances } from "./seedFilteredStances";
 
 export type ShortlistArgs = RunContext & {
   sessionId: string;
@@ -42,22 +47,24 @@ export type ShortlistArgs = RunContext & {
 // and a tail count, not a wall of text.
 const ALL_PASSED_REASON_LINES = 6;
 
-function tierCount(board: ShortlistBoardView, tier: string): number {
-  return board.tiers.find((t) => t.tier === tier)?.rows.length ?? 0;
-}
-
-// The reply when every role got a pass stance: the ranker's shared top-line,
-// then the per-role reasons it wrote. Nothing is closed yet — that's the
-// commit's job — so the framing is "here's where I landed", not "I closed them".
+// The reply when nothing survived to a pick: the ranker's shared top-line, then
+// the per-role reasons it wrote for the roles it actually read. Nothing is
+// closed yet — that's the commit's job — so the framing is "here's where I
+// landed", not "I closed them".
+//
+// The counts come from the BOARD, not from the ranker: the roles the earlier
+// passes ruled out never reached it, and quoting its tally next to a screen
+// showing all of them read as a contradiction.
 function describeAllPassed(
   picks: ShortlistJobsOutput,
   candidates: Array<{ id: string; title: string }>,
+  counts: BoardCounts,
   companyDisplayName: string,
 ): string {
-  const n = candidates.length;
+  const n = counts.total;
   const lead =
     picks.proposalNote?.trim() ||
-    `I read ${n === 1 ? "the one role" : `all ${n} roles`} at ${companyDisplayName} — none of them look worth applying to.`;
+    `I went through ${n === 1 ? "the one role" : `all ${n} roles`} at ${companyDisplayName} — none of them look worth applying to.`;
   const lines = candidates
     .filter((c) => picks.reasons[c.id])
     .slice(0, ALL_PASSED_REASON_LINES)
@@ -72,17 +79,17 @@ function describeAllPassed(
 
 function describeSeed(
   proposalNote: string | null,
-  tallies: SeedTallies,
+  counts: BoardCounts,
 ): string {
   const parts: string[] = [];
   if (proposalNote?.trim()) parts.push(proposalNote.trim());
-  const counts = [
-    `${tallies.picked} I'd apply to`,
-    ...(tallies.borderline > 0 ? [`${tallies.borderline} worth a look`] : []),
-    ...(tallies.passed > 0 ? [`${tallies.passed} I'd pass on`] : []),
+  const pieces = [
+    `${counts.picked} I'd apply to`,
+    ...(counts.borderline > 0 ? [`${counts.borderline} worth a look`] : []),
+    ...(counts.closing > 0 ? [`${counts.closing} I'd pass on`] : []),
   ];
   parts.push(
-    `The board on the right has every role with where I landed and why — ${counts.join(", ")}. Change anything you disagree with (or tell me and I'll move it), and when it looks right I'll lock it in.`,
+    `The board on the right has every role with where I landed and why — ${pieces.join(", ")}. Change anything you disagree with (or tell me and I'll move it), and when it looks right I'll lock it in.`,
   );
   return parts.join("\n\n");
 }
@@ -120,9 +127,17 @@ function describeUnfinished(
   ].join("\n");
 }
 
+// The reply when a whole round ended with nothing to weigh — every role was
+// ruled out before the ranker ever saw one. Deliberately the same SHAPE as a
+// normal seed (here's the board, change what you disagree with, say the word and
+// I'll settle it), because from the user's side one step happened either way.
+function describeNothingKept(board: ShortlistBoardView): string {
+  const { closing } = countBoard(board);
+  return `I went through ${closing === 1 ? "the one role" : `all ${closing} roles`} at ${board.companyName} and none of them look like a fit — they're on the right with my reasoning for each. If I've got one wrong, mark it and I'll pull it back; otherwise say the word and I'll clear them out and keep watching for new postings.`;
+}
+
 function describeReshow(board: ShortlistBoardView): string {
-  const picked = tierCount(board, "picks");
-  const borderline = tierCount(board, "borderline");
+  const { picked, borderline } = countBoard(board);
   const pieces = [
     `${picked} pick${picked === 1 ? "" : "s"}`,
     ...(borderline > 0 ? [`${borderline} still up in the air`] : []),
@@ -163,10 +178,29 @@ export async function* runShortlist(
     extraContext: args.direction,
   });
   if (!context.ok) {
-    yield {
-      type: "text",
-      text: `There's nothing read-and-ready to shortlist here right now.`,
-    };
+    // Nothing survived to rank. The board still opens, over the roles the
+    // earlier passes ruled out — from the user's side prescan, scan and
+    // shortlist are one step, so "everything was filtered" and "the ranker
+    // passed on the one survivor" must not produce different screens. Stancing
+    // those closes is what makes the board editable: without a stance nothing
+    // is on it, and the rows render read-only.
+    const stanced = await seedFilteredStances({ userId, companyId });
+    if (stanced === 0) {
+      yield {
+        type: "text",
+        text: `There's nothing read-and-ready to shortlist here right now.`,
+      };
+      return;
+    }
+    await markCompanyShortlisting(companyId, userId);
+    const { events, board } = await buildShortlistBoardEvents(
+      userId,
+      companyId,
+    );
+    yield* yieldUiEvents(events);
+    if (board) {
+      yield { type: "text", text: describeNothingKept(board) };
+    }
     return;
   }
   const n = context.input.candidates.length;
@@ -180,7 +214,7 @@ export async function* runShortlist(
   }
   const picks = result.output;
 
-  const tallies = await seedBoardStances({
+  await seedBoardStances({
     userId,
     companyId,
     candidates: context.input.candidates,
@@ -190,12 +224,23 @@ export async function* runShortlist(
   // company's life where the next move is theirs, so it says so.
   await markCompanyShortlisting(companyId, userId);
 
-  const { events } = await buildShortlistBoardEvents(userId, companyId);
+  // Describe the BOARD, not the ranker's own tally: the roles the earlier passes
+  // ruled out are on that screen too, and they're what made "1 I'd pass on" sit
+  // above a pile of forty.
+  const { events, board } = await buildShortlistBoardEvents(userId, companyId);
   yield* yieldUiEvents(events);
+  const counts = board
+    ? countBoard(board)
+    : { picked: 0, borderline: 0, closing: 0, total: 0 };
   const body =
-    tallies.picked === 0 && tallies.borderline === 0
-      ? describeAllPassed(picks, context.input.candidates, context.companyName)
-      : describeSeed(picks.proposalNote, tallies);
+    counts.picked === 0 && counts.borderline === 0
+      ? describeAllPassed(
+          picks,
+          context.input.candidates,
+          counts,
+          context.companyName,
+        )
+      : describeSeed(picks.proposalNote, counts);
   const unfinished = describeUnfinished(context.input.candidates, picks);
   yield {
     type: "text",

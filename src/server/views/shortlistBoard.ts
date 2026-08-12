@@ -8,16 +8,14 @@
 // commit that clears them (entities/companies/commitShortlist).
 
 import {
-  CompanyEventType,
-  JobEventType,
   MatchBucket,
   JobInteractionStatus,
   ProposedVerdict,
 } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import {
+  closedThisRoundJobIds,
   isOnBoard,
-  roundStartedAt,
   isOverridden,
   isPending,
   liveVerdict,
@@ -63,6 +61,49 @@ const SHORTLIST_BOARD_TIERS: ShortlistBoardTier[] = [
   "filteredThisRound",
 ];
 
+// The board renders TWO groups, and the line between them is what COMMITTING
+// does: `keep` survives it, `discard` is closed by it. It lives here rather than
+// in the panel because the chat line that introduces a board has to be able to
+// agree with it — quoting the ranker's own tally there said "1 I'd pass on"
+// beside a pile of forty, since the ranker never saw the roles the earlier
+// passes had already ruled out.
+export type BoardGroup = "keep" | "discard";
+
+export const BOARD_GROUP_OF_TIER: Record<ShortlistBoardTier, BoardGroup> = {
+  picks: "keep",
+  borderline: "keep",
+  undecided: "keep",
+  notReadYet: "keep",
+  onHold: "keep",
+  pass: "discard",
+  filteredThisRound: "discard",
+};
+
+export type BoardCounts = {
+  picked: number;
+  borderline: number;
+  // Everything the commit would close — the ranker's passes AND the roles the
+  // earlier filtering ruled out. One number, because the board shows them as
+  // one pile and the user reads them as one outcome.
+  closing: number;
+  total: number;
+};
+
+export function countBoard(board: ShortlistBoardView): BoardCounts {
+  const count = (tier: ShortlistBoardTier) =>
+    board.tiers.find((t) => t.tier === tier)?.rows.length ?? 0;
+  const closing = board.tiers
+    .filter((t) => BOARD_GROUP_OF_TIER[t.tier] === "discard")
+    .reduce((sum, t) => sum + t.rows.length, 0);
+  const total = board.tiers.reduce((sum, t) => sum + t.rows.length, 0);
+  return {
+    picked: count("picks"),
+    borderline: count("borderline"),
+    closing,
+    total,
+  };
+}
+
 export type ShortlistBoardRow = NegotiationRow & {
   jobId: string;
   jobSlug: string | null;
@@ -75,11 +116,6 @@ export type ShortlistBoardRow = NegotiationRow & {
   // The one-line rationale for the row: the stance reason while a negotiation
   // is open, otherwise the deferNote a commit left on a set-aside role.
   reason: string | null;
-  // The user began writing this application and stopped. Shown on the row
-  // because the commit happens HERE: the chat callout that names these scrolls
-  // away, and a `pass` that closes a role with real work in it should be made in
-  // front of that fact rather than beside it.
-  unfinishedApplication: boolean;
   // The scan pass's read, ONLY when it contradicts where the row ended up.
   // Null on the ordinary agreeing row — the shortlist reason is written later
   // and with more context, so repeating the earlier one just doubles the row.
@@ -162,20 +198,7 @@ export async function loadShortlistBoard(
   // This round's automatic closes, resolved to job ids first so the row query
   // stays bounded: a company worked for months carries hundreds of closes and
   // the board only ever wants the current round's.
-  const roundStart = await roundStartedAt(userId, companyId);
-  const closedThisRound = roundStart
-    ? await prisma.jobEvent.findMany({
-        where: {
-          type: JobEventType.CLOSED,
-          occurredAt: { gte: roundStart },
-          jobInteraction: { userId, job: { companyId } },
-        },
-        select: { jobInteraction: { select: { jobId: true } } },
-      })
-    : [];
-  const closedJobIds = [
-    ...new Set(closedThisRound.map((e) => e.jobInteraction.jobId)),
-  ];
+  const closedJobIds = await closedThisRoundJobIds(userId, companyId);
 
   const rows = await prisma.jobInteraction.findMany({
     // Considered roles, plus this round's closes. Skipping the decided tail in
@@ -266,7 +289,6 @@ export async function loadShortlistBoard(
       status: r.status,
       // Only when the first read CONTRADICTS where the row ended up. Agreement
       // is the boring case and repeating it doubles every row.
-      unfinishedApplication: r.status === JobInteractionStatus.APPLYING,
       scanDissent: scanDissent(r.matchBucket, liveVerdict(r)),
       reason,
       verdict: liveVerdict(r),

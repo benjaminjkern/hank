@@ -49,6 +49,12 @@ export async function dispatchCommitNegotiation(
     companyId: board.companyId,
     companyName: board.companySlug ?? board.companyName,
   });
+  // Deliberately no `confirmed` here: the commit refuses a board that would
+  // close a role the user had started applying to, and this path has no way to
+  // ask them. Falling through hands the press to Hank as ordinary text, he hits
+  // the same refusal on the tool — which spells out which roles and why — and
+  // asks. Same shape as a stale button: the cost is the round trip this was
+  // saving, never a close the user didn't agree to.
   if (!result.ok) return null;
   // The board closes with the commit, so the panel can't stay on it.
   return { kind: "company", id: board.companyId };
