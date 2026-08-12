@@ -109,7 +109,7 @@ export const viewApplicationQuestionsTool: ToolDef<{ job?: string }> = {
         const req = item.required ? " (required)" : "";
         const src =
           item.source === "user" ? " · added by hand (unverified)" : "";
-        const edited = item.edited ? " · edited since you last saw it" : "";
+        const edited = item.pending ? " · changed since you last saw it" : "";
         lines.push(
           `- [${item.id}] ${label}${req}${src} — ${STATUS_LABEL[item.status]}${edited}`,
         );

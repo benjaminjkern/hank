@@ -230,6 +230,16 @@ export type WidgetSubmission =
   | { kind: "add_more_companies"; answer: "yes" | "no"; settled: number }
   | { kind: "confirm_revive_company"; companyId: string; answer: "yes" | "no" }
   | { kind: "confirm_application_submit"; jobId: string }
+  // "Looks good to me" on a negotiation panel that has nothing outstanding —
+  // settle it without spending a turn on Hank agreeing with his own proposal.
+  // Submission-only: no widget renders this, the panel's own pill emits it, and
+  // the server re-checks that nothing is outstanding before acting.
+  | { kind: "commit_negotiation"; panel: "discovery" }
+  | {
+      kind: "commit_negotiation";
+      panel: "shortlist-board";
+      companyId: string;
+    }
   // Three branches for the next-company picker:
   //   - pick a company → walkthrough on that company (auto-bumps to ACTIVE
   //     if it was READY/NEW; both stay ACTIVE if there was already one).

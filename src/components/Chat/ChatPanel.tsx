@@ -26,6 +26,7 @@ import { splitFocusRefTokens } from "@/lib/focusRefToken";
 import type { FocusRefTokenPiece } from "@/lib/focusRefToken";
 import { splitJobRefTokens } from "@/lib/jobRefToken";
 import type { JobRefTokenPiece } from "@/lib/jobRefToken";
+import { NEGOTIATION_PANELS, type NegotiationPanel } from "@/lib/panelMode";
 import { stripToolErrorMarker } from "@/server/agent/tools/lib/toolError";
 
 import { HankLogo } from "../HankLogo";
@@ -488,6 +489,20 @@ const Composer = styled.div<{ $centered: boolean }>`
   `
       : ""}
 `;
+
+// What the chip calls the surface its changes are on. The user is looking at
+// one of three screens and needs to know which batch the × would throw away.
+const PANEL_NOUN: Record<NegotiationPanel, string> = {
+  "shortlist-board": "shortlist",
+  discovery: "company",
+  application: "application",
+};
+
+function panelEditLabel(panel: NegotiationPanel, count: number): string {
+  const noun =
+    panel === "discovery" ? "company mark" : `${PANEL_NOUN[panel]} change`;
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
 
 const AttachmentRow = styled.div`
   padding: ${({ theme }) => `${theme.space.sm} ${theme.space.lg} 0`};
@@ -1071,13 +1086,15 @@ export function ChatPanel() {
   const stop = useChatStore((s) => s.stop);
   const send = useChatStore((s) => s.send);
   const pendingAttachments = useChatStore((s) => s.pendingAttachments);
-  const pendingBoardEditCount = useChatStore((s) => s.pendingBoardEditCount);
-  const discardBoardEdits = useChatStore((s) => s.discardBoardEdits);
-  // Arms the confirm on the board chip's ×. Local because it's a transient
-  // gesture, and it resets on its own once the count reaches zero.
-  const [discardingBoard, setDiscardingBoard] = useState(false);
-  const pendingDiscoveryMarkCount = useChatStore(
-    (s) => s.pendingDiscoveryMarkCount,
+  const pendingPanelEdits = useChatStore((s) => s.pendingPanelEdits);
+  const discardPanelEdits = useChatStore((s) => s.discardPanelEdits);
+  // Which chip has its × armed. One at a time is enough — arming is a transient
+  // gesture aimed at a specific chip — and it resets on its own when that
+  // surface's count reaches zero.
+  const [discarding, setDiscarding] = useState<NegotiationPanel | null>(null);
+  const pendingPanelTotal = NEGOTIATION_PANELS.reduce(
+    (n, panel) => n + pendingPanelEdits[panel],
+    0,
   );
   const stageFiles = useChatStore((s) => s.stageFiles);
   const removePending = useChatStore((s) => s.removePending);
@@ -1273,15 +1290,12 @@ export function ChatPanel() {
   const anyUploading = pendingAttachments.some((p) => p.status === "uploading");
   const anyUploaded = pendingAttachments.some((p) => p.status === "uploaded");
   const busy = streaming || anyUploading;
-  // Board marks are sendable on their own — that's how the user hands a batch
-  // of them to Hank without typing anything.
+  // Panel changes are sendable on their own — that's how the user hands a batch
+  // of them to Hank without typing anything, on any of the three surfaces.
   const canSend =
     canChat &&
     !busy &&
-    (Boolean(text.trim()) ||
-      anyUploaded ||
-      pendingBoardEditCount > 0 ||
-      pendingDiscoveryMarkCount > 0);
+    (Boolean(text.trim()) || anyUploaded || pendingPanelTotal > 0);
 
   function submit() {
     if (!canSend) return;
@@ -1427,66 +1441,50 @@ export function ChatPanel() {
         )
       )}
       <Composer key="composer" $centered={isEmpty}>
-        {pendingDiscoveryMarkCount > 0 && (
-          <AttachmentRow>
-            {/* Display-only: the marks are already saved on the discovery list;
-                the server attaches them to whatever the user sends next. */}
-            <PendingChip $status="uploaded">
-              ☰{" "}
-              <PendingName>
-                {pendingDiscoveryMarkCount} company mark
-                {pendingDiscoveryMarkCount === 1 ? "" : "s"} — send to hand
-                {pendingDiscoveryMarkCount === 1 ? " it" : " them"} over
-              </PendingName>
-            </PendingChip>
-          </AttachmentRow>
-        )}
-        {pendingBoardEditCount > 0 && (
-          <AttachmentRow>
-            {/* The edits are already saved on the board; the server attaches
-                them to whatever the user sends next. Dismissing UNDOES them —
-                see discardBoardEdits. */}
-            <PendingChip $status="uploaded">
-              ☰{" "}
-              <PendingName>
-                {discardingBoard
-                  ? `Discard ${pendingBoardEditCount} shortlist change${
-                      pendingBoardEditCount === 1 ? "" : "s"
-                    }?`
-                  : `${pendingBoardEditCount} shortlist change${
-                      pendingBoardEditCount === 1 ? "" : "s"
-                    } — send to hand ${
-                      pendingBoardEditCount === 1 ? "it" : "them"
-                    } over`}
-              </PendingName>
-              {discardingBoard ? (
-                <>
-                  <ChipConfirm
-                    onClick={() => {
-                      setDiscardingBoard(false);
-                      void discardBoardEdits();
-                    }}
-                  >
-                    Discard
-                  </ChipConfirm>
+        {NEGOTIATION_PANELS.filter((p) => pendingPanelEdits[p] > 0).map(
+          (panel) => (
+            <AttachmentRow key={panel}>
+              {/* The changes are already saved on the panel; the server attaches
+                  them to whatever the user sends next. Dismissing UNDOES them —
+                  see discardPanelEdits. */}
+              <PendingChip $status="uploaded">
+                ☰{" "}
+                <PendingName>
+                  {discarding === panel
+                    ? `Discard ${panelEditLabel(panel, pendingPanelEdits[panel])}?`
+                    : `${panelEditLabel(panel, pendingPanelEdits[panel])} — send to hand ${
+                        pendingPanelEdits[panel] === 1 ? "it" : "them"
+                      } over`}
+                </PendingName>
+                {discarding === panel ? (
+                  <>
+                    <ChipConfirm
+                      onClick={() => {
+                        setDiscarding(null);
+                        void discardPanelEdits(panel);
+                      }}
+                    >
+                      Discard
+                    </ChipConfirm>
+                    <ChipClose
+                      onClick={() => setDiscarding(null)}
+                      aria-label={`keep my ${PANEL_NOUN[panel]} changes`}
+                    >
+                      ×
+                    </ChipClose>
+                  </>
+                ) : (
                   <ChipClose
-                    onClick={() => setDiscardingBoard(false)}
-                    aria-label="keep my shortlist changes"
+                    onClick={() => setDiscarding(panel)}
+                    aria-label={`discard my ${PANEL_NOUN[panel]} changes`}
+                    title="Discard these changes — this panel goes back to what Hank last saw"
                   >
                     ×
                   </ChipClose>
-                </>
-              ) : (
-                <ChipClose
-                  onClick={() => setDiscardingBoard(true)}
-                  aria-label="discard my shortlist changes"
-                  title="Discard these changes — your marks go back to what Hank last saw"
-                >
-                  ×
-                </ChipClose>
-              )}
-            </PendingChip>
-          </AttachmentRow>
+                )}
+              </PendingChip>
+            </AttachmentRow>
+          ),
         )}
         {pendingAttachments.length > 0 && (
           <AttachmentRow>

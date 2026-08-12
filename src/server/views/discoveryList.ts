@@ -17,12 +17,16 @@
 
 import { prisma } from "@/server/db/prisma";
 import {
-  isMarkPending,
+  isPending,
   liveMark,
   MARK_WORDS,
 } from "@/server/entities/companies/suggestionMark";
+import type {
+  NegotiationRow,
+  NegotiationState,
+} from "@/server/views/negotiationPanel";
 
-export type DiscoveryRow = {
+export type DiscoveryRow = NegotiationRow & {
   id: string;
   name: string;
   reason: string;
@@ -31,11 +35,10 @@ export type DiscoveryRow = {
   checked: boolean;
 };
 
-export type DiscoveryListView = {
+// `openThreadCount` is always 0: a candidate is a name and a reason, so there is
+// nothing here Hank can ask about that unchecking doesn't already answer.
+export type DiscoveryListView = NegotiationState & {
   rows: DiscoveryRow[];
-  // How many rows the user has changed since Hank last heard — what the
-  // composer's pending chip counts.
-  pendingMarks: number;
 };
 
 export async function loadDiscoveryList(
@@ -56,7 +59,11 @@ export async function loadDiscoveryList(
       relayedMark: true,
     },
   });
-  if (open.length === 0) return { rows: [], pendingMarks: 0 };
+  // No open candidate anywhere: the last commit settled the batch, so there is
+  // nothing to negotiate over rather than an empty negotiation.
+  if (open.length === 0) {
+    return { rows: [], open: false, pendingCount: 0, openThreadCount: 0 };
+  }
 
   // The newest open row names the current batch. Keyed on runId when there is
   // one; a null runId (a hand-driven or replayed write) can't be told apart
@@ -70,20 +77,22 @@ export async function loadDiscoveryList(
   // predates that and is still worth folding rather than drawing twice.
   const seen = new Set<string>();
   const rows: DiscoveryRow[] = [];
-  let pendingMarks = 0;
+  let pendingCount = 0;
   for (const r of batch) {
     if (seen.has(r.nameKey)) continue;
     seen.add(r.nameKey);
-    if (isMarkPending(r)) pendingMarks += 1;
+    const pending = isPending(r);
+    if (pending) pendingCount += 1;
     rows.push({
       id: r.id,
       name: r.name,
       reason: r.reason,
       url: r.url,
       checked: liveMark(r.userMark) === "ADD",
+      pending,
     });
   }
-  return { rows, pendingMarks };
+  return { rows, open: true, pendingCount, openThreadCount: 0 };
 }
 
 // The same list as plain text for Hank's per-turn context. Marks included —

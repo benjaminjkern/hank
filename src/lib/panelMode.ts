@@ -27,6 +27,26 @@ export type PanelMode =
   // application-status funnel. Self-fetching from /api/analytics.
   | "analytics";
 
+// The three modes that are NEGOTIATIONS: Hank proposes, the user amends, and
+// one commit settles the whole surface. They share a contract — see
+// views/negotiationPanel.ts for the payload half — and the discriminator is the
+// panel mode itself, so there is no second vocabulary to keep in step with this
+// union.
+export type NegotiationPanel = Extract<
+  PanelMode,
+  "shortlist-board" | "discovery" | "application"
+>;
+
+export const NEGOTIATION_PANELS = [
+  "shortlist-board",
+  "discovery",
+  "application",
+] as const satisfies readonly NegotiationPanel[];
+
+export function isNegotiationPanel(mode: string): mode is NegotiationPanel {
+  return (NEGOTIATION_PANELS as readonly string[]).includes(mode);
+}
+
 // The Documents view is itself a tiny router: an index of cards, each opening
 // its own sub-page (so the page reads short instead of one long scroll).
 export type DocumentsSubPage =

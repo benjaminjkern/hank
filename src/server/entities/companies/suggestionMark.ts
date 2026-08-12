@@ -52,7 +52,7 @@ export function liveMark(
 // `liveMark` on BOTH sides so a never-touched row (both null) and a row
 // re-checked back to the proposal both read as settled — nothing to report when
 // nothing about the list changed.
-export function isMarkPending(row: MarkedRow): boolean {
+export function isPending(row: MarkedRow): boolean {
   return liveMark(row.userMark) !== liveMark(row.relayedMark);
 }
 
@@ -96,8 +96,42 @@ export async function listUnrelayedSuggestionMarks(
     select: { id: true, name: true, userMark: true, relayedMark: true },
   });
   return rows
-    .filter(isMarkPending)
+    .filter(isPending)
     .map((r) => ({ id: r.id, name: r.name, mark: liveMark(r.userMark) }));
+}
+
+// Undo every unrelayed mark: put each row's live mark back to what Hank was last
+// told, which is by definition the last thing he saw. A row he proposed and the
+// user never touched is already there; the rest go back to `relayedMark`, which
+// is `null` for a row that has only ever been the proposal.
+//
+// Nothing else has to be undone — a mark decides nothing until `commit_discovery`
+// settles the batch, so a discarded row never left the list it was drawn in.
+export async function discardUnrelayedSuggestionMarks(
+  userId: string,
+): Promise<number> {
+  const rows = await prisma.companySuggestion.findMany({
+    where: { userId, ...openSuggestionWhere() },
+    select: { id: true, userMark: true, relayedMark: true },
+  });
+  const pending = rows.filter(isPending);
+  if (pending.length === 0) return 0;
+
+  // Two shapes at most — back to a mark Hank was told, or back to the untouched
+  // proposal — so the write stays two statements rather than one per row.
+  const byMark = new Map<CompanySuggestionMark | null, string[]>();
+  for (const r of pending) {
+    byMark.set(r.relayedMark, [...(byMark.get(r.relayedMark) ?? []), r.id]);
+  }
+  await prisma.$transaction(
+    [...byMark].map(([mark, ids]) =>
+      prisma.companySuggestion.updateMany({
+        where: { userId, id: { in: ids } },
+        data: { userMark: mark },
+      }),
+    ),
+  );
+  return pending.length;
 }
 
 // Catch `relayedMark` up for the rows just reported. Grouped by target mark so

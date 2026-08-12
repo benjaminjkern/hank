@@ -23,6 +23,7 @@
 import { useState } from "react";
 import styled from "styled-components";
 
+import { buildWidgetSubmissionMessage } from "@/components/Chat/widgets/types";
 import { useChatStore } from "@/lib/chatStore";
 import type {
   ShortlistBoardView as ShortlistBoardData,
@@ -30,7 +31,7 @@ import type {
   ShortlistBoardTier,
 } from "@/server/views/shortlistBoard";
 
-import { PanelRowCard, PanelSendChangesButton } from "./shared/PanelRowCard";
+import { NegotiationSettleButton, PanelRowCard } from "./shared/negotiation";
 import {
   StanceMarks,
   STANCE_OF_VERDICT,
@@ -305,7 +306,6 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
   const send = useChatStore((s) => s.send);
   const readOnly = useChatStore((s) => s.impersonateSessionId !== null);
   const streaming = useChatStore((s) => s.streaming);
-  const pending = board.pendingEdits;
 
   // The server's tier order IS the render order within each group, so
   // flattening keeps picks ahead of borderline ahead of pass.
@@ -320,18 +320,35 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
     <Root>
       <Header>
         {board.open && !readOnly && (
-          <PanelSendChangesButton
+          // "Looks good" with nothing outstanding settles the board directly —
+          // there is nothing on it Hank hasn't already agreed with, so the turn
+          // he'd spend re-reading it buys nothing. Anything else is a message.
+          <NegotiationSettleButton
+            state={board}
             disabled={streaming}
-            onClick={() =>
+            labels={{
+              changes: "Send my changes",
+              threads: "Send my changes",
+              commit: "Looks good to me",
+            }}
+            onSend={() =>
               void send(
-                pending > 0
-                  ? "These are my changes to the board — if you agree with them, go ahead and lock the shortlist in."
-                  : "The board looks right to me as it stands — if you agree, go ahead and lock the shortlist in.",
+                "These are my changes to the board — if you agree with them, go ahead and lock the shortlist in.",
               )
             }
-          >
-            {pending > 0 ? "Send my changes" : "Looks good to me"}
-          </PanelSendChangesButton>
+            onCommit={() =>
+              void send(
+                buildWidgetSubmissionMessage(
+                  {
+                    kind: "commit_negotiation",
+                    panel: "shortlist-board",
+                    companyId: board.companyId,
+                  },
+                  "[The board looks right — lock it in]",
+                ),
+              )
+            }
+          />
         )}
         <H2>{board.companyName} — shortlist</H2>
         {!board.open && (

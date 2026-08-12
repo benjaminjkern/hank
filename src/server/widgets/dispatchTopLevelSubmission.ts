@@ -30,10 +30,12 @@ import {
 } from "@/server/procedures/registry/enrichCompanies";
 import { runWrapSegment } from "@/server/procedures/registry/wrapSegment";
 import { showTargetFor, buildShowEvents } from "@/server/views/showEvents";
+import { dispatchCommitNegotiation } from "@/server/widgets/dispatchCommitNegotiation";
 import { dispatchNextCompanyPicker } from "@/server/widgets/dispatchNextCompanyPicker";
 import {
   parseNextCompanyPickerSubmission,
   parseAddMoreCompaniesSubmission,
+  parseCommitNegotiationSubmission,
   parseCompanyDisambiguationSubmission,
 } from "@/server/widgets/parse";
 
@@ -85,6 +87,17 @@ export async function* dispatchTopLevelSubmission(
     );
     yield addMoreCompaniesWidget(added, 0);
     return { kind: "terminal" };
+  }
+
+  // "Looks good to me" on a negotiation panel with nothing outstanding. The
+  // dispatch re-checks that claim against the database and returns null if it no
+  // longer holds — then this falls through and Hank answers the message like any
+  // other. See dispatchCommitNegotiation for why the guard lives there and not
+  // on the button.
+  const commitSubmission = parseCommitNegotiationSubmission(userMessage);
+  if (commitSubmission) {
+    const entryTarget = await dispatchCommitNegotiation(commitSubmission, args);
+    if (entryTarget) return { kind: "enter", entryTarget };
   }
 
   // "Find more" / "Done adding" after a finished add. More asks what to look for

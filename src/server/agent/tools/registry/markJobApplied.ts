@@ -28,7 +28,7 @@ export const markJobAppliedTool: ToolDef<{
   name: "mark_job_applied",
   affectsViewedState: true,
   description:
-    "Record that the user applied to a job. Single canonical APPLIED path — both the drafting widget's submit button and historical entry ('I applied to Coinbase in March') route through here. Logs an APPLIED event, advances JobInteraction → APPLIED, stamps applyChannel (RECRUITER if the job is linked to an opportunity, DIRECT otherwise, unless you pass an explicit channel), and wipes any cover letter / short answers the user never actually used. This is an ATOMIC RECORD-ONLY action: it does NOT bring up the next role or move the screen. To move on afterward, call a navigation tool — company_walkthrough on this company (brings up its remaining roles), caught_up_company (done with this company), or show_whats_next (top-level). Use this — not log_job_events — for APPLIED.",
+    "Record that the user applied to a job. Single canonical APPLIED path — both the drafting widget's submit button and historical entry ('I applied to Coinbase in March') route through here. Logs an APPLIED event, advances JobInteraction → APPLIED, stamps applyChannel (RECRUITER if the job is linked to an opportunity, DIRECT otherwise, unless you pass an explicit channel), and clears the role's shortlist stance. Whatever was drafted stays — the user may reuse it elsewhere. This is an ATOMIC RECORD-ONLY action: it does NOT bring up the next role or move the screen. To move on afterward, call a navigation tool — company_walkthrough on this company (brings up its remaining roles), caught_up_company (done with this company), or show_whats_next (top-level). Use this — not log_job_events — for APPLIED.",
   inputSchema: {
     type: "object",
     properties: {

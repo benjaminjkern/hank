@@ -149,7 +149,7 @@ Everything the form asks for renders on the **application page** — a right-pan
 | Question | Compare live text to | Used by |
 | --- | --- | --- |
 | Whose words are these? | `proposedDrafts` | [`authorFor`](../src/server/entities/jobs/applicationDrafts.ts) / `isUserOwned`, the page's author mark |
-| Has Hank seen this yet? | `relayedDrafts` | `applicationEditsFor` → the panel-edit relay, `pendingEditCount` |
+| Has Hank seen this yet? | `relayedDrafts` | `applicationEditsFor` → the panel-edit relay, `pendingCount` |
 
 Authorship is therefore **derived, never stamped**, and that buys the behaviour a stamp couldn't: edit an item, change your mind, put his wording back, and it is his again — because it IS his again. Neither baseline is the `*Reuse` flag, which answers "may we draw on this later".
 
