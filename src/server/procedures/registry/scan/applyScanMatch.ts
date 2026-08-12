@@ -9,19 +9,18 @@
 // scan idempotent — a rate-limit straggler picked up on the next pass can't
 // clobber a later state.
 //
-// SCANNED is deliberately NOT logged as a JobEvent: it's informational and
-// high-frequency, and it dominated the per-role timeline. The status-cache flip
-// is the whole write. A skip DOES log a CLOSED event — that's a real decision —
-// and goes through `logJobEvent` so the event and the status commit together.
+// Neither outcome logs a JobEvent. A match is informational and high-frequency,
+// and it dominated the per-role timeline; a skip is a PROPOSAL, not a decision —
+// it leaves a PASS stance the user can overturn on the board, and the commit is
+// what closes the role and logs that.
 
 import {
   JobCloseReason,
   JobInteractionStatus,
-  JobEventType,
   MatchBucket,
 } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
-import { logJobEvent } from "@/server/entities/jobs/logJobEvents";
+import { passOnJobs } from "@/server/entities/jobs/passOnJobs";
 import type {
   ScanMatchBucket,
   ScanCloseReason,
@@ -52,23 +51,22 @@ export async function applyScanMatch(args: {
   });
   if (existing && existing.status !== JobInteractionStatus.NEW) return;
 
+  // A pass, PROPOSED not landed: the row keeps its status and picks up a PASS
+  // stance, so it shows on the board with this reason and the user can overturn
+  // it with one click. The commit is what closes it. Deliberately no event —
+  // nothing has happened to the role yet.
   if (args.verdict.decision === "skip") {
-    await logJobEvent({
+    await passOnJobs({
       userId: args.userId,
-      item: {
-        jobId: args.jobId,
-        type: JobEventType.CLOSED,
-        notes: args.verdict.reason,
-        jobInteractionUpdate: {
-          status: JobInteractionStatus.CLOSED,
+      eliminatedBy: "SCAN",
+      jobs: [
+        {
+          id: args.jobId,
           closeReason: CLOSE_REASONS[args.verdict.closeReason],
           closeNote: args.verdict.reason,
           closeSummaryLabel: args.verdict.summaryLabel ?? null,
-          matchBucket: null,
-          matchScore: null,
-          matchReason: null,
         },
-      },
+      ],
     });
     return;
   }

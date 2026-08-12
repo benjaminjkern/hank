@@ -507,6 +507,12 @@ model JobInteraction {
   // is committed (commit_shortlist maps PICK→SHORTLISTED,
   // BORDERLINE→DEFERRED/OUTRANKED, PASS→CLOSED). See docs/flows.md (shortlist).
   //
+  // EVERY pass writes one, including the automatic ones: the metadata pass and
+  // the full read propose `PASS` here rather than closing the role, so a round
+  // changes no status until it is committed. A cleared stance is therefore also
+  // the round boundary — a row carrying one is in the CURRENT round, and nothing
+  // has to compare timestamps to work that out.
+  //
   // agentVerdict/agentReason are Hank's proposal and ONLY Hank writes them, so
   // his rationale survives the user disagreeing with it.
   agentVerdict ProposedVerdict?
@@ -524,6 +530,13 @@ model JobInteraction {
   // stops rows from jumping tier mid-review. Hank's own moves set both, so a
   // difference always means "unrelayed user edit".
   placementVerdict ProposedVerdict?
+  // Which pass proposed the PASS on this row, set with the stance and cleared
+  // with it. Orders the board's closing pile: a role the shortlist itself passed
+  // on got further than one the full read eliminated, which got further than one
+  // the metadata pass never opened — and that ordering is the only fit signal
+  // those rows have, since a role dropped before the read never gets a
+  // matchBucket at all.
+  eliminatedBy EliminatedBy?
   coverLetter  String?
   shortAnswers Json? // [{question, answer}]
   // The application text as HANK last WROTE it: {coverLetter, answers:[{question,text}]}.
@@ -613,6 +626,14 @@ enum MatchBucket {
   STRONG // clear fit at the right level — pre-checked in the shortlist widget
   POSSIBLE // plausible, worth surfacing, not a slam-dunk
   WEAK // survived match but a stretch — usually not pre-checked
+}
+
+// Which pass proposed passing on a role. Not a status: it qualifies the stance,
+// and says how far the role got before something ruled it out.
+enum EliminatedBy {
+  PRE_SCAN // the cheap metadata pass — the body was never read
+  SCAN // the full read judged it against the thesis
+  SHORTLIST // it reached the ranker and lost there
 }
 
 // Structured "why" for a CLOSED job (WITHDRAWN = applied then pulled; rest pre-apply).

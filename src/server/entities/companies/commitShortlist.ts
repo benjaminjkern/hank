@@ -26,7 +26,7 @@ import { prisma } from "@/server/db/prisma";
 import { planJobEvents } from "@/server/entities/jobs/logJobEvents";
 import type { LogJobEventInput } from "@/server/entities/jobs/logJobEvents";
 import {
-  canHoldStance,
+  isStanceable,
   onBoardWhere,
 } from "@/server/entities/jobs/shortlistPool";
 
@@ -98,6 +98,10 @@ export async function commitShortlist(args: {
     userVerdict: null,
     placementVerdict: null,
     agentReason: null,
+    // Cleared with the stance it qualifies: the round is over, so "which pass
+    // ruled this out" is no longer a live proposal. A row that ends up CLOSED
+    // keeps its closeReason/closeNote, which is the durable record.
+    eliminatedBy: null,
     stanceAt: null,
   };
 
@@ -111,8 +115,8 @@ export async function commitShortlist(args: {
     // acted on: honouring a stale `pick` here writes SHORTLISTED over an APPLIED
     // role, which is the board undoing what the user told Hank they'd done.
     // (CLOSED is deliberately not in this set — a mark on a filtered row is the
-    // un-close, and `canHoldStance` says so.)
-    if (!canHoldStance(row.status)) {
+    // un-close, and `isStanceable` says so.)
+    if (!isStanceable(row.status)) {
       noOpUpdates.push({ id: row.id, data: { ...clearStance } });
       continue;
     }

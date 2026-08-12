@@ -32,7 +32,7 @@ import {
   setBoardStance,
   type BoardStanceMove,
 } from "@/server/entities/jobs/setBoardStance";
-import { canHoldStance } from "@/server/entities/jobs/shortlistPool";
+import { isStanceable } from "@/server/entities/jobs/shortlistPool";
 import {
   runEnrichJobBody,
   type EnrichJobBodyOutcome,
@@ -68,7 +68,7 @@ export async function runReconsiderJob(
   });
   if (!row) return { kind: "not_reconsiderable", title: null, status: null };
 
-  if (!canHoldStance(row.status)) {
+  if (!isStanceable(row.status)) {
     return {
       kind: "not_reconsiderable",
       title: row.job.title,

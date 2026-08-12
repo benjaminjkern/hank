@@ -12,7 +12,7 @@ import {
   toRoleAttrs,
 } from "@/server/entities/jobs/roleAttrs";
 import {
-  canHoldStance,
+  isStanceable,
   onBoardWhere,
 } from "@/server/entities/jobs/shortlistPool";
 import type { ShortAnswer } from "@/server/entities/jobs/types";
@@ -68,7 +68,7 @@ export type FocusedJobView = {
     // PICK / BORDERLINE / PASS — the live stance (the user's if they've moved
     // it, else Hank's), matching what the board row shows.
     verdict: string | null;
-    // False for a row the round can't move — the same `canHoldStance` gate the
+    // False for a row the round can't move — the same `isStanceable` gate the
     // board applies, so the two surfaces can't disagree about what's editable.
     markable: boolean;
     // Whether the automatic filtering closed it rather than anyone judging it,
@@ -195,7 +195,7 @@ export async function getFocusedJobView(
           // What the board would show selected: the live stance, or the group
           // the row's own status places it in.
           verdict: liveVerdict(i) ?? placedVerdict(i),
-          markable: canHoldStance(i.status),
+          markable: isStanceable(i.status),
           filtered: i.status === JobInteractionStatus.CLOSED,
         }
       : null;
