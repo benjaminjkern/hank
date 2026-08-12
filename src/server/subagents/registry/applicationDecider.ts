@@ -58,6 +58,7 @@ import type {
   SubAgentDef,
   SubAgentOutputSchema,
 } from "@/server/subagents/lib/types";
+import { USER_FACING_VOICE } from "@/server/subagents/lib/voice";
 
 // flash 5/0/0 on re-run (the batch's one warn was variance). The decision is
 // grounded in the form's own questions + the catalog of past applications, so
@@ -178,8 +179,7 @@ const COMMIT_DECISION_SCHEMA: SubAgentOutputSchema = {
       },
       notice: {
         type: "string",
-        description:
-          "Set ONLY when you chose to help (draft / co-write) despite a SOFT hold the user expressed in memory — e.g. profile.md says 'hold off on cover letters until I trust the flow' or 'I usually skip cover letters'. One plain-English sentence the user reads, telling them you saw the note and went ahead so they can judge it and tell you to stop (e.g. \"You'd noted holding off on cover letters until you trust this — I drafted one anyway so you can judge it; say the word and I'll drop it.\"). Omit when no such note applied.",
+        description: `Set ONLY when you chose to help (draft / co-write) despite a SOFT hold the user expressed in memory — e.g. profile.md says 'hold off on cover letters until I trust the flow' or 'I usually skip cover letters'. One plain-English sentence the user reads, telling them you saw the note and went ahead so they can judge it and tell you to stop. ${USER_FACING_VOICE}  (e.g. \"You'd noted holding off on cover letters until you trust this — I drafted one anyway so you can judge it; say the word and I'll drop it."). Omit when no such note applied.`,
       },
     },
     required: ["questions"],

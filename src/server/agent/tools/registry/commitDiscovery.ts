@@ -23,7 +23,7 @@ export const commitDiscoveryTool: ToolDef<Record<string, never>> = {
   handle() {
     return Promise.resolve({
       content:
-        "Handed off to the company-list commit. It adds the marked companies, records the passes, and puts the refreshed list back on screen. Nothing more to do this turn — don't list any companies in chat.",
+        "Handed off to the company-list commit. It adds the checked companies, records the passes, and clears the list off screen. Nothing more to do this turn — don't list any companies in chat.",
       entryTarget: { kind: "discovery_commit" as const },
     });
   },

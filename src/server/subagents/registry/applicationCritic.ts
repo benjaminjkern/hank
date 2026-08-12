@@ -49,6 +49,7 @@ import type {
   SubAgentDef,
   SubAgentOutputSchema,
 } from "@/server/subagents/lib/types";
+import { USER_FACING_VOICE } from "@/server/subagents/lib/voice";
 
 // UNTUNED on the cheap tier — conservative pin. A single-shot transform judge
 // with no self-verification loop; missing a fabrication (or inventing a fake
@@ -201,8 +202,7 @@ const REPORT_CRITIQUE_SCHEMA: SubAgentOutputSchema = {
             },
             userNote: {
               type: "string",
-              description:
-                "The SAME finding addressed to the CANDIDATE — shown to them verbatim if no revision resolves it, so it must read as a finished sentence from a careful reader, not as your thinking. One or two sentences, second person, naming what you saw and what they'd need to confirm or change: 'Your letter says you're based in New York; the resume gives Los Angeles.' or 'The letter describes Savvy in the past tense, but the resume lists it as current — which is right?'. Plain language: no field names, no severity/kind words, no 'the critic', no scratchpad.",
+              description: `The SAME finding addressed to the CANDIDATE — shown to them verbatim if no revision resolves it, so it must read as a finished sentence from a careful reader, not as your thinking. ${USER_FACING_VOICE} One or two sentences naming what you saw and what they'd need to confirm or change: 'Your letter says you're based in New York; the resume gives Los Angeles.' or 'The letter describes Savvy in the past tense, but the resume lists it as current — which is right?'. Plain language: no field names, no severity/kind words, no 'the critic', no scratchpad.`,
             },
             resolution: {
               type: "string",

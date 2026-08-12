@@ -58,7 +58,11 @@ export type SuggestionHistoryEntry = {
   nameKey: string;
   verdict: CompanySuggestionVerdict;
   timesDeclined: number;
-  lastDecidedAt: Date;
+  // How long ago the user last decided this name. Computed here rather than in
+  // the prompt because `now` is ambient and a sub-agent's userContent has to be
+  // pure — rendering a Date there would make the same fixture read differently
+  // on different days.
+  daysAgo: number;
   // Declined in the most recent answered round — the one case the search is
   // told never to re-propose unless this run's direction names it.
   inLatestRound: boolean;
@@ -241,6 +245,7 @@ export async function settleSuggestions(args: {
 // How far back the search is told about. Old enough that a repeated pattern is
 // visible, bounded so the prompt doesn't grow without limit.
 const HISTORY_LIMIT = 120;
+const MS_PER_DAY = 86_400_000;
 
 // Everything the user has already ruled on, newest first — the search's memory
 // of its own past proposals.
@@ -260,11 +265,17 @@ export async function listSuggestionHistory(
     },
   });
   if (rows.length === 0) return [];
+  const now = nowMs();
 
-  // "The latest round" is the most recent runId that produced a decision. A
-  // null runId (a replayed or hand-driven decision) never counts as the latest
-  // round, since it can't be told apart from any other.
-  const latestRunId = rows.find((r) => r.runId)?.runId ?? null;
+  // "The latest round" is the most recent run that DECLINED something — not the
+  // most recent that decided anything. Keyed on decisions generally, a commit
+  // where the user unchecked nothing would take the flag off the round before
+  // it, and "they just told you no" would stop being true one commit early.
+  // A null runId (a replayed or hand-driven decision) never counts, since it
+  // can't be told apart from any other.
+  const latestRunId =
+    rows.find((r) => r.runId && r.verdict === CompanySuggestionVerdict.DECLINED)
+      ?.runId ?? null;
 
   const byKey = new Map<string, SuggestionHistoryEntry>();
   for (const r of rows) {
@@ -281,7 +292,9 @@ export async function listSuggestionHistory(
       nameKey: r.nameKey,
       verdict: r.verdict!,
       timesDeclined: declined ? 1 : 0,
-      lastDecidedAt: r.decidedAt ?? new Date(0),
+      daysAgo: r.decidedAt
+        ? Math.max(0, Math.round((now - r.decidedAt.getTime()) / MS_PER_DAY))
+        : 0,
       inLatestRound:
         declined && latestRunId !== null && r.runId === latestRunId,
     });

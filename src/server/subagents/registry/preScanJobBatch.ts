@@ -35,6 +35,7 @@ import type {
   SubAgentDef,
   SubAgentOutputSchema,
 } from "@/server/subagents/lib/types";
+import { USER_FACING_VOICE } from "@/server/subagents/lib/voice";
 
 import type Anthropic from "@anthropic-ai/sdk";
 
@@ -201,7 +202,7 @@ const COMMIT_PRESCAN_SCHEMA: SubAgentOutputSchema = {
           properties: {
             rationale: {
               type: "string",
-              description: `Write this FIRST, before \`verdict\` — the verdict must follow from it. ON A SKIP this is shown to the user next to the closed role, so FORMAT MATTERS: lead with a short NOUN PHRASE naming the role ('Product role', 'Enterprise sales role', 'Los Angeles on-site role'), NOT a sentence ('Role type is sales' renders as broken text), then the contrast, addressing the user as 'you' / 'your' — NEVER by name and never as 'the user' / 'the candidate' ('outside the user's scope' and 'the user wants backend' both leak through wrong; say 'outside what you're targeting' / 'you want backend'). 3-12 words. Examples: ${PRE_SCAN_SKIP_REASONS.map((r) => `'${r.example}'`).join(" / ")}. ON A KEEP nobody reads it — one terse internal phrase is enough ('Backend IC, on-thesis' / 'Ambiguous title, needs body-read').`,
+              description: `Write this FIRST, before \`verdict\` — the verdict must follow from it. ON A SKIP this is shown to the user next to the closed role, so FORMAT MATTERS: lead with a short NOUN PHRASE naming the role ('Product role', 'Enterprise sales role', 'Los Angeles on-site role'), NOT a sentence ('Role type is sales' renders as broken text), then the contrast. ${USER_FACING_VOICE} 3-12 words. Examples: ${PRE_SCAN_SKIP_REASONS.map((r) => `'${r.example}'`).join(" / ")}. ON A KEEP nobody reads it — one terse internal phrase is enough ('Backend IC, on-thesis' / 'Ambiguous title, needs body-read').`,
             },
             verdict: {
               type: "string",

@@ -28,6 +28,7 @@ import type {
   SubAgentDef,
   SubAgentOutputSchema,
 } from "@/server/subagents/lib/types";
+import { USER_FACING_VOICE } from "@/server/subagents/lib/voice";
 
 // flash 6/0/0 against rebuilt self-contained fixtures (2026-06-19) — the verdict
 // is bounded by the summary + thesis it's handed.
@@ -125,8 +126,7 @@ const COMMIT_MATCH_SCHEMA: SubAgentOutputSchema = {
       },
       reason: {
         type: "string",
-        description:
-          "One short user-facing sentence — the FINAL verdict only, NOT your reasoning trail. Do all reconsidering in `analysis`; this field never contains 'let me reconsider' / 'wait' / 'actually' / 'passes geo'. For a match: why it fits ('IC backend infra at your level, NYC/remote'). For a skip: the disqualifier ('Sales role — you target engineering' / 'SF-onsite, off your remote thesis'). Address the user as 'you' / 'your' — NEVER by name and never as 'the user' / 'the candidate' (this string is shown to the user; 'outside the user's scope' / 'the user wants X' both read as machine text). For a skip, lead with a noun phrase naming the role ('Sales role', 'Senior-level position'), not a copular sentence ('Role type is sales'). Natural English only — no enum names, no 'SCANNED'/'CLOSED', no tool jargon.",
+        description: `One short user-facing sentence — the FINAL verdict only, NOT your reasoning trail. Do all reconsidering in \`analysis\`; this field never contains 'let me reconsider' / 'wait' / 'actually' / 'passes geo'. For a match: why it fits ('IC backend infra at your level, NYC/remote'). For a skip: the disqualifier ('Sales role — you target engineering' / 'SF-onsite, off your remote thesis'). ${USER_FACING_VOICE} For a skip, lead with a noun phrase naming the role ('Sales role', 'Senior-level position'), not a copular sentence ('Role type is sales'). Natural English only — no enum names, no 'SCANNED'/'CLOSED', no tool jargon.`,
       },
       summaryLabel: {
         type: "string",
