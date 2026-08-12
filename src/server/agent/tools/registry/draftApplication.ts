@@ -92,19 +92,22 @@ export const draftApplicationTool: ToolDef<{
           .join(", ")}.`,
       );
     }
-    // The read-back verdict, in Hank's own channel. He has to relay an
-    // unresolved finding rather than report a finished draft — the whole point
-    // of the reviewer is lost if its conclusion stops here.
+    // The read-back verdict, in Hank's own channel. He has to say how it ended
+    // rather than report a finished draft — the whole point of the reviewer is
+    // lost if its conclusion stops here. What he must NOT do is reprint the
+    // findings: each is already drawn against the answer it objects to, and a
+    // copy in chat is the same words twice, the second time nowhere near the
+    // text they're about.
     if (result.note) {
       parts.push(`The reviewer's line on it: ${result.note}`);
     }
     const open = result.review?.open ?? [];
     if (open.length > 0) {
       parts.push(
-        `Read back against the résumé, and ${open.length === 1 ? "one thing is" : `${open.length} things are`} still unresolved — each is marked against its answer on the page, and each needs the USER to settle it (you can't). Tell them plainly what came up, in one sentence, and leave the call to them:`,
+        `Read back against the résumé: ${open.length === 1 ? "one thing is" : `${open.length} things are`} still unresolved, each already marked against its own answer on the page — the user reads them there, so DON'T list them back. Say how many came up and what kind of thing they are, and leave the call to them; each needs the USER to settle it (you can't).`,
         ...open.map((f) => `- ${f.label}: ${f.note}`),
       );
-    } else if (result.review?.outcome === "clean") {
+    } else if (result.reviewStop === "clean") {
       parts.push(
         "Read back against the résumé and the posting — nothing came up. You can tell them it's ready to look over.",
       );

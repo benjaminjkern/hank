@@ -23,6 +23,7 @@ import type {
   ApplicationItem,
   ApplicationItemStatus,
   ApplicationView as ApplicationViewPayload,
+  FindingTone,
 } from "@/server/views/application";
 
 import {
@@ -191,6 +192,28 @@ const StockSection = styled.section`
   gap: ${({ theme }) => theme.space.xs};
 `;
 
+const StockHeaderRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.space.xs};
+`;
+
+// The one control on this page whose whole job is "explain yourself" — a plain
+// round glyph, quiet until you want it.
+const InfoDot = styled.button`
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px;
+  color: ${({ theme }) => theme.colors.textSubtle};
+  background: transparent;
+  border-radius: 999px;
+  cursor: pointer;
+  &:hover {
+    color: ${({ theme }) => theme.colors.text};
+  }
+`;
+
 const StockHeader = styled.button`
   display: flex;
   align-items: center;
@@ -300,28 +323,49 @@ const Empty = styled.div`
   line-height: 1.6;
 `;
 
-// One unresolved finding, sitting against the text it's about. Two rewrites
-// couldn't settle it, because settling it means knowing something about the
-// user that isn't on the page.
-const Finding = styled.div<{ $register: "question" | "note" }>`
+// One finding, sitting against the text it's about. The rewrite loop couldn't
+// settle it, because settling it means knowing something about the user that
+// isn't on the page.
+//
+// An `answered` one goes quiet rather than disappearing: the user is editing
+// the very words it objects to, and having the reason for the edit vanish
+// mid-keystroke is worse than reading a note that's already been dealt with. It
+// clears when their next message carries it to Hank.
+const Finding = styled.div<{ $tone: FindingTone }>`
   display: flex;
   gap: ${({ theme }) => theme.space.sm};
   padding: ${({ theme }) => `${theme.space.sm} ${theme.space.md}`};
   border-left: 2px solid
-    ${({ theme, $register }) =>
-      $register === "question" ? theme.colors.border : theme.colors.danger};
+    ${({ theme, $tone }) =>
+      $tone === "note" ? theme.colors.danger : theme.colors.border};
   background: ${({ theme }) => theme.colors.bgMuted};
   border-radius: ${({ theme }) => theme.radius.sm};
   font-size: 12px;
   line-height: 1.55;
   color: ${({ theme }) => theme.colors.textMuted};
+  opacity: ${({ $tone }) => ($tone === "answered" ? 0.55 : 1)};
 `;
 
-const FindingMark = styled.span<{ $register: "question" | "note" }>`
-  color: ${({ theme, $register }) =>
-    $register === "question" ? theme.colors.textSubtle : theme.colors.danger};
+const FindingMark = styled.span<{ $tone: FindingTone }>`
+  color: ${({ theme, $tone }) =>
+    $tone === "note" ? theme.colors.danger : theme.colors.textSubtle};
   flex-shrink: 0;
 `;
+
+// What the muted state says out loud, so "faded" isn't the only signal.
+const FindingState = styled.span`
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-family: ${({ theme }) => theme.font.mono};
+  color: ${({ theme }) => theme.colors.textSubtle};
+`;
+
+const FINDING_MARK: Record<FindingTone, string> = {
+  question: "?",
+  note: "!",
+  answered: "✓",
+};
 
 function countThings(n: number): string {
   return n === 1 ? "one thing" : `${n} things`;
@@ -483,29 +527,45 @@ export function ApplicationView({
 // the form asks" without burying the two questions that need real writing.
 // One with an answer already saved stays in the main list — there's text to
 // read, and hiding it would hide the text.
+//
+// The header names the group and stops. WHY they're here is a sentence about a
+// judgement someone made, which is worth reading once and not on every visit —
+// so it sits behind the ⓘ rather than under the title.
 function StockFields({ items }: { items: ApplicationItem[] }) {
   const [open, setOpen] = useState(false);
+  const [explaining, setExplaining] = useState(false);
   return (
     <StockSection>
-      <StockHeader onClick={() => setOpen((o) => !o)}>
-        <StockCaret $open={open}>▶</StockCaret>
-        <StockTitle>Easy ones — you fill these in yourself</StockTitle>
-        <StockCount>{items.length}</StockCount>
-      </StockHeader>
-      {open && (
-        <>
-          <SubLabel>
-            The form asks for these too. They&apos;re quick to answer straight
-            on the posting, so Hank leaves them to you.
-          </SubLabel>
-          {items.map((item) => (
-            <StockRow key={item.id}>
-              {item.label}
-              {item.required && <SubLabel>Required</SubLabel>}
-            </StockRow>
-          ))}
-        </>
+      <StockHeaderRow>
+        <StockHeader onClick={() => setOpen((o) => !o)}>
+          <StockCaret $open={open}>▶</StockCaret>
+          <StockTitle>The rest of the form</StockTitle>
+          <StockCount>{items.length}</StockCount>
+        </StockHeader>
+        {/* Tap, not hover: a hover tooltip is 1.5s away on a desktop and
+            unreachable on a phone. */}
+        <InfoDot
+          onClick={() => setExplaining((e) => !e)}
+          aria-expanded={explaining}
+          aria-label="Why are these here?"
+        >
+          ⓘ
+        </InfoDot>
+      </StockHeaderRow>
+      {explaining && (
+        <SubLabel>
+          These came off the application form. Hank read them as quick factual
+          fields — your name, links, work authorization — so he left them for
+          you to fill in on the posting rather than drafting them.
+        </SubLabel>
       )}
+      {open &&
+        items.map((item) => (
+          <StockRow key={item.id}>
+            {item.label}
+            {item.required && <SubLabel>Required</SubLabel>}
+          </StockRow>
+        ))}
     </StockSection>
   );
 }
@@ -586,6 +646,24 @@ function AddQuestion({ jobId }: { jobId: string }) {
   );
 }
 
+// The rename endpoint names the reason it refused; say it in the user's terms.
+// Anything else is a genuine failure and reads as one.
+async function renameProblem(res: Response): Promise<string> {
+  const reason = await res
+    .json()
+    .then((body: unknown) =>
+      typeof (body as { error?: unknown } | null)?.error === "string"
+        ? (body as { error: string }).error
+        : "",
+    )
+    .catch(() => "");
+  if (reason === "duplicate") return "The form already asks that one.";
+  if (reason === "not_yours") {
+    return "Someone else described this one, so its wording isn't yours to change.";
+  }
+  return "Couldn't save that just now.";
+}
+
 function ApplicationItemCard({
   jobId,
   item,
@@ -607,9 +685,15 @@ function ApplicationItemCard({
   const [renamingLabel, setRenamingLabel] = useState(false);
   const [label, setLabel] = useState(item.label);
   const [renaming, setRenaming] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  // Escape has to reach the commit that the blur it causes would otherwise run.
+  // A ref, not state: blur fires before a setState lands.
+  const abandonRename = useRef(false);
 
   function cancelRename() {
+    abandonRename.current = true;
     setRenamingLabel(false);
+    setRenameError(null);
     setLabel(item.label);
   }
 
@@ -635,25 +719,48 @@ function ApplicationItemCard({
 
   // The question text is the key its answer is stored under, so this goes
   // through its own endpoint — the server moves the answer with it.
-  async function renameLabel() {
+  //
+  // Committed by leaving the field, the way editing in place works everywhere:
+  // whatever is in the box when you look away is what it says. There is nothing
+  // to confirm, so there is no Save — and nothing is refused, so there is no
+  // error for a no-op. Blanking it isn't a rename (a question needs words), so
+  // that puts the old wording back rather than rejecting the edit.
+  async function commitRename() {
+    if (abandonRename.current) {
+      abandonRename.current = false;
+      return;
+    }
+    if (renaming) return;
     const next = label.trim();
-    if (!next || renaming) return;
-    if (next === item.label) {
+    if (!next || next === item.label) {
+      setLabel(item.label);
       setRenamingLabel(false);
+      setRenameError(null);
       return;
     }
     setRenaming(true);
+    setRenameError(null);
     try {
       const res = await fetch(`/api/jobs/${jobId}/application`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId: item.id, question: next }),
       });
-      if (!res.ok) throw new Error(String(res.status));
+      if (!res.ok) {
+        // Stay in the editor holding their words: the wording they typed is the
+        // only copy of it, and closing the box would throw it away to show an
+        // error about it.
+        setRenameError(await renameProblem(res));
+        return;
+      }
+      // A rename changes the item's id, so this card is about to be replaced
+      // by one keyed to the new question. Disarm first: the blur that unmount
+      // may fire would otherwise re-PUT the new wording at the old id.
+      abandonRename.current = true;
       replaceViewedApplication((await res.json()) as ApplicationViewPayload);
       setRenamingLabel(false);
     } catch {
-      setSaveState("error");
+      setRenameError("Couldn't save that just now.");
     } finally {
       setRenaming(false);
     }
@@ -727,25 +834,26 @@ function ApplicationItemCard({
                 value={label}
                 disabled={renaming}
                 onChange={(e) => setLabel(e.target.value)}
+                onBlur={() => void commitRename()}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") void renameLabel();
+                  // Enter and clicking away are the same gesture — blur, and
+                  // let the one commit path run.
+                  if (e.key === "Enter") e.currentTarget.blur();
                   if (e.key === "Escape") cancelRename();
                 }}
               />
-              <AddButton
-                onClick={() => void renameLabel()}
-                disabled={renaming || !label.trim()}
-              >
-                {renaming ? "Saving…" : "Save"}
-              </AddButton>
-              <AddButton onClick={cancelRename} disabled={renaming}>
-                Cancel
-              </AddButton>
+              {renaming && <SubLabel>saving…</SubLabel>}
+              {renameError && <Tag $tone="danger">{renameError}</Tag>}
             </RenameRow>
           ) : item.addedByYou && !readOnly ? (
             <EditableLabel
-              onClick={() => setRenamingLabel(true)}
-              title="Edit this question"
+              onClick={() => {
+                // Opening always re-arms, so a flag left set by an Escape whose
+                // blur never fired can't swallow the next edit.
+                abandonRename.current = false;
+                setRenamingLabel(true);
+              }}
+              title="Click to reword this question"
             >
               {item.label}
             </EditableLabel>
@@ -759,8 +867,7 @@ function ApplicationItemCard({
             <ConfirmRemoveButton
               hasText={!!item.text?.trim()}
               onRemove={() => void remove()}
-              label="✕"
-              title="Remove this question"
+              title="Remove this question — it isn't one the form asks"
               prompt="Remove it and its answer?"
             />
           )}
@@ -780,11 +887,16 @@ function ApplicationItemCard({
           `question` is Hank asking about his own draft — it must not look like
           a fault, because the user didn't write the words it's about. */}
       {item.findings.map((finding) => (
-        <Finding key={finding.note} $register={finding.register}>
-          <FindingMark $register={finding.register}>
-            {finding.register === "question" ? "?" : "!"}
+        <Finding key={finding.note} $tone={finding.tone}>
+          <FindingMark $tone={finding.tone}>
+            {FINDING_MARK[finding.tone]}
           </FindingMark>
           <span>{finding.note}</span>
+          {finding.tone === "answered" && (
+            <FindingState title="Your change answers this. It clears when your next message reaches Hank.">
+              answered
+            </FindingState>
+          )}
         </Finding>
       ))}
 

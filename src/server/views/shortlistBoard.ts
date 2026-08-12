@@ -12,6 +12,11 @@ import {
   JobInteractionStatus,
   ProposedVerdict,
 } from "@/generated/prisma/client";
+import {
+  BOARD_GROUP_OF_TIER,
+  SHORTLIST_BOARD_TIERS,
+  type ShortlistBoardTier,
+} from "@/lib/boardTiers";
 import { prisma } from "@/server/db/prisma";
 import {
   closedThisRoundJobIds,
@@ -31,53 +36,6 @@ import type {
   NegotiationRow,
   NegotiationState,
 } from "@/server/views/negotiationPanel";
-
-export type ShortlistBoardTier =
-  // The negotiation (pool rows, by PLACEMENT — see placementVerdict: a row the
-  // user just re-marked stays in its old group until their next message):
-  | "picks" // apply to these
-  | "borderline" // worth a look; not recommended
-  | "pass" // recommend against; closes at commit
-  | "undecided" // on the board with no stance — nobody has called it yet
-  // Still in the running, just not part of this round's ranking:
-  | "notReadYet" // NEW — surfaced but the body was never read
-  | "onHold" // deliberately deferred for a reason of its own
-  // Decided by the passes that BUILT this board — shown so the automatic
-  // filtering is auditable while the round is still open:
-  | "filteredThisRound";
-
-// Render order. The last two are the ones the panel collapses, and they're
-// adjacent on purpose: together they are exactly what committing this board
-// CLOSES. Everything above survives the commit in some form, which is why
-// "not read yet" and "on hold" sit with the live groups rather than in the tail
-// — they're still in play, they just haven't been ranked.
-const SHORTLIST_BOARD_TIERS: ShortlistBoardTier[] = [
-  "picks",
-  "borderline",
-  "undecided",
-  "notReadYet",
-  "onHold",
-  "pass",
-  "filteredThisRound",
-];
-
-// The board renders TWO groups, and the line between them is what COMMITTING
-// does: `keep` survives it, `discard` is closed by it. It lives here rather than
-// in the panel because the chat line that introduces a board has to be able to
-// agree with it — quoting the ranker's own tally there said "1 I'd pass on"
-// beside a pile of forty, since the ranker never saw the roles the earlier
-// passes had already ruled out.
-export type BoardGroup = "keep" | "discard";
-
-export const BOARD_GROUP_OF_TIER: Record<ShortlistBoardTier, BoardGroup> = {
-  picks: "keep",
-  borderline: "keep",
-  undecided: "keep",
-  notReadYet: "keep",
-  onHold: "keep",
-  pass: "discard",
-  filteredThisRound: "discard",
-};
 
 export type BoardCounts = {
   picked: number;

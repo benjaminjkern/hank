@@ -76,16 +76,10 @@ export async function persistApplicationReview(
         null);
 
   const open =
-    result.finalVerdict === "error"
+    result.stop === "error"
       ? []
       : findingsFrom(result.unresolvedIssues, textForItem);
   const review: ApplicationReview = {
-    outcome:
-      result.finalVerdict === "error"
-        ? "error"
-        : open.length > 0
-          ? "unresolved"
-          : "clean",
     open,
     settled:
       readApplicationReview(prior?.applicationReview ?? null)?.settled ?? [],
