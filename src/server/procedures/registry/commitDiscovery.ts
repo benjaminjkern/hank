@@ -17,6 +17,7 @@
 // the roster.
 
 import { CompanySuggestionVerdict } from "@/generated/prisma/client";
+import { yieldUiEvents } from "@/server/agent/contracts";
 import type { RunContext, TurnEvent } from "@/server/agent/contracts";
 import { appendPipelineActivity } from "@/server/agent/session/appendMessages";
 import { settleSuggestionBatch } from "@/server/entities/companies/suggestionMark";
@@ -26,6 +27,7 @@ import {
   runChecklistAdd,
 } from "@/server/procedures/registry/enrichCompanies";
 import { loadDiscoveryList } from "@/server/views/discoveryList";
+import { buildShowEvents } from "@/server/views/showEvents";
 
 export type CommitDiscoveryResult = {
   // The list was already empty — the caller turns this into a "there's nothing
@@ -73,6 +75,15 @@ export async function* runCommitDiscovery(
       })),
     ],
   });
+
+  // The list stopped existing on the line above — every row now has a verdict,
+  // so the panel is drawing a negotiation that's over. Move it off HERE rather
+  // than after the work below: the enrichment is a couple of minutes of live
+  // careers-page reads and the consolidation is two LLM calls, and until this
+  // ran at the end of all that, the user watched a settled list the whole time
+  // and kept it forever if anything cut the run short. Same move, same reason,
+  // as the "Looks good to me" path (widgets/dispatchTopLevelSubmission.ts).
+  yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
 
   const passedNames = toPass.map((r) => r.name);
   let added: string[] = [];

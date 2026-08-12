@@ -3,10 +3,7 @@ import { yieldUiEvents } from "@/server/agent/contracts";
 import type { TurnEvent } from "@/server/agent/contracts";
 import { runCommitDiscovery } from "@/server/procedures/registry/commitDiscovery";
 import { runFindCompanies } from "@/server/procedures/registry/findCompanies";
-import {
-  buildDiscoveryEvents,
-  buildShowEvents,
-} from "@/server/views/showEvents";
+import { buildDiscoveryEvents } from "@/server/views/showEvents";
 
 import type { WalkthroughArgs, WalkthroughResult } from "./types";
 
@@ -79,9 +76,7 @@ export async function* runDiscoveryCommitArm(
     };
     return { wrappedUp: false };
   }
-  // The list is fully settled, so leaving it up would offer a surface with
-  // nothing left to decide. Back to the dashboard, where the companies that
-  // just landed are — same move the shortlist board makes on commit.
-  yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
+  // No panel move here: runCommitDiscovery drops it back to the dashboard the
+  // moment the verdicts land, which is minutes before this line runs.
   return { wrappedUp: false };
 }

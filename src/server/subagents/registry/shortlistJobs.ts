@@ -44,6 +44,7 @@ import type {
   SubAgentDef,
   SubAgentOutputSchema,
 } from "@/server/subagents/lib/types";
+import { USER_FACING_VOICE } from "@/server/subagents/lib/voice";
 
 // flash 4/0/0 against self-contained fixtures (2026-06-19).
 const MODEL: LlmModel = "deepseek-v4-flash";
@@ -133,8 +134,7 @@ const PROPOSE_SHORTLIST_STANCES_SCHEMA: SubAgentOutputSchema = {
           properties: {
             reason: {
               type: "string",
-              description:
-                "Write this FIRST, before `stance`. One short user-facing sentence explaining the fit for this job; the `stance` must follow from it. Renders next to the role on the board. Examples: 'Direct fit — IC backend infra, NYC, your seniority.' / 'London-only, off your remote/NYC thesis.' / 'Director-level might be a stretch but CPG vertical is right.'",
+              description: `Write this FIRST, before \`stance\`. One short user-facing sentence explaining the fit for this job; the \`stance\` must follow from it. Renders next to the role on the board. ${USER_FACING_VOICE} Examples: 'Direct fit — IC backend infra, NYC, your seniority.' / 'London-only, off your remote/NYC thesis.' / 'Director-level might be a stretch but CPG vertical is right.'`,
             },
             stance: {
               type: "string",

@@ -19,6 +19,7 @@ import type {
   SubAgentDef,
   SubAgentOutputSchema,
 } from "@/server/subagents/lib/types";
+import { USER_FACING_VOICE } from "@/server/subagents/lib/voice";
 
 // flash 6/0/0 — bounded gating over two memory slots, nothing to fabricate.
 const MODEL: LlmModel = "deepseek-v4-flash";
@@ -55,8 +56,7 @@ const COMMIT_SCHEMA: SubAgentOutputSchema = {
       suggestedProbes: {
         type: "array",
         items: { type: "string" },
-        description:
-          "REQUIRED when ok=false — 2-3 short user-facing questions the enrich-profile agent can use as probes. Plain English, no enum / path references. Never empty on ok=false.",
+        description: `REQUIRED when ok=false — 2-3 short user-facing questions the enrich-profile agent can use as probes. Plain English, no enum / path references. Never empty on ok=false. ${USER_FACING_VOICE}`,
       },
     },
     required: ["ok"],

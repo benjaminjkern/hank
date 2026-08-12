@@ -27,16 +27,16 @@
 import { CompanyStatus } from "@/generated/prisma/client";
 import type { AnyToolDef } from "@/server/agent/tools/lib/types";
 import { fetchUrlTool } from "@/server/agent/tools/registry/fetchUrl";
+import type {
+  OpenSuggestion,
+  SuggestionHistoryEntry,
+} from "@/server/entities/companies/companySuggestions";
 import type { LlmModel } from "@/server/platform/llm/models";
 import type {
   SubAgentDef,
   SubAgentOutputSchema,
 } from "@/server/subagents/lib/types";
-
-import type {
-  OpenSuggestion,
-  SuggestionHistoryEntry,
-} from "@/server/entities/companies/companySuggestions";
+import { USER_FACING_VOICE } from "@/server/subagents/lib/voice";
 
 import type Anthropic from "@anthropic-ai/sdk";
 
@@ -129,13 +129,11 @@ const COMMIT_CANDIDATES_SCHEMA: SubAgentOutputSchema = {
             },
             oneLineReason: {
               type: "string",
-              description:
-                'Why this is on the list. One sentence, plain English (no enum codes / path references — the user reads it). "Backend-heavy fintech raising Series B; payments-infra roles match the user\'s thesis."',
+              description: `Why this is on the list. One sentence, plain English, no enum codes or path references. "Backend-heavy fintech raising Series B; the payments-infra roles line up with what you're after." ${USER_FACING_VOICE}`,
             },
             summary: {
               type: "string",
-              description:
-                "What you ESTABLISHED about this company, 2-4 sentences: what it does, its stage/size/funding, where it's based, anything about how it hires that a candidate would want to know. This is what the main agent quotes when the user asks \"tell me more about that one\", so it must be things you can stand behind — what a search result said, or what you know well enough to assert. Do NOT pad it: a shorter honest summary beats a confident wrong one, and omitting the field entirely is correct when the name is all you've got. Don't repeat oneLineReason; that's the fit case, this is the company.",
+              description: `${USER_FACING_VOICE} What you ESTABLISHED about this company, 2-4 sentences: what it does, its stage/size/funding, where it's based, anything about how it hires that a candidate would want to know. This is what the main agent quotes when the user asks \"tell me more about that one\", so it must be things you can stand behind — what a search result said, or what you know well enough to assert. Do NOT pad it: a shorter honest summary beats a confident wrong one, and omitting the field entirely is correct when the name is all you've got. Don't repeat oneLineReason; that's the fit case, this is the company.`,
             },
             url: {
               type: "string",
@@ -148,8 +146,7 @@ const COMMIT_CANDIDATES_SCHEMA: SubAgentOutputSchema = {
       },
       provenance: {
         type: "string",
-        description:
-          'ONE plain sentence for the USER on how you found this batch — searched the web, worked from what you already know, or both, and roughly how it split. They read this above the list, so no internal terms, no tool names, no candidate names. "Searched for recent Series-B payments infra; three of these are companies I already knew fit your thesis."',
+        description: `ONE plain sentence for the USER on how you found this batch — searched the web, worked from what you already know, or both, and roughly how it split. No internal terms, no tool names, no candidate names. "Searched for recent Series-B payments infra; three of these I already knew fit your thesis." ${USER_FACING_VOICE}`,
       },
     },
     required: ["candidates", "provenance"],
@@ -244,11 +241,15 @@ function renderUserContent(input: FindCompaniesInput): string {
 function renderHistory(history: SuggestionHistoryEntry[]): string {
   const declined = history.filter((h) => h.verdict === "DECLINED");
   if (declined.length === 0) return "";
+  // Age is rendered because the rule below weighs it ("repeated and recent are
+  // strong, a lone old one is weak") — without it that judgment has no input
+  // and the model is guessing at which declines are stale.
   const line = (h: SuggestionHistoryEntry) => {
     const times =
       h.timesDeclined > 1 ? ` (turned down ${h.timesDeclined}x)` : "";
     const latest = h.inLatestRound ? " [LAST ROUND]" : "";
-    return `- ${h.name}${times}${latest}`;
+    const age = h.daysAgo === 0 ? "today" : `${h.daysAgo}d ago`;
+    return `- ${h.name} (${age})${times}${latest}`;
   };
   return [
     "# You suggested these before and the user turned them down",

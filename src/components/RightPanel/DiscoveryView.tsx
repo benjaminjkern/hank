@@ -42,13 +42,6 @@ const H2 = styled.h2`
   color: ${({ theme }) => theme.colors.text};
 `;
 
-const Sub = styled.p`
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: ${({ theme }) => theme.colors.textMuted};
-`;
-
 const List = styled.div`
   display: flex;
   flex-direction: column;
@@ -133,19 +126,10 @@ function CandidateRow({ row }: { row: DiscoveryRow }) {
 }
 
 export function DiscoveryView({ discovery }: { discovery: DiscoveryListView }) {
-  const checked = discovery.rows.filter((r) => r.checked).length;
-
   return (
     <Root>
       <Header>
         <H2>Companies to add</H2>
-        {discovery.rows.length > 0 && (
-          <Sub>
-            {checked === discovery.rows.length
-              ? `All ${discovery.rows.length} are set to add — uncheck any you don't want, then send.`
-              : `Adding ${checked} of ${discovery.rows.length} — send when it looks right.`}
-          </Sub>
-        )}
       </Header>
 
       {discovery.rows.length === 0 ? (
