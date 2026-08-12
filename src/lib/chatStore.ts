@@ -4,7 +4,11 @@ import { create } from "zustand";
 
 import { reportClientEvent } from "@/lib/clientEvents";
 import { withImpersonate } from "@/lib/impersonation";
-import type { DocumentsSubPage, PanelMode } from "@/lib/panelMode";
+import type {
+  DocumentsSubPage,
+  NegotiationPanel,
+  PanelMode,
+} from "@/lib/panelMode";
 import type { WidgetKind } from "@/lib/widgetKinds";
 import type {
   CompanyJobView,
@@ -286,12 +290,12 @@ type State = {
   viewedBoard: ShortlistBoardView | null;
   viewedApplication: ApplicationView | null;
   viewedDiscovery: DiscoveryListView | null;
-  // Board rows the user changed since their last chat message — rendered as a
-  // composer chip; the server derives the authoritative relay at send time.
-  pendingBoardEditCount: number;
-  // Same, for discovery marks. Kept as its own count rather than folded into
-  // the board's: the composer names which surface the pending edits are on.
-  pendingDiscoveryMarkCount: number;
+  // Per negotiation panel, how much the user has changed since their last chat
+  // message — one composer chip each, because the chip names the surface it's
+  // about. Never tallied locally: every count is whatever the server's last
+  // payload said, which is what makes marking a row and putting it back read as
+  // zero changes. The server derives the authoritative relay at send time.
+  pendingPanelEdits: Record<NegotiationPanel, number>;
   panelMode: PanelMode;
   // Who moved the panel last, which is what decides whether the URL writer
   // pushes a history entry or rewrites the current one: a user gesture is a
@@ -403,8 +407,10 @@ type Actions = {
     verdict: "pick" | "borderline" | "pass",
     reason?: string,
   ) => Promise<void>;
-  // Undo every unsent board mark, everywhere — the composer chip's dismiss.
-  discardBoardEdits: () => Promise<void>;
+  // Undo every unsent change on one negotiation panel — the composer chip's
+  // dismiss. A real undo, not a dismissal: each surface puts its rows back to
+  // what Hank last saw.
+  discardPanelEdits: (panel: NegotiationPanel) => Promise<void>;
   // The discovery list's equivalent: POSTs one candidate's mark, which decides
   // nothing until Hank's commit_discovery.
   markSuggestion: (suggestionId: string, mark: "add" | "pass") => Promise<void>;
@@ -453,8 +459,11 @@ const initial: State = {
   viewedBoard: null,
   viewedDiscovery: null,
   viewedApplication: null,
-  pendingBoardEditCount: 0,
-  pendingDiscoveryMarkCount: 0,
+  pendingPanelEdits: {
+    "shortlist-board": 0,
+    discovery: 0,
+    application: 0,
+  },
   panelMode: "dashboard",
   panelMovedBy: "user",
   documentsNav: { subPage: "index", expandedArtifacts: [] },
@@ -733,7 +742,13 @@ export const useChatStore = create<State & Actions>((set, get) => ({
             if (!data) return;
             set((s) =>
               s.viewedApplication?.jobId === id
-                ? { viewedApplication: data }
+                ? {
+                    viewedApplication: data,
+                    pendingPanelEdits: {
+                      ...s.pendingPanelEdits,
+                      application: data.pendingCount,
+                    },
+                  }
                 : {},
             );
           })
@@ -751,8 +766,35 @@ export const useChatStore = create<State & Actions>((set, get) => ({
           .then((data: ShortlistBoardView | null) => {
             if (!data) return;
             set((s) =>
-              s.viewedBoard?.companyId === id ? { viewedBoard: data } : {},
+              s.viewedBoard?.companyId === id
+                ? {
+                    viewedBoard: data,
+                    pendingPanelEdits: {
+                      ...s.pendingPanelEdits,
+                      "shortlist-board": data.pendingCount,
+                    },
+                  }
+                : {},
             );
+          })
+          .catch(() => {}),
+      );
+    }
+    // Discovery has no id to guard on — there is one open batch per user, so
+    // whatever comes back IS the panel's payload.
+    if (get().viewedDiscovery) {
+      tasks.push(
+        fetch(withImpersonate("/api/discovery", impersonate))
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data: DiscoveryListView | null) => {
+            if (!data) return;
+            set((s) => ({
+              viewedDiscovery: data,
+              pendingPanelEdits: {
+                ...s.pendingPanelEdits,
+                discovery: data.pendingCount,
+              },
+            }));
           })
           .catch(() => {}),
       );
@@ -932,9 +974,12 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       viewedOpportunity: view.opportunity,
       viewedBoard: view.board,
       viewedDiscovery: view.discovery,
-      pendingDiscoveryMarkCount: view.discovery?.pendingMarks ?? 0,
       viewedApplication: view.application,
-      pendingBoardEditCount: view.board?.pendingEdits ?? 0,
+      pendingPanelEdits: {
+        "shortlist-board": view.board?.pendingCount ?? 0,
+        discovery: view.discovery?.pendingCount ?? 0,
+        application: view.application?.pendingCount ?? 0,
+      },
       documentsNav: { ...s.documentsNav, subPage: view.documentsSubPage },
       // The address says whether the panel shows. Every view but the dashboard
       // is open by definition; `/` is the chat-first stowed one and
@@ -1051,12 +1096,15 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       );
       if (!res.ok) return;
       const data = (await res.json()) as ShortlistBoardView;
-      set({
+      set((s) => ({
         viewedBoard: data,
         panelMode: "shortlist-board",
         panelMovedBy: "user",
-        pendingBoardEditCount: data.pendingEdits,
-      });
+        pendingPanelEdits: {
+          ...s.pendingPanelEdits,
+          "shortlist-board": data.pendingCount,
+        },
+      }));
     } catch {
       // ignore
     }
@@ -1069,12 +1117,15 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       );
       if (!res.ok) return;
       const data = (await res.json()) as DiscoveryListView;
-      set({
+      set((s) => ({
         viewedDiscovery: data,
         panelMode: "discovery",
         panelMovedBy: "user",
-        pendingDiscoveryMarkCount: data.pendingMarks,
-      });
+        pendingPanelEdits: {
+          ...s.pendingPanelEdits,
+          discovery: data.pendingCount,
+        },
+      }));
     } catch {
       // ignore
     }
@@ -1093,10 +1144,13 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       });
       if (!res.ok) return;
       const data = (await res.json()) as DiscoveryListView;
-      set({
+      set((s) => ({
         viewedDiscovery: data,
-        pendingDiscoveryMarkCount: data.pendingMarks,
-      });
+        pendingPanelEdits: {
+          ...s.pendingPanelEdits,
+          discovery: data.pendingCount,
+        },
+      }));
     } catch {
       // ignore
     }
@@ -1119,12 +1173,13 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       );
       if (!res.ok) return;
       const data = (await res.json()) as ShortlistBoardView;
-      // The count comes from the server rather than a local tally, so marking a
-      // row and putting it back reads as zero changes — which is what it is.
       // It counts the VIEWED board; edits parked on another company's board
       // still relay, they just aren't in this number.
       set((s) => ({
-        pendingBoardEditCount: data.pendingEdits,
+        pendingPanelEdits: {
+          ...s.pendingPanelEdits,
+          "shortlist-board": data.pendingCount,
+        },
         ...(s.viewedBoard?.companyId === companyId
           ? { viewedBoard: data }
           : {}),
@@ -1153,24 +1208,24 @@ export const useChatStore = create<State & Actions>((set, get) => ({
   // message": leaving marks parked for a later send is exactly the hidden
   // behaviour the chip exists to remove, and it stops the user cleanly changing
   // the subject after a round of marking.
-  async discardBoardEdits() {
+  async discardPanelEdits(panel) {
     if (get().impersonateSessionId) return;
     try {
-      const res = await fetch("/api/shortlist-board/discard", {
+      const res = await fetch("/api/panel-edits/discard", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ panel }),
       });
       if (!res.ok) return;
-      set({ pendingBoardEditCount: 0 });
-      // Repaint whatever board is on screen from the server's copy — the marks
-      // it's drawing are the ones that just went away.
-      const companyId = get().viewedBoard?.companyId;
-      if (!companyId) return;
-      const fresh = await fetch(
-        `/api/companies/${companyId}/shortlist-board`,
-      ).then((r) => (r.ok ? (r.json() as Promise<ShortlistBoardView>) : null));
-      if (fresh) set({ viewedBoard: fresh });
+      set((s) => ({
+        pendingPanelEdits: { ...s.pendingPanelEdits, [panel]: 0 },
+      }));
+      // Repaint whatever this surface is drawing from the server's copy — the
+      // marks on screen are the ones that just went away. Only the panel in
+      // view needs repainting; the others reload when they're next opened.
+      await get().refreshViewedEntities();
     } catch {
-      // ignore — the board re-derives from the server on the next refresh
+      // ignore — every panel re-derives from the server on the next refresh
     }
   },
 
@@ -1210,7 +1265,12 @@ export const useChatStore = create<State & Actions>((set, get) => ({
         viewedOpportunity: null,
         viewedBoard: null,
         viewedApplication: null,
-        pendingBoardEditCount: 0,
+        viewedDiscovery: null,
+        pendingPanelEdits: {
+          "shortlist-board": 0,
+          discovery: 0,
+          application: 0,
+        },
         panelMode: "dashboard",
         panelMovedBy: "user",
         documentsNav: { subPage: "index", expandedArtifacts: [] },
@@ -1251,32 +1311,46 @@ export const useChatStore = create<State & Actions>((set, get) => ({
         mediaKind: "", // unknown client-side; rehydrated on next refetch
       }));
     const trimmed = text.trim();
-    // Pending board marks are content: sending with an empty composer is how
+    // Unsent panel changes are CONTENT: sending with an empty composer is how
     // the user hands a batch of them over. The server derives the authoritative
-    // list; these views just paint the bubble without waiting for the refetch.
+    // relay from the DB — these views only paint the bubble's chips without
+    // waiting for the end-of-turn refetch, so a surface missing here costs a
+    // chip, never the edit itself.
+    const pendingViews: PanelEditView[] = [];
     const board = get().viewedBoard;
-    const pendingViews: PanelEditView[] =
-      get().pendingBoardEditCount > 0 && board
-        ? board.tiers
-            .flatMap((t) => t.rows)
-            .filter((r) => r.pending)
-            .map((r) => ({
-              title: r.title,
-              companyName: board.companyName,
-              verdict: r.verdict ?? "UNDECIDED",
-            }))
-        : [];
-    // Same for an open application: unsent edits are content, so an empty
-    // composer still sends. The server derives the authoritative list.
+    if (board && board.pendingCount > 0) {
+      pendingViews.push(
+        ...board.tiers
+          .flatMap((t) => t.rows)
+          .filter((r) => r.pending)
+          .map((r) => ({
+            title: r.title,
+            companyName: board.companyName,
+            verdict: r.verdict ?? "UNDECIDED",
+          })),
+      );
+    }
+    const discovery = get().viewedDiscovery;
+    if (discovery && discovery.pendingCount > 0) {
+      pendingViews.push(
+        ...discovery.rows
+          .filter((r) => r.pending)
+          .map((r) => ({
+            title: r.name,
+            companyName: null,
+            verdict: r.checked ? "add" : "pass",
+          })),
+      );
+    }
     const application = get().viewedApplication;
-    if (application && application.pendingEditCount > 0) {
+    if (application && application.pendingCount > 0) {
       pendingViews.push(
         ...application.items
-          .filter((i) => i.edited || i.addedNotRelayed)
+          .filter((i) => i.pending)
           .map((i) => ({
             title: i.label,
             companyName: application.companyName,
-            verdict: i.edited ? "edited" : "added",
+            verdict: i.change ?? "edited",
           })),
       );
     }
@@ -1303,11 +1377,15 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       streamInterrupted: false,
       stopController,
       pendingAttachments: [],
-      // Board edits made since the last message relay with THIS one (the
+      // Panel changes made since the last message relay with THIS one (the
       // server snapshots them into the persisted user row at append time), so
-      // the composer chip clears now. The persisted bubble shows them after
+      // every composer chip clears now. The persisted bubble shows them after
       // the end-of-turn refetch.
-      pendingBoardEditCount: 0,
+      pendingPanelEdits: {
+        "shortlist-board": 0,
+        discovery: 0,
+        application: 0,
+      },
       messages: [
         ...s.messages,
         {
@@ -1942,7 +2020,16 @@ function applyEvent(
           viewedBoard: inner.board ?? null,
           viewedApplication: inner.application ?? null,
           viewedDiscovery: inner.discovery ?? null,
-          pendingDiscoveryMarkCount: inner.discovery?.pendingMarks ?? 0,
+          pendingPanelEdits: {
+            "shortlist-board":
+              inner.board?.pendingCount ??
+              s.pendingPanelEdits["shortlist-board"],
+            discovery:
+              inner.discovery?.pendingCount ?? s.pendingPanelEdits.discovery,
+            application:
+              inner.application?.pendingCount ??
+              s.pendingPanelEdits.application,
+          },
           // Mid-turn change while the user is on the chat tab → badge the
           // right tab so they know there's something to look at. The end-of-
           // turn `done` handler decides whether to auto-flip.

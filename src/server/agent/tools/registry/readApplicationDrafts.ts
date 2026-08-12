@@ -69,7 +69,7 @@ export const readApplicationDraftsTool: ToolDef<{ job?: string }> = {
         item.status === "written_by_you"
           ? "their own words — don't rewrite these"
           : "your draft, as written";
-      const edited = item.edited ? ", changed since you last saw it" : "";
+      const edited = item.pending ? ", changed since you last saw it" : "";
       parts.push("", heading, `(${owner}${edited})`, item.text.trim());
     }
 

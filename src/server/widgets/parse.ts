@@ -16,6 +16,27 @@
 import { extractWidgetMarker } from "@/lib/widgetMarker";
 
 // ---------------------------------------------------------------------------
+// Top-level: settling a negotiation panel. Emitted by the panel's own
+// "looks good to me" pill when nothing is left to argue about; dispatched by
+// dispatchCommitNegotiation, which re-derives that claim before acting on it.
+// ---------------------------------------------------------------------------
+
+export type CommitNegotiationSubmission =
+  { panel: "discovery" } | { panel: "shortlist-board"; companyId: string };
+
+export function parseCommitNegotiationSubmission(
+  userMessage: string,
+): CommitNegotiationSubmission | null {
+  const obj = extractWidgetMarker(userMessage);
+  if (!obj || obj.kind !== "commit_negotiation") return null;
+  if (obj.panel === "discovery") return { panel: "discovery" };
+  if (obj.panel === "shortlist-board" && typeof obj.companyId === "string") {
+    return { panel: "shortlist-board", companyId: obj.companyId };
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Walkthrough pipeline widgets: confirm_revive_company,
 // confirm_application_submit, next_job_picker. Dispatched by the walkthrough
 // state machine (handleWidgetSubmission).

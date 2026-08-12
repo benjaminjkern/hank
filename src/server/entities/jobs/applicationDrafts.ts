@@ -476,3 +476,68 @@ export function renderApplicationEditRelayText(
     ...blocks,
   ].join("\n");
 }
+
+// Undo every unsent edit on one application: put each item's text back to what
+// Hank last saw. Only unrelayed edits exist to undo — a relayed one re-baselined
+// on its way out, so it is no longer a divergence.
+//
+// Nothing else needs repairing, and both reasons are the same property stated
+// twice. Authorship is DERIVED from the baseline (`authorFor`), so restoring the
+// text restores who wrote it. Findings anchor to a hash of the words they
+// objected to, so restoring the words restores the objection. An undo is a
+// no-op here because every rule on this page reads the same comparison.
+export async function discardUnrelayedApplicationEdits(
+  userId: string,
+): Promise<number> {
+  const relays = await listUnrelayedApplicationEdits(userId);
+  const edited = relays
+    .map((r) => ({
+      jobId: r.jobId,
+      // A hand-added question has no text to restore — it is a structural add,
+      // undone by removing the question, which is its own explicit button.
+      itemIds: new Set(
+        r.edits.filter((e) => e.change !== "added").map((e) => e.itemId),
+      ),
+    }))
+    .filter((r) => r.itemIds.size > 0);
+  if (edited.length === 0) return 0;
+
+  const rows = await prisma.jobInteraction.findMany({
+    where: { userId, jobId: { in: edited.map((r) => r.jobId) } },
+    select: { id: true, jobId: true, shortAnswers: true, proposedDrafts: true },
+  });
+  const touchedByJob = new Map(edited.map((r) => [r.jobId, r.itemIds]));
+
+  await bulkUpdate(
+    "JobInteraction",
+    "id",
+    rows.flatMap((row) => {
+      const touched = touchedByJob.get(row.jobId);
+      if (!touched) return [];
+      const baseline = readProposedDrafts(row.proposedDrafts);
+      // An answer with no baseline entry was written from scratch, so undoing it
+      // removes the entry rather than blanking it — a blank one renders as an
+      // orphan item, which reads as the undo not having worked.
+      const answers = readShortAnswers(row.shortAnswers).flatMap((a) => {
+        if (!touched.has(questionId(a.question))) return [a];
+        const base = baseline?.answers.find(
+          (b) =>
+            normalizeForCompare(b.question) === normalizeForCompare(a.question),
+        );
+        return base ? [{ question: a.question, answer: base.text }] : [];
+      });
+      return [
+        {
+          key: row.id,
+          patch: {
+            ...(touched.has(COVER_LETTER_ID)
+              ? { coverLetter: baseline?.coverLetter ?? null }
+              : {}),
+            shortAnswers: answers as unknown as Prisma.JsonValue,
+          },
+        },
+      ];
+    }),
+  );
+  return edited.reduce((n, r) => n + r.itemIds.size, 0);
+}

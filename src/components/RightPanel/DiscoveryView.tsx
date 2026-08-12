@@ -13,17 +13,19 @@
 import { useState } from "react";
 import styled from "styled-components";
 
-import {
-  SuggestionCheckbox,
-  SuggestionRow,
-} from "@/components/Chat/widgets/sharedStyles";
+import { SuggestionCheckbox } from "@/components/Chat/widgets/sharedStyles";
+import { buildWidgetSubmissionMessage } from "@/components/Chat/widgets/types";
 import { useChatStore } from "@/lib/chatStore";
 import type {
   DiscoveryListView,
   DiscoveryRow,
 } from "@/server/views/discoveryList";
 
-import { PanelSendChangesButton } from "./shared/PanelRowCard";
+import {
+  NegotiationSettleButton,
+  PanelRowCard,
+  PendingTag,
+} from "./shared/negotiation";
 
 const Root = styled.div`
   display: flex;
@@ -56,6 +58,18 @@ const List = styled.div`
   display: flex;
   flex-direction: column;
   gap: ${({ theme }) => theme.space.sm};
+`;
+
+const Row = styled(PanelRowCard)<{ $dropped: boolean }>`
+  flex-direction: row;
+  align-items: flex-start;
+  gap: ${({ theme }) => theme.space.sm};
+  cursor: pointer;
+
+  /* Unchecked means "not going in" — the row stays readable and stops competing
+     for attention with the ones that are. */
+  opacity: ${({ $dropped }) => ($dropped ? 0.55 : 1)};
+  transition: opacity 0.12s ease;
 `;
 
 const Body = styled.div`
@@ -99,10 +113,16 @@ function CandidateRow({ row }: { row: DiscoveryRow }) {
     }
   }
 
-  // SuggestionRow is a label, so the whole row is the hit target and takes the
-  // accent border when checked — the same control the chat widgets use.
+  // The whole row is the hit target (the card is a label), and the checkbox is
+  // the same themed control the chat widgets use.
+  //
+  // Checked is the DEFAULT here — every company arrives proposed — so it draws
+  // as an ordinary card and the unchecked ones dim instead. That's the right way
+  // round for a list whose whole job is unchecking, and it leaves the accent
+  // border free to mean what it means on every other negotiation panel: you
+  // changed this and Hank hasn't seen it.
   return (
-    <SuggestionRow>
+    <Row as="label" $pending={row.pending} $dropped={!row.checked}>
       <SuggestionCheckbox
         type="checkbox"
         checked={row.checked}
@@ -113,7 +133,8 @@ function CandidateRow({ row }: { row: DiscoveryRow }) {
         <Name>{row.name}</Name>
         <Reason>{row.reason}</Reason>
       </Body>
-    </SuggestionRow>
+      {row.pending && <PendingTag />}
+    </Row>
   );
 }
 
@@ -121,28 +142,37 @@ export function DiscoveryView({ discovery }: { discovery: DiscoveryListView }) {
   const send = useChatStore((s) => s.send);
   const readOnly = useChatStore((s) => s.impersonateSessionId !== null);
   const streaming = useChatStore((s) => s.streaming);
-  const pending = discovery.pendingMarks;
   const checked = discovery.rows.filter((r) => r.checked).length;
 
   return (
     <Root>
       <Header>
         {discovery.rows.length > 0 && !readOnly && (
-          // Adaptive like the board's: it spares a round trip by saying the list
-          // is settled AND that Hank should go ahead, so he commits instead of
-          // asking "want me to add those?".
-          <PanelSendChangesButton
+          // Untouched list, nothing outstanding: adding it is what Hank proposed
+          // by finding these, so the press settles it directly instead of buying
+          // a turn in which he agrees with himself.
+          <NegotiationSettleButton
+            state={discovery}
             disabled={streaming}
-            onClick={() =>
+            labels={{
+              changes: "Send my changes",
+              threads: "Send my changes",
+              commit: "Looks good to me",
+            }}
+            onSend={() =>
               void send(
-                pending > 0
-                  ? "That's the company list how I want it — go ahead and add the ones still checked."
-                  : "The company list looks right as it stands — go ahead and add them.",
+                "That's the company list how I want it — go ahead and add the ones still checked.",
               )
             }
-          >
-            {pending > 0 ? "Send my changes" : "Looks good to me"}
-          </PanelSendChangesButton>
+            onCommit={() =>
+              void send(
+                buildWidgetSubmissionMessage(
+                  { kind: "commit_negotiation", panel: "discovery" },
+                  "[The company list looks right — add them]",
+                ),
+              )
+            }
+          />
         )}
         <H2>Companies to add</H2>
         {discovery.rows.length > 0 && (

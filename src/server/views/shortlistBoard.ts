@@ -4,7 +4,7 @@
 // Hank's board context block, and the show_shortlist_board tool.
 //
 // The stance columns this reads are written elsewhere: the seed
-// (procedures/registry/shortlist), the edit paths (setProposedStance), and the
+// (procedures/registry/shortlist), the edit paths (setBoardStance), and the
 // commit that clears them (entities/companies/commitShortlist).
 
 import {
@@ -29,6 +29,10 @@ import {
   canHoldStance,
   CONSIDERED_STATUSES,
 } from "@/server/entities/jobs/shortlistPool";
+import type {
+  NegotiationRow,
+  NegotiationState,
+} from "@/server/views/negotiationPanel";
 
 export type ShortlistBoardTier =
   // The negotiation (pool rows, by PLACEMENT — see placementVerdict: a row the
@@ -59,7 +63,7 @@ const SHORTLIST_BOARD_TIERS: ShortlistBoardTier[] = [
   "filteredThisRound",
 ];
 
-export type ShortlistBoardRow = {
+export type ShortlistBoardRow = NegotiationRow & {
   jobId: string;
   jobSlug: string | null;
   title: string;
@@ -87,9 +91,6 @@ export type ShortlistBoardRow = {
   // disagreement is visible without labelling every untouched row "Hank:".
   overriddenAgentVerdict: ProposedVerdict | null;
   overriddenAgentReason: string | null;
-  // The user re-marked this row and hasn't sent a message yet, so it's drawn
-  // under its old group with the new mark selected.
-  pending: boolean;
   // Whether the panel offers the three marks on this row. Wider than
   // `isStanceable`, deliberately: a row the filtering closed can be marked too,
   // and the mark revives it on the way (see runReconsiderJob). The entity
@@ -103,16 +104,14 @@ export type ShortlistBoardTierRows = {
   rows: ShortlistBoardRow[];
 };
 
-export type ShortlistBoardView = {
+// `open` is derived, never stored: some row is on the board (stanced or
+// placed). `openThreadCount` is always 0 — every row arrives with a mark
+// already selected, so there is no row waiting on an answer, only rows waiting
+// on agreement.
+export type ShortlistBoardView = NegotiationState & {
   companyId: string;
   companyName: string;
   companySlug: string | null;
-  // A negotiation is open: some row is on the board (stanced or placed).
-  // Derived, never stored.
-  open: boolean;
-  // Some row carries an unrelayed user mark — the panel says so, and the next
-  // message is what settles them.
-  pendingEdits: number;
   tiers: ShortlistBoardTierRows[];
 };
 
@@ -234,13 +233,13 @@ export async function loadShortlistBoard(
   const open = rows.some(isOnBoard);
 
   const byTier = new Map<ShortlistBoardTier, ShortlistBoardRow[]>();
-  let pendingEdits = 0;
+  let pendingCount = 0;
   for (const r of rows) {
     const tier = tierFor(r);
     const onBoard = isOnBoard(r);
     const pending = isPending(r);
 
-    if (pending) pendingEdits++;
+    if (pending) pendingCount++;
     // On an overridden row the rationale moves to `overriddenAgentReason`, which
     // renders it attributed to Hank. Leaving it here too printed one string
     // twice — the plain line and "Hank had this as X — <same string>".
@@ -291,7 +290,8 @@ export async function loadShortlistBoard(
     companyName: company.name,
     companySlug: company.slug,
     open,
-    pendingEdits,
+    pendingCount,
+    openThreadCount: 0,
     tiers: SHORTLIST_BOARD_TIERS.flatMap((tier) => {
       const tierRows = byTier.get(tier);
       return tierRows ? [{ tier, rows: tierRows }] : [];

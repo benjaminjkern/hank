@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 
 import { buildWidgetSubmissionMessage } from "@/components/Chat/widgets/types";
-import { isStockItem } from "@/lib/applicationItem";
+import { wasStockItem } from "@/lib/applicationItem";
 import { useChatStore } from "@/lib/chatStore";
 import type {
   ApplicationItem,
@@ -25,11 +25,12 @@ import type {
   ApplicationView as ApplicationViewPayload,
 } from "@/server/views/application";
 
-import { AuthorMark } from "./shared/AuthorMark";
 import {
   ConfirmRemoveButton,
   ReuseSwitch,
 } from "./shared/applicationArtifacts";
+import { AuthorMark } from "./shared/AuthorMark";
+import { NegotiationSettleButton, PendingTag } from "./shared/negotiation";
 
 const Root = styled.div`
   display: flex;
@@ -359,13 +360,15 @@ export function ApplicationView({
   const send = useChatStore((s) => s.send);
   const streaming = useChatStore((s) => s.streaming);
   const readOnly = !!useChatStore((s) => s.impersonateSessionId);
-  const pending = application.pendingEditCount;
-  const open = application.openFindingCount;
-  // Submit asks once when the review has something open, then defers. It's the
-  // last honest moment to catch a contradiction — after this the application is
-  // sent and the page is a record — but it's the user's call, not a gate.
+  const open = application.openThreadCount;
+  // Submitting with something still open takes two taps, and the first one is
+  // not a client-side warning: it ASKS HANK, because what's outstanding is a
+  // question about this person that only they can settle ("is that venture
+  // still running?"), and he can put it in words a count can't. The second tap
+  // submits regardless — this is the last honest moment to catch a
+  // contradiction, but it's the user's call and never a gate.
   const [confirmingSubmit, setConfirmingSubmit] = useState(false);
-  // Editing the flagged item clears its finding, so the ask can evaporate
+  // Answering the flagged item settles its thread, so the ask can evaporate
   // between the two taps — in which case there's nothing left to confirm and
   // the button goes back to plain submit.
   const asking = confirmingSubmit && open > 0;
@@ -373,11 +376,12 @@ export function ApplicationView({
 
   // A stock field with an answer saved against it keeps its editor in the main
   // list — the verdict says nobody needs to DRAFT it, not that the text it
-  // already holds should be tucked away.
+  // already holds should be tucked away. Filed by what Hank last saw, so an
+  // unsent change never moves a row out from under the cursor.
   const toWrite: ApplicationItem[] = [];
   const fillInYourself: ApplicationItem[] = [];
   for (const item of application.items) {
-    (isStockItem(item) ? fillInYourself : toWrite).push(item);
+    (wasStockItem(item) ? fillInYourself : toWrite).push(item);
   }
 
   return (
@@ -397,32 +401,50 @@ export function ApplicationView({
         )}
         {asking && !application.submitted && (
           <Note>
-            {countThings(open)} below {open === 1 ? "is" : "are"} still flagged.
-            Sending is your call — tap again and I&apos;ll mark it submitted.
+            {countThings(open)} below {open === 1 ? "is" : "are"} still open —
+            Hank&apos;s asking about {open === 1 ? "it" : "them"} in chat.
+            Sending is your call: tap again and I&apos;ll mark it submitted.
           </Note>
         )}
         {!readOnly && (
           <ActionRow>
             {!application.submitted && (
               <>
-                <PillButton
+                {/* Unlike the board and the discovery list, "looks good"
+                    settles nothing here — what settles an application is having
+                    sent it, which is the button next to this one. So all three
+                    intents are messages. */}
+                <NegotiationSettleButton
+                  state={application}
                   disabled={streaming}
-                  onClick={() =>
+                  labels={{
+                    changes: "Send my changes",
+                    threads: "Looks good to me",
+                    commit: "Looks good to me",
+                  }}
+                  onSend={(intent) =>
                     void send(
-                      pending > 0
+                      intent === "changes"
                         ? "I've made some changes to the application — take a look and tell me what you think."
-                        : "The application reads right to me as it stands.",
+                        : "The application reads right to me — but tell me what's still open on it before I send it.",
                     )
                   }
-                >
-                  {pending > 0 ? "Send my changes" : "Looks good to me"}
-                </PillButton>
+                  onCommit={() =>
+                    void send("The application reads right to me as it stands.")
+                  }
+                />
                 <PillButton
                   $primary
                   disabled={streaming}
                   onClick={() => {
                     if (needsConfirm) {
                       setConfirmingSubmit(true);
+                      // Hank reads the form and raises what's outstanding in his
+                      // own words. The button is already re-labelled, so the
+                      // next tap submits whatever he comes back with.
+                      void send(
+                        "I'm ready to mark this one submitted — is there anything still open on it I should deal with first?",
+                      );
                       return;
                     }
                     void send(
@@ -727,9 +749,8 @@ function ApplicationItemCard({
   // One thing the outline says: there's a change here Hank hasn't seen, and it
   // rides the next message. A question described by hand counts even with
   // nothing written under it — the form asks something he can't see.
-  const pending = item.edited || item.addedNotRelayed;
   return (
-    <Item $pending={pending}>
+    <Item $pending={item.pending}>
       <ItemHead>
         <ItemLabel>
           {renamingLabel ? (
@@ -776,11 +797,7 @@ function ApplicationItemCard({
               prompt="Remove it and its answer?"
             />
           )}
-          {pending && (
-            <Tag $tone="accent">
-              {item.edited ? "edited" : "added"} · not sent yet
-            </Tag>
-          )}
+          {item.pending && <PendingTag change={item.change} />}
           {item.author && <AuthorMark author={item.author} />}
         </HeadMarks>
       </ItemHead>

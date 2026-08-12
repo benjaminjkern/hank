@@ -10,10 +10,11 @@ import { JobInteractionStatus } from "@/generated/prisma/client";
 import { companyLogoUrl } from "@/lib/companyLogo";
 import { prisma } from "@/server/db/prisma";
 import {
+  applicationEditsFor,
   authorFor,
-  readProposedDrafts,
   readReuseFlags,
   readShortAnswers,
+  type ApplicationEdit,
   type DraftAuthor,
   type DraftedRow,
 } from "@/server/entities/jobs/applicationDrafts";
@@ -31,6 +32,10 @@ import type {
   ApplicationDecision,
   DraftVerdict,
 } from "@/server/subagents/registry/applicationDecider";
+import type {
+  NegotiationRow,
+  NegotiationState,
+} from "@/server/views/negotiationPanel";
 import { normalizeForCompare } from "@/utils/text";
 
 export type ApplicationItemStatus =
@@ -43,7 +48,7 @@ export type ApplicationItemStatus =
   // Nothing written. `note` says why, when Hank had a reason.
   | "empty";
 
-export type ApplicationItem = {
+export type ApplicationItem = NegotiationRow & {
   id: string;
   kind: "cover_letter" | "question";
   // "Cover letter", or the question as the form asks it.
@@ -58,8 +63,10 @@ export type ApplicationItem = {
   // written, or when nothing stamped it.
   author: DraftAuthor | null;
   status: ApplicationItemStatus;
-  // Diverges from what Hank last wrote, so it rides the next chat message.
-  edited: boolean;
+  // What the pending change DID, in the same vocabulary the relay reports it to
+  // Hank in — so the page's tag says "written" for text the user typed from
+  // scratch rather than calling it an edit. Null when nothing is pending.
+  change: ApplicationEdit["change"] | null;
   // Hank's one-line reason for leaving this alone, shown under an empty item.
   note: string | null;
   // What the decider ruled for this item. "skip" is the panel's cue to file it
@@ -72,9 +79,6 @@ export type ApplicationItem = {
   // question is what the form actually says, and someone else's wording isn't
   // theirs to change — both render read-only.
   addedByYou: boolean;
-  // Added by hand and not yet carried to Hank. Counts toward pendingEditCount
-  // exactly like an edited answer: the form asks something he can't see.
-  addedNotRelayed: boolean;
   // What the review couldn't settle about THIS item, in the reviewer's own
   // words, sitting against the text it's about and clearing when those words
   // change. The register follows who wrote the text: an objection to Hank's
@@ -83,7 +87,7 @@ export type ApplicationItem = {
   findings: Array<{ note: string; register: "question" | "note" }>;
 };
 
-export type ApplicationView = {
+export type ApplicationView = NegotiationState & {
   jobId: string;
   jobSlug: string | null;
   jobTitle: string;
@@ -102,16 +106,35 @@ export type ApplicationView = {
   // The form takes a cover letter (so the page offers one unprompted).
   wantsCoverLetter: boolean;
   items: ApplicationItem[];
-  // Items whose text hasn't been relayed to Hank yet.
-  pendingEditCount: number;
-  // Open findings across every item — what submit asks about. The page doesn't
-  // report the review's VERDICT: what a pass concluded is news, and news is
-  // said once in chat by whoever ran it rather than displayed indefinitely by a
-  // page that has no way to notice it has gone stale. What survives here is
-  // per-item and self-clearing: a finding sits against the text it objects to
-  // and goes when that text is rewritten.
-  openFindingCount: number;
 };
+
+// Everything still owed a conversation before this application is settled, and
+// the two halves are different failures:
+//
+//   - a review finding nobody answered — the read-back objected to what's on the
+//     page and the words it objected to are still there;
+//   - a question the decider handed BACK ("ask_user") that still has nothing
+//     written under it — Hank judged he couldn't answer it without the user, and
+//     the user hasn't either.
+//
+// The second half is why this isn't just a finding count: an unanswered ask_user
+// question never reaches the critic, because there is no draft to read back.
+//
+// A required question the decider never flagged does NOT count. This page exists
+// for the writing that is hard — cover letters and short answers — and treating
+// every blank stock field as an open thread would hold a submit on things the
+// user fills in on the real form in seconds.
+function openThreadCount(items: ApplicationItem[]): number {
+  return items.reduce(
+    (n, i) =>
+      n +
+      // Counted per finding, not per item: one answer can carry two separate
+      // objections, and settling one doesn't settle the other.
+      i.findings.length +
+      (i.verdict === "ask_user" && !(i.text ?? "").trim() ? 1 : 0),
+    0,
+  );
+}
 
 export async function loadApplicationView(
   userId: string,
@@ -182,6 +205,15 @@ export async function loadApplicationView(
         note: f.note,
         register: author === "user" ? ("note" as const) : ("question" as const),
       }));
+  // ONE source for "does this diverge from what Hank last wrote" — the same
+  // function the relay reports the divergence to him with, so the page's tag and
+  // the message he reads can never disagree about what changed, and both treat
+  // editing back to his wording as a no-op. A hand-added question is folded in
+  // below: it has no text to diverge, but the form asking something he can't
+  // read is a change all the same.
+  const changeByItem = new Map(
+    applicationEditsFor(row).map((e) => [e.itemId, e.change]),
+  );
   const answers = readShortAnswers(row.shortAnswers);
   const reuseFlags = readReuseFlags(row.shortAnswersReuse);
   const answerByQuestion = new Map(
@@ -210,9 +242,8 @@ export async function loadApplicationView(
         verdict: decision?.coverLetter?.verdict ?? null,
         note: decision?.coverLetter?.reason ?? null,
         author: authorFor(row, { kind: "cover_letter" }),
-        edited: isEdited(row, { kind: "cover_letter" }),
+        change: changeByItem.get(COVER_LETTER_ID) ?? null,
         addedByYou: false,
-        addedNotRelayed: false,
         findings: findingsFor(
           COVER_LETTER_ID,
           authorFor(row, { kind: "cover_letter" }),
@@ -244,9 +275,12 @@ export async function loadApplicationView(
         verdict: verdict?.verdict ?? (isStockFieldType(q.type) ? "skip" : null),
         note: verdict?.reason ?? null,
         author: authorFor(row, { kind: "question", question: q.question }),
-        edited: isEdited(row, { kind: "question", question: q.question }),
+        // A hand-added question is pending on its own account — there's no text
+        // to diverge, and the news is that the form asks this at all.
+        change:
+          changeByItem.get(q.id) ??
+          (q.addedByUserId === userId && !q.relayedAt ? "added" : null),
         addedByYou: q.addedByUserId === userId,
-        addedNotRelayed: q.addedByUserId === userId && !q.relayedAt,
         findings: findingsFor(
           q.id,
           authorFor(row, { kind: "question", question: q.question }),
@@ -273,9 +307,8 @@ export async function loadApplicationView(
         verdict: null,
         note: null,
         author: authorFor(row, { kind: "question", question: a.question }),
-        edited: isEdited(row, { kind: "question", question: a.question }),
+        change: changeByItem.get(questionId(a.question)) ?? null,
         addedByYou: false,
-        addedNotRelayed: false,
         findings: findingsFor(
           questionId(a.question),
           authorFor(row, { kind: "question", question: a.question }),
@@ -285,6 +318,7 @@ export async function loadApplicationView(
   }
 
   const job = row.job;
+  const submitted = SUBMITTED_STATUSES.includes(row.status);
   return {
     jobId: job.id,
     jobSlug: job.slug,
@@ -300,15 +334,18 @@ export async function loadApplicationView(
         }
       : null,
     companyName: job.company?.name ?? job.companyName ?? "this company",
-    submitted: SUBMITTED_STATUSES.includes(row.status),
+    submitted,
+    // A submitted application is a record: the text stays editable because it's
+    // reusable elsewhere, but there is no longer a negotiation to settle.
+    open: !submitted,
+    pendingCount: items.filter((i) => i.pending).length,
+    openThreadCount: openThreadCount(items),
     formUnreadable:
       (merged.formUnavailable || merged.formNeverFetched) &&
       merged.userAddedQuestions.length === 0,
     formEmpty: items.length === 0 && !merged.formNeverFetched,
     wantsCoverLetter: merged.formWantsCoverLetter,
     items,
-    pendingEditCount: items.filter((i) => i.edited || i.addedNotRelayed).length,
-    openFindingCount: openFindings.length,
   };
 }
 
@@ -325,25 +362,6 @@ const SUBMITTED_STATUSES: JobInteractionStatus[] = [
   JobInteractionStatus.DELISTED,
 ];
 
-function isEdited(
-  row: DraftedRow,
-  item: { kind: "cover_letter" } | { kind: "question"; question: string },
-): boolean {
-  const drafts = readProposedDrafts(row.proposedDrafts);
-  if (item.kind === "cover_letter") {
-    const base = drafts?.coverLetter ?? null;
-    return (base ?? "").trim() !== (row.coverLetter ?? "").trim();
-  }
-  const norm = normalizeForCompare(item.question);
-  const live = readShortAnswers(row.shortAnswers).find(
-    (a) => normalizeForCompare(a.question) === norm,
-  );
-  const base = drafts?.answers.find(
-    (a) => normalizeForCompare(a.question) === norm,
-  );
-  return (base?.text ?? "").trim() !== (live?.answer ?? "").trim();
-}
-
 function buildItem(input: {
   id: string;
   kind: "cover_letter" | "question";
@@ -355,9 +373,8 @@ function buildItem(input: {
   verdict: DraftVerdict | null;
   note: string | null;
   author: DraftAuthor | null;
-  edited: boolean;
+  change: ApplicationEdit["change"] | null;
   addedByYou: boolean;
-  addedNotRelayed: boolean;
   findings: Array<{ note: string; register: "question" | "note" }>;
 }): ApplicationItem {
   const hasText = (input.text ?? "").trim().length > 0;
@@ -381,12 +398,12 @@ function buildItem(input: {
     reuse: input.reuse,
     author: hasText ? input.author : null,
     status,
-    edited: input.edited,
+    change: input.change,
+    pending: input.change !== null,
     // A reason only earns space when there's nothing written to read instead.
     note: hasText ? null : input.note?.trim() || null,
     verdict: input.verdict,
     addedByYou: input.addedByYou,
-    addedNotRelayed: input.addedNotRelayed,
     findings: input.findings,
   };
 }
