@@ -30,7 +30,11 @@ import {
   ReuseSwitch,
 } from "./shared/applicationArtifacts";
 import { AuthorMark } from "./shared/AuthorMark";
-import { NegotiationSettleButton, PendingTag } from "./shared/negotiation";
+import {
+  NegotiationBar,
+  NegotiationButton,
+  PendingTag,
+} from "./shared/negotiation";
 
 const Root = styled.div`
   display: flex;
@@ -71,26 +75,6 @@ const ActionRow = styled.div`
   gap: ${({ theme }) => theme.space.sm};
 `;
 
-const PillButton = styled.button<{ $primary?: boolean }>`
-  font-size: 12px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  cursor: pointer;
-  border: 1px solid ${({ theme }) => theme.colors.accent};
-  color: ${({ theme, $primary }) =>
-    $primary ? theme.colors.bg : theme.colors.accent};
-  background: ${({ theme, $primary }) =>
-    $primary ? theme.colors.accent : "transparent"};
-
-  &:hover:not(:disabled) {
-    opacity: 0.85;
-  }
-  &:disabled {
-    cursor: default;
-    opacity: 0.5;
-  }
-`;
-
 const LinkOut = styled.a`
   font-size: 12px;
   color: ${({ theme }) => theme.colors.accent};
@@ -98,8 +82,9 @@ const LinkOut = styled.a`
 `;
 
 // The outline is the page's one piece of live state: this box holds a change
-// Hank hasn't been told about. Nothing else on the card is allowed to use the
-// accent colour, so "outlined" reads as one thing.
+// Hank hasn't been told about. Nothing else on the card may use the accent
+// colour, and the border is the whole treatment — the same one the board and
+// the discovery list draw, so it reads identically wherever it's met.
 const Item = styled.section<{ $pending: boolean }>`
   display: flex;
   flex-direction: column;
@@ -108,8 +93,6 @@ const Item = styled.section<{ $pending: boolean }>`
   border: 1px solid
     ${({ theme, $pending }) =>
       $pending ? theme.colors.accent : theme.colors.border};
-  box-shadow: ${({ theme, $pending }) =>
-    $pending ? `0 0 0 3px ${theme.colors.accent}22` : "none"};
   border-radius: ${({ theme }) => theme.radius.md};
   background: ${({ theme }) => theme.colors.bgPanel};
 `;
@@ -408,64 +391,6 @@ export function ApplicationView({
         )}
         {!readOnly && (
           <ActionRow>
-            {!application.submitted && (
-              <>
-                {/* Unlike the board and the discovery list, "looks good"
-                    settles nothing here — what settles an application is having
-                    sent it, which is the button next to this one. So all three
-                    intents are messages. */}
-                <NegotiationSettleButton
-                  state={application}
-                  disabled={streaming}
-                  labels={{
-                    changes: "Send my changes",
-                    threads: "Looks good to me",
-                    commit: "Looks good to me",
-                  }}
-                  onSend={(intent) =>
-                    void send(
-                      intent === "changes"
-                        ? "I've made some changes to the application — take a look and tell me what you think."
-                        : "The application reads right to me — but tell me what's still open on it before I send it.",
-                    )
-                  }
-                  onCommit={() =>
-                    void send("The application reads right to me as it stands.")
-                  }
-                />
-                <PillButton
-                  $primary
-                  disabled={streaming}
-                  onClick={() => {
-                    if (needsConfirm) {
-                      setConfirmingSubmit(true);
-                      // Hank reads the form and raises what's outstanding in his
-                      // own words. The button is already re-labelled, so the
-                      // next tap submits whatever he comes back with.
-                      void send(
-                        "I'm ready to mark this one submitted — is there anything still open on it I should deal with first?",
-                      );
-                      return;
-                    }
-                    void send(
-                      buildWidgetSubmissionMessage(
-                        {
-                          kind: "confirm_application_submit",
-                          jobId: application.jobId,
-                        },
-                        "[I submitted ✓]",
-                        {
-                          jobTitle: application.jobTitle,
-                          companyName: application.companyName,
-                        },
-                      ),
-                    );
-                  }}
-                >
-                  {asking ? "Yes, mark it submitted" : "I submitted ✓"}
-                </PillButton>
-              </>
-            )}
             {application.postingUrl && (
               <LinkOut
                 href={application.postingUrl}
@@ -506,6 +431,48 @@ export function ApplicationView({
           described by hand. */}
       {!readOnly && <AddQuestion jobId={application.jobId} />}
       {fillInYourself.length > 0 && <StockFields items={fillInYourself} />}
+
+      {!readOnly && !application.submitted && (
+        // The application's settle button is "I submitted" — what ends this
+        // negotiation is having actually sent the form, not agreeing that it
+        // reads well. So there is no separate "looks good to me" here: with no
+        // unsent changes and nothing open, saying so to Hank would be a turn
+        // spent on nothing.
+        //
+        // Two taps while something is open, and the first one ASKS HIM rather
+        // than printing a count — what's outstanding is a question about this
+        // person that only they can settle, and he can put it in words. The
+        // second submits regardless: it's their call, never a gate.
+        <NegotiationBar state={application}>
+          <NegotiationButton
+            disabled={streaming}
+            onClick={() => {
+              if (needsConfirm) {
+                setConfirmingSubmit(true);
+                void send(
+                  "I'm ready to mark this one submitted — is there anything still open on it I should deal with first?",
+                );
+                return;
+              }
+              void send(
+                buildWidgetSubmissionMessage(
+                  {
+                    kind: "confirm_application_submit",
+                    jobId: application.jobId,
+                  },
+                  "[I submitted ✓]",
+                  {
+                    jobTitle: application.jobTitle,
+                    companyName: application.companyName,
+                  },
+                ),
+              );
+            }}
+          >
+            {asking ? "Yes, mark it submitted" : "I submitted ✓"}
+          </NegotiationButton>
+        </NegotiationBar>
+      )}
     </Root>
   );
 }
@@ -797,7 +764,7 @@ function ApplicationItemCard({
               prompt="Remove it and its answer?"
             />
           )}
-          {item.pending && <PendingTag change={item.change} />}
+          <PendingTag pending={item.pending} change={item.change} />
           {item.author && <AuthorMark author={item.author} />}
         </HeadMarks>
       </ItemHead>

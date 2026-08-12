@@ -97,7 +97,15 @@ export async function* dispatchTopLevelSubmission(
   const commitSubmission = parseCommitNegotiationSubmission(userMessage);
   if (commitSubmission) {
     const entryTarget = await dispatchCommitNegotiation(commitSubmission, args);
-    if (entryTarget) return { kind: "enter", entryTarget };
+    if (entryTarget) {
+      // Move the panel off the surface that just settled — it has nothing left
+      // to decide, so leaving it up offers a dead screen. The arm this enters
+      // may move it again; this is the one move that has to happen either way.
+      yield* yieldUiEvents(
+        (await buildShowEvents(userId, showTargetFor(entryTarget))).events,
+      );
+      return { kind: "enter", entryTarget };
+    }
   }
 
   // "Find more" / "Done adding" after a finished add. More asks what to look for

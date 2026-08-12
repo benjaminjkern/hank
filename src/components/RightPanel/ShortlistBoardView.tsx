@@ -31,7 +31,12 @@ import type {
   ShortlistBoardTier,
 } from "@/server/views/shortlistBoard";
 
-import { NegotiationSettleButton, PanelRowCard } from "./shared/negotiation";
+import {
+  NegotiationBar,
+  NegotiationButton,
+  PanelRowCard,
+  PendingTag,
+} from "./shared/negotiation";
 import {
   StanceMarks,
   STANCE_OF_VERDICT,
@@ -241,6 +246,7 @@ function BoardRow({
     <PanelRowCard $pending={row.pending}>
       <RowTop>
         <RowTitle>{row.title}</RowTitle>
+        <PendingTag pending={row.pending} />
       </RowTop>
       {rowMeta(row) && <RowMeta>{rowMeta(row)}</RowMeta>}
       {row.reason && <RowReason>{row.reason}</RowReason>}
@@ -319,37 +325,6 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
   return (
     <Root>
       <Header>
-        {board.open && !readOnly && (
-          // "Looks good" with nothing outstanding settles the board directly —
-          // there is nothing on it Hank hasn't already agreed with, so the turn
-          // he'd spend re-reading it buys nothing. Anything else is a message.
-          <NegotiationSettleButton
-            state={board}
-            disabled={streaming}
-            labels={{
-              changes: "Send my changes",
-              threads: "Send my changes",
-              commit: "Looks good to me",
-            }}
-            onSend={() =>
-              void send(
-                "These are my changes to the board — if you agree with them, go ahead and lock the shortlist in.",
-              )
-            }
-            onCommit={() =>
-              void send(
-                buildWidgetSubmissionMessage(
-                  {
-                    kind: "commit_negotiation",
-                    panel: "shortlist-board",
-                    companyId: board.companyId,
-                  },
-                  "[The board looks right — lock it in]",
-                ),
-              )
-            }
-          />
-        )}
         <H2>{board.companyName} — shortlist</H2>
         {!board.open && (
           <OpenNote>
@@ -370,6 +345,31 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
       </TierSection>
       {discard.length > 0 && (
         <DiscardGroup companyId={board.companyId} placed={discard} />
+      )}
+
+      {!readOnly && (
+        // Only when there is nothing left to send: every row already carries the
+        // mark Hank proposed and the user agreed with, so the turn he'd spend
+        // re-reading the board buys nothing.
+        <NegotiationBar state={board}>
+          <NegotiationButton
+            disabled={streaming}
+            onClick={() =>
+              void send(
+                buildWidgetSubmissionMessage(
+                  {
+                    kind: "commit_negotiation",
+                    panel: "shortlist-board",
+                    companyId: board.companyId,
+                  },
+                  "[The board looks right — lock it in]",
+                ),
+              )
+            }
+          >
+            Looks good to me
+          </NegotiationButton>
+        </NegotiationBar>
       )}
     </Root>
   );
