@@ -12,6 +12,7 @@
 import {
   CompanyEventType,
   JobDeferReason,
+  JobEventType,
   JobInteractionStatus,
   ProposedVerdict,
 } from "@/generated/prisma/client";
@@ -116,6 +117,31 @@ export async function roundStartedAt(
   if (!scraped) return committed;
   if (!committed) return scraped;
   return scraped > committed ? scraped : committed;
+}
+
+// The roles this round's automatic filtering closed, newest round only. Three
+// callers need the same answer and must not drift: the board shows them as its
+// auditable tail, the seed stances them when they're ALL that's left, and the
+// walkthrough asks whether there's a round to show at all.
+//
+// Scoped by `roundStartedAt`, so a commit ends the round and the next call comes
+// back empty — which is also what stops the walkthrough re-opening a board it
+// just settled.
+export async function closedThisRoundJobIds(
+  userId: string,
+  companyId: string,
+): Promise<string[]> {
+  const roundStart = await roundStartedAt(userId, companyId);
+  if (!roundStart) return [];
+  const closed = await prisma.jobEvent.findMany({
+    where: {
+      type: JobEventType.CLOSED,
+      occurredAt: { gte: roundStart },
+      jobInteraction: { userId, job: { companyId } },
+    },
+    select: { jobInteraction: { select: { jobId: true } } },
+  });
+  return [...new Set(closed.map((e) => e.jobInteraction.jobId))];
 }
 
 export type BoardEditRelay = {

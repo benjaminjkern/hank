@@ -75,28 +75,20 @@ export function capShortlistPicks(
   return { kept, rawCount, capped: true };
 }
 
-export type SeedTallies = {
-  picked: number;
-  borderline: number;
-  passed: number;
-  capped: boolean;
-};
-
+// Returns nothing: what landed is read back off the BOARD, which also carries
+// the roles this round's earlier passes closed. A tally counted here can only
+// ever describe the candidates the ranker saw, and quoting it beside a screen
+// showing the rest is what made the seed message contradict the panel.
 export async function seedBoardStances(args: {
   userId: string;
   companyId: string;
   candidates: ShortlistRankable[];
   picks: ShortlistJobsOutput;
-}): Promise<SeedTallies> {
-  const { kept, capped } = capShortlistPicks(
-    args.picks.pickedJobIds,
-    args.candidates,
-  );
+}): Promise<void> {
+  const { kept } = capShortlistPicks(args.picks.pickedJobIds, args.candidates);
   const keptSet = new Set(kept);
   const passedSet = new Set(args.picks.passedJobIds);
   const now = new Date();
-
-  const tallies: SeedTallies = { picked: 0, borderline: 0, passed: 0, capped };
   // Each row carries its own stance reason, so there is no `updateMany` that
   // covers them all — that per-row-values case is exactly what bulkUpdate is
   // for, and it is ONE statement for the whole board.
@@ -123,9 +115,6 @@ export async function seedBoardStances(args: {
       : passedSet.has(c.id)
         ? ProposedVerdict.PASS
         : ProposedVerdict.BORDERLINE;
-    if (verdict === ProposedVerdict.PICK) tallies.picked++;
-    else if (verdict === ProposedVerdict.PASS) tallies.passed++;
-    else tallies.borderline++;
     const interactionId = interactionIdByJobId.get(c.id);
     if (!interactionId) continue;
     patches.push({
@@ -142,6 +131,4 @@ export async function seedBoardStances(args: {
     });
   }
   await bulkUpdate("JobInteraction", "id", patches);
-
-  return tallies;
 }

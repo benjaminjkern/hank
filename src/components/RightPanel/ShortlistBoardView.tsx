@@ -25,10 +25,11 @@ import styled from "styled-components";
 
 import { buildWidgetSubmissionMessage } from "@/components/Chat/widgets/types";
 import { useChatStore } from "@/lib/chatStore";
-import type {
-  ShortlistBoardView as ShortlistBoardData,
-  ShortlistBoardRow,
-  ShortlistBoardTier,
+import {
+  BOARD_GROUP_OF_TIER,
+  type ShortlistBoardView as ShortlistBoardData,
+  type ShortlistBoardRow,
+  type ShortlistBoardTier,
 } from "@/server/views/shortlistBoard";
 
 import {
@@ -162,26 +163,6 @@ const ScanTag = styled.span`
   color: ${({ theme }) => theme.colors.textSubtle};
 `;
 
-// The screen has two groups, not one per tier, and the line between them is
-// what COMMITTING does: `keep` survives it, `discard` is closed by it. Rows
-// arrive with their mark pre-selected, so a heading per verdict only restated
-// what the marks already say.
-//
-// That's why "not read yet" and "on hold" sit with the live rows despite nobody
-// having ranked them — they survive the commit, so filing them under a heading
-// about closing would be a lie about what happens next.
-type BoardGroup = "keep" | "discard";
-
-const GROUP_OF_TIER: Record<ShortlistBoardTier, BoardGroup> = {
-  picks: "keep",
-  borderline: "keep",
-  undecided: "keep",
-  notReadYet: "keep",
-  onHold: "keep",
-  pass: "discard",
-  filteredThisRound: "discard",
-};
-
 const DISCARD_LABEL = "Closing these";
 const DISCARD_HINT =
   "Marked pass, or ruled out before the shortlist. Committing closes them — mark one Shortlist or Defer to pull it back.";
@@ -256,9 +237,6 @@ function BoardRow({
           {row.overriddenAgentReason ? ` — ${row.overriddenAgentReason}` : ""}
         </ScanTag>
       )}
-      {row.unfinishedApplication && (
-        <ScanTag>✎ You started an application here and never sent it.</ScanTag>
-      )}
       {row.scanDissent && <ScanTag>⚠ {row.scanDissent}</ScanTag>}
       <StanceRow>
         {!readOnly && row.markable && (
@@ -318,20 +296,36 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
   const keep: PlacedRow[] = [];
   const discard: PlacedRow[] = [];
   for (const { tier, rows } of board.tiers) {
-    const bucket = GROUP_OF_TIER[tier] === "keep" ? keep : discard;
+    const bucket = BOARD_GROUP_OF_TIER[tier] === "keep" ? keep : discard;
     for (const row of rows) bucket.push({ tier, row });
   }
+
+  // A round that ruled everything out still gets this screen — the boundary
+  // between the passes isn't visible to the user, so "nothing survived the
+  // filtering" and "the ranker passed on the survivors" must not look different.
+  // What changes is the framing: there is nothing to approve, only a verdict to
+  // overturn, so the note says what committing does instead of leaving "Looks
+  // good to me" to mean "close this company out".
+  const nothingKept = keep.length === 0 && discard.length > 0;
 
   return (
     <Root>
       <Header>
         <H2>{board.companyName} — shortlist</H2>
-        {!board.open && (
+        {!board.open ? (
           <OpenNote>
             This shortlist is locked in — nothing left to decide here. To change
             your mind on a role, just tell Hank in chat.
           </OpenNote>
-        )}
+        ) : nothingKept ? (
+          <OpenNote>
+            None of the roles Hank looked at this round are a fit, so there is
+            nothing to shortlist. Disagree on one? Mark it Shortlist or Defer
+            and he will pull it back. Otherwise settling this closes them out
+            and leaves {board.companyName} on your list, watched for new
+            postings.
+          </OpenNote>
+        ) : null}
       </Header>
       <TierSection>
         {keep.map(({ tier, row }) => (
@@ -367,7 +361,9 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
               )
             }
           >
-            Looks good to me
+            {nothingKept
+              ? "Nothing here — mark them caught up"
+              : "Looks good to me"}
           </NegotiationButton>
         </NegotiationBar>
       )}

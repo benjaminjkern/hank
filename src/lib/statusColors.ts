@@ -96,26 +96,16 @@ export function statusTone(status: string): StatusTone {
   }
 }
 
-// User-facing label for a raw status / reason enum. The right-panel pills render
-// the raw enum verbatim otherwise; this maps the ones whose enum name shouldn't
-// show as-is. `CLOSED` Title-cases to "Closed" automatically (the user-close
-// status), so it needs no entry. `DELISTED` (posting came down on its own) gets
-// a friendlier phrase. Anything unmapped is Title-Cased (NOT_A_MATCH → "Not a
-// match").
-const STATUS_LABELS: Record<string, string> = {
-  DELISTED: "No longer listed",
-  SHORTLISTING: "Your call", // CompanyStatus — board open, waiting on the user
-  APPLYING: "Applying", // CompanyStatus — shortlist committed, working the survivors
-  IN_FLIGHT: "In flight", // CompanyStatus — application(s) submitted, awaiting reply
-  IN_PROCESS: "In process", // CompanyStatus — employer engaged (recruiter reply / interview)
-  PAUSED: "Paused", // CompanyStatus — set aside for now (was DEFERRED)
-  CAUGHT_UP: "Caught up",
-  BLOCKED: "Couldn't load roles", // CompanyStatus — a technical set-aside, revivable
-  INTERVIEW_SCHEDULED: "Interview scheduled",
-  INTERVIEW_DEBRIEF: "Interview debrief",
-  WAITING_ON_RESPONSE: "Waiting to hear back",
-  NOT_A_MATCH: "Not a match",
-  LOCATION_MISMATCH: "Location mismatch",
+// A STATUS renders as its own name, always — Title-cased straight off the enum.
+// There is deliberately no per-status label map: one that reworded a few left
+// the user reading a different vocabulary per pill, and "Your call"
+// (SHORTLISTING) told them what to do rather than naming the state at all.
+//
+// REASONS are the exception, and only where the enum is jargon rather than a
+// short phrase: a block reason has to say what actually went wrong, and
+// "Auth walled" doesn't. Everything else — every status, plus reasons like
+// NOT_A_MATCH that Title-case to exactly the words you'd choose — falls through.
+const REASON_LABELS: Record<string, string> = {
   CANNOT_SCRAPE: "Couldn't load roles",
   AMBIGUOUS_NAME: "Name matches multiple companies",
   NO_OWN_BOARD: "Hires under a parent company",
@@ -124,7 +114,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 export function statusLabel(status: string | null | undefined): string {
   if (!status) return "";
-  const mapped = STATUS_LABELS[status];
+  const mapped = REASON_LABELS[status];
   if (mapped) return mapped;
   // Title-case the raw enum: SHORTLISTED → "Shortlisted", USER_REJECTED →
   // "User rejected".

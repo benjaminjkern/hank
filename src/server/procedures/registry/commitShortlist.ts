@@ -117,6 +117,7 @@ export async function runCommitShortlist(
     sessionId: string;
     companyId: string;
     companyName: string;
+    confirmed?: boolean;
   },
 ): Promise<CommitShortlistResult> {
   // Both reads happen BEFORE the commit clears the stances and re-anchors the
@@ -130,6 +131,7 @@ export async function runCommitShortlist(
   const result = await commitShortlist({
     userId: args.userId,
     companyId: args.companyId,
+    confirmed: args.confirmed,
   });
   if (!result.ok) return result;
 
