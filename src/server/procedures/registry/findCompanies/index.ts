@@ -37,7 +37,7 @@ const MIN_PROFILE_CHARS = 20;
 const MIN_DIRECTION_CHARS = 3;
 
 export async function runFindCompanies(
-  args: { direction?: string; count?: number },
+  args: { direction?: string; count?: number; append?: boolean },
   ctx: RunContext,
 ): Promise<FindCompaniesResult> {
   const input = await loadFindCompaniesInput({
@@ -64,9 +64,11 @@ export async function runFindCompanies(
     userId: ctx.userId,
     runId: ctx.runId,
     sessionId: ctx.sessionId,
+    append: args.append,
     suggestions: r.output.candidates.map((c) => ({
       name: c.name,
       reason: c.oneLineReason,
+      summary: c.summary,
       url: c.url,
     })),
   });

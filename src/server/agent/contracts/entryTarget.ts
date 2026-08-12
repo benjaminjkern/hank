@@ -28,7 +28,10 @@ export type EntryTarget =
   // infra"), or absent to work from the user's thesis alone. This is a
   // discriminated union, so a variant carrying no id is fine: every consumer
   // narrows on `kind` first.
-  | { kind: "discovery"; direction?: string }
+  // `append` keeps what's already on the panel and adds to it. Absent (the
+  // default) replaces it: a fresh search is normally a fresh list, and growing
+  // the panel every time would bury the batch the user is looking at.
+  | { kind: "discovery"; direction?: string; append?: boolean }
   // Settle the discovery list the user has been marking up. Its own variant
   // rather than a flag on `discovery`, because it enters a different arm: one
   // SEARCHES, the other COMMITS what the searching produced.

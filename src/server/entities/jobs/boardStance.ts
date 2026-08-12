@@ -284,5 +284,5 @@ export function renderBoardEditRelayText(edits: BoardEditRelay[]): string {
       : "";
     return `- ${e.title}${e.companyName ? ` (${e.companyName})` : ""}: ${to}${from}`;
   });
-  return `(From the shortlist board — the user changed ${edits.length === 1 ? "this row" : "these rows"} by hand since their last message. Your own reasoning is preserved on each row, so engage with the disagreement rather than restating it:\n${lines.join("\n")})`;
+  return `(From the shortlist board — the user changed ${edits.length === 1 ? "this row" : "these rows"} by hand since their last message. Your own reasoning is preserved on each row, so engage with the disagreement rather than restating it. If they overrode you and said nothing about why, ASK — once, covering all of them, before you commit the board. A stated reason carries to the next company; a silent override teaches you nothing:\n${lines.join("\n")})`;
 }

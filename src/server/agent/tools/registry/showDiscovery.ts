@@ -34,8 +34,9 @@ export const showDiscoveryTool: ToolDef<Record<string, never>> = {
     return {
       content: `Put the list of ${count} back on the user's screen. Nothing else happens — this is display only; they still have to settle it and you still have to call commit_discovery.`,
       events: show.events,
+      // The chip names the destination, never the contents — see discoveryArm.
       statusLines: [
-        `Pulled up ${formatFocusRefToken("discovery", null, count)}.`,
+        `Pulled up ${formatFocusRefToken("discovery", null, "Companies to add")}.`,
       ],
     };
   },

@@ -83,6 +83,10 @@ export type FindCompaniesInput = {
 export type FindCompaniesCandidate = {
   name: string;
   oneLineReason: string;
+  // What this search actually established about the company — the grounding the
+  // main agent elaborates from when the user asks about a candidate. Absent when
+  // the search had nothing beyond the name it could stand behind.
+  summary?: string;
   // The canonical careers/ATS board URL the search surfaced for this company,
   // when the sub-agent is confident it's THIS company's board.
   // Carried through the checklist into the URL hunter as a "verify this first"
@@ -128,6 +132,11 @@ const COMMIT_CANDIDATES_SCHEMA: SubAgentOutputSchema = {
               description:
                 'Why this is on the list. One sentence, plain English (no enum codes / path references — the user reads it). "Backend-heavy fintech raising Series B; payments-infra roles match the user\'s thesis."',
             },
+            summary: {
+              type: "string",
+              description:
+                "What you ESTABLISHED about this company, 2-4 sentences: what it does, its stage/size/funding, where it's based, anything about how it hires that a candidate would want to know. This is what the main agent quotes when the user asks \"tell me more about that one\", so it must be things you can stand behind — what a search result said, or what you know well enough to assert. Do NOT pad it: a shorter honest summary beats a confident wrong one, and omitting the field entirely is correct when the name is all you've got. Don't repeat oneLineReason; that's the fit case, this is the company.",
+            },
             url: {
               type: "string",
               description:
@@ -148,7 +157,12 @@ const COMMIT_CANDIDATES_SCHEMA: SubAgentOutputSchema = {
 };
 
 type CommitCandidatesInput = {
-  candidates?: Array<{ name?: string; oneLineReason?: string; url?: string }>;
+  candidates?: Array<{
+    name?: string;
+    oneLineReason?: string;
+    summary?: string;
+    url?: string;
+  }>;
   provenance?: string;
   // Injected by the runner from `reasoning` — see FindCompaniesOutput.analysis.
   analysis?: string;
@@ -317,7 +331,8 @@ Acknowledge the translation in \`analysis\`.
 # Output
 
 Call commit_candidates with:
-- candidates: [{name, oneLineReason, url?}] — name as the user would recognize it; oneLineReason explains plausible fit in plain English.
+- candidates: [{name, oneLineReason, summary?, url?}] — name as the user would recognize it; oneLineReason explains plausible fit in plain English.
+- **summary (optional, per candidate):** 2-4 sentences on what the company IS — what it does, stage/funding, location, how it hires. The main agent has no web access, so this is the ONLY grounding it has when the user asks about a candidate; without it, it answers from its own general knowledge and cannot tell the user which parts are checked. So: only what you can stand behind, and OMIT the field rather than pad it from vague recall.
 - **url (optional, per candidate):** if a search result showed you the company's own careers/ATS board URL and you're confident it belongs to THIS company, include it — it disambiguates name collisions (two real "Runway") and skips a re-hunt. OMIT rather than guess; never fabricate a slug.
 - **provenance:** one plain sentence for the USER on how you found this batch (searched vs. already knew, roughly the split). They see it above the list — plain English, no tool names, no candidate names.
 - In \`analysis\`: searched vs. worked-from-knowledge, any direction you translated, why you cut off.
@@ -366,7 +381,14 @@ export const findCompaniesSubAgent: SubAgentDef<
 
     const candidates: FindCompaniesCandidate[] = (out.candidates ?? [])
       .filter(
-        (c): c is { name: string; oneLineReason: string; url?: string } => {
+        (
+          c,
+        ): c is {
+          name: string;
+          oneLineReason: string;
+          summary?: string;
+          url?: string;
+        } => {
           if (!c.name || !c.oneLineReason) return false;
           return !existingNamesNormalized.has(c.name.toLowerCase());
         },
@@ -374,6 +396,10 @@ export const findCompaniesSubAgent: SubAgentDef<
       .map((c) => ({
         name: c.name.trim(),
         oneLineReason: c.oneLineReason.trim(),
+        summary:
+          c.summary && c.summary.trim().length > 0
+            ? c.summary.trim()
+            : undefined,
         url: c.url && c.url.trim().length > 0 ? c.url.trim() : undefined,
       }))
       // Dedupe by name in case the sub-agent emitted the same company twice.

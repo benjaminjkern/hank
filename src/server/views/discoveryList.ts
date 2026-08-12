@@ -16,6 +16,7 @@
 // (procedures/registry/commitDiscovery).
 
 import { prisma } from "@/server/db/prisma";
+import { currentBatch } from "@/server/entities/companies/companySuggestions";
 import {
   isPending,
   liveMark,
@@ -30,8 +31,12 @@ export type DiscoveryRow = NegotiationRow & {
   id: string;
   name: string;
   reason: string;
+  // What the search established about the company. Null on a row Hank added
+  // himself and on rows written before the search returned one.
+  summary: string | null;
   url: string | null;
-  // Every candidate is proposed as "add"; false means the user unchecked it.
+  // False means the mark in force is "pass" — the user unchecked it, or Hank
+  // did on their say-so.
   checked: boolean;
 };
 
@@ -52,10 +57,12 @@ export async function loadDiscoveryList(
       name: true,
       nameKey: true,
       reason: true,
+      summary: true,
       url: true,
       runId: true,
       createdAt: true,
       userMark: true,
+      agentMark: true,
       relayedMark: true,
     },
   });
@@ -65,13 +72,9 @@ export async function loadDiscoveryList(
     return { rows: [], open: false, pendingCount: 0, openThreadCount: 0 };
   }
 
-  // The newest open row names the current batch. Keyed on runId when there is
-  // one; a null runId (a hand-driven or replayed write) can't be told apart
-  // from any other, so those rows only ever form a batch among themselves.
-  const newest = open[0];
-  const batch = open.filter((r) =>
-    newest.runId === null ? r.runId === null : r.runId === newest.runId,
-  );
+  // One run only — the rule lives in entities/ because Hank's own edits have to
+  // land on the same batch this draws.
+  const batch = currentBatch(open);
 
   // One row per name — recordSuggestions keeps it that way, so a duplicate here
   // predates that and is still worth folding rather than drawing twice.
@@ -87,8 +90,9 @@ export async function loadDiscoveryList(
       id: r.id,
       name: r.name,
       reason: r.reason,
+      summary: r.summary,
       url: r.url,
-      checked: liveMark(r.userMark) === "ADD",
+      checked: liveMark(r) === "ADD",
       pending,
     });
   }
@@ -97,13 +101,23 @@ export async function loadDiscoveryList(
 
 // The same list as plain text for Hank's per-turn context. Marks included —
 // negotiating over the list means knowing which ones the user has unchecked.
+//
+// The summary rides along because "tell me more about that one" is the question
+// this block exists to answer: without it he has a one-line fit case and his own
+// general knowledge, and no way to tell the user which is which.
 export function renderDiscoveryListText(view: DiscoveryListView): string {
   if (view.rows.length === 0) return "";
   const line = (r: DiscoveryRow) =>
-    `- ${r.name} [${r.checked ? MARK_WORDS.ADD : MARK_WORDS.PASS}] — ${r.reason}`;
+    [
+      `- ${r.name} [${r.checked ? MARK_WORDS.ADD : MARK_WORDS.PASS}] — ${r.reason}`,
+      r.summary ? `  ${r.summary}` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
   return [
     "# Companies on the user's screen right now, waiting on a decision",
-    "Every one you found is checked to add by default; the user unchecks what they don't want. Nothing here is committed — `commit_discovery` adds everything still checked and records the rest. Don't re-list these in chat; they're already on screen.",
+    "Every one you found is checked to add by default; the user unchecks what they don't want, and you can mark one yourself with `update_discovery_proposal`. Nothing here is committed — `commit_discovery` adds everything still checked and records the rest. Don't re-list these in chat; they're already on screen.",
+    "The indented line under a company is what the search actually established about it — that's what you answer from when the user asks about one. Anything beyond it is your own general knowledge, so say so.",
     view.rows.map(line).join("\n"),
   ].join("\n");
 }
