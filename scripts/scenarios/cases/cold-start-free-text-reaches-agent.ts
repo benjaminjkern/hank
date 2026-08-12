@@ -20,7 +20,7 @@ const scenario: Scenario = {
         attachmentIds: [],
         sessionIdOverride: TEST_SESSION_ID,
       })) {
-        if (ev.type === "widget")
+        if (ev.type === "pipeline_widget")
           events.push({ type: "widget", kind: ev.kind });
         else if (ev.type === "text")
           events.push({ type: "text", text: ev.text });

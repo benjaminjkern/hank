@@ -13,19 +13,19 @@
 // each parser keys on its own marker kind. It's listed in the order a discovery
 // round runs — checklist, then any name collision it flagged, then add-more.
 //
-// Every branch does the same three things: persist the user's message, run its
-// deterministic dispatch, and report back what the caller should do next
-// (TopLevelSubmissionOutcome). Nothing here calls an LLM to decide anything.
+// Every branch does the same two things: run its deterministic dispatch, and
+// report back what the caller should do next (TopLevelSubmissionOutcome).
+// Nothing here calls an LLM to decide anything, and nothing here writes the
+// user's row — runChat has already done that (see runChat's step 1).
 
-import { yieldUiEvents } from "@/server/agent/contracts";
+import { statusEvent, yieldUiEvents } from "@/server/agent/contracts";
 import type {
   EntryTarget,
   RunContext,
   TurnEvent,
 } from "@/server/agent/contracts";
-import { appendUserMessage, narrateStatus } from "@/server/agent/session";
 import {
-  promptAddMoreCompanies,
+  addMoreCompaniesWidget,
   runDisambiguationResolution,
 } from "@/server/procedures/registry/enrichCompanies";
 import { runWrapSegment } from "@/server/procedures/registry/wrapSegment";
@@ -37,8 +37,6 @@ import {
   parseCompanyDisambiguationSubmission,
 } from "@/server/widgets/parse";
 
-import { buildPanelEditBlocks } from "./panelEditRelay";
-
 // "Find more" says they want another round, not what it should contain.
 const FIND_MORE_NUDGE =
   "(They just finished adding companies and want another round. Ask what to look for this time — a different sector, stage, or angle from the batch they just saw. Don't search yet.)";
@@ -46,7 +44,6 @@ const FIND_MORE_NUDGE =
 export type TopLevelSubmissionArgs = RunContext & {
   sessionId: string;
   userMessage: string;
-  attachmentIds: string[];
 };
 
 // What the caller does after this generator drains.
@@ -74,7 +71,7 @@ export type TopLevelSubmissionOutcome =
 export async function* dispatchTopLevelSubmission(
   args: TopLevelSubmissionArgs,
 ): AsyncGenerator<TurnEvent, TopLevelSubmissionOutcome> {
-  const { userId, sessionId, userMessage, attachmentIds, runId } = args;
+  const { userId, sessionId, userMessage } = args;
 
   // The user resolved a name collision the URL hunter flagged during a checklist
   // add. Commit each chosen board + scrape + prescan, narrate ✓ — then the same
@@ -82,15 +79,11 @@ export async function* dispatchTopLevelSubmission(
   const disambiguationSubmission =
     parseCompanyDisambiguationSubmission(userMessage);
   if (disambiguationSubmission) {
-    await appendUserMessage(sessionId, userMessage, attachmentIds, {
-      runId,
-      leadingBlocks: await buildPanelEditBlocks(userId),
-    });
     const added = yield* runDisambiguationResolution(
       disambiguationSubmission.resolved,
       args,
     );
-    yield* promptAddMoreCompanies(added, 0, args);
+    yield addMoreCompaniesWidget(added, 0);
     return { kind: "terminal" };
   }
 
@@ -100,10 +93,6 @@ export async function* dispatchTopLevelSubmission(
   // to what's next.
   const addMoreSubmission = parseAddMoreCompaniesSubmission(userMessage);
   if (addMoreSubmission) {
-    await appendUserMessage(sessionId, userMessage, attachmentIds, {
-      runId,
-      leadingBlocks: await buildPanelEditBlocks(userId),
-    });
     if (addMoreSubmission.answer === "yes") {
       return { kind: "ask", openingNudge: FIND_MORE_NUDGE };
     }
@@ -123,10 +112,6 @@ export async function* dispatchTopLevelSubmission(
   // entryTarget back for the chat turn to run on.
   const pickerSubmission = parseNextCompanyPickerSubmission(userMessage);
   if (pickerSubmission) {
-    await appendUserMessage(sessionId, userMessage, attachmentIds, {
-      runId,
-      leadingBlocks: await buildPanelEditBlocks(userId),
-    });
     const dispatch = await dispatchNextCompanyPicker({
       userId,
       sessionId,
@@ -135,7 +120,7 @@ export async function* dispatchTopLevelSubmission(
     if (dispatch.kind === "ask") {
       return { kind: "ask", openingNudge: dispatch.openingNudge };
     }
-    yield* narrateStatus(sessionId, dispatch.statusText, runId);
+    yield statusEvent(dispatch.statusText);
     yield* yieldUiEvents(
       (await buildShowEvents(userId, showTargetFor(dispatch.entryTarget)))
         .events,

@@ -12,4 +12,4 @@ export {
   appendRunError,
   appendToolResultMessage,
 } from "./appendMessages";
-export { narrateStatus, narrateText } from "./narrate";
+export { recordTranscript } from "./recordTranscript";

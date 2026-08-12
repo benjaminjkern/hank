@@ -22,7 +22,7 @@ import { appendPipelineActivity } from "@/server/agent/session/appendMessages";
 import { settleSuggestionBatch } from "@/server/entities/companies/suggestionMark";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
 import {
-  promptAddMoreCompanies,
+  addMoreCompaniesWidget,
   runChecklistAdd,
 } from "@/server/procedures/registry/enrichCompanies";
 import { loadDiscoveryList } from "@/server/views/discoveryList";
@@ -110,6 +110,6 @@ export async function* runCommitDiscovery(
     await runConsolidateSessionMemory(args);
   }
 
-  yield* promptAddMoreCompanies(added, toPass.length, args);
+  yield addMoreCompaniesWidget(added, toPass.length);
   return { empty: false, added, passed: passedNames };
 }

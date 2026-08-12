@@ -172,6 +172,13 @@ export async function* runHankTurn(
     );
   }
 
+  // Release the rows runAgentTurn announced. This turn is the one emitter that
+  // writes its own — its assistant row carries `thinking` / `tool_use` blocks
+  // the stream never sees, so recordTranscript can't build it — and the release
+  // is what hands the stream back, so whatever runs after this turn (the
+  // walkthrough state machine, the what's-next picker) gets persisted again.
+  yield { type: "message_end" };
+
   await recordUsage({
     userId: args.userId,
     operation: "chat",

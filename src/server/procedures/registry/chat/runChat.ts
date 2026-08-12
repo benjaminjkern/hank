@@ -1,13 +1,14 @@
 // What one user message MEANS — the whole product sequence, from the moment the
 // run is open to the moment the stream has nothing left to say.
 //
-// In order: promote anything that came due, let a widget submission commit
-// itself, ask what's next when there's nothing to run on, then drive chat turns
-// until one waits on the user. The wrap fires in here too, once, when a turn
-// reports a company ended.
+// In order: own the user's message, promote anything that came due, let a
+// widget submission commit itself, ask what's next when there's nothing to run
+// on, then drive chat turns until one waits on the user. The wrap fires in here
+// too, once, when a turn reports a company ended.
 //
-// The run itself — the API-key gate, the concurrency claim, the AbortController,
-// the runId — belongs to runtime/runUserMessage.ts, which wraps this. The split
+// The run itself — the concurrency claim, the AbortController, the runId, and
+// what a thrown run MEANS — belongs to runtime/runUserMessage.ts, which wraps
+// this. The split
 // is deliberate: that file is true of any message regardless of what it says,
 // while every branch below is a decision about companies, roles, and profiles.
 
@@ -17,7 +18,6 @@ import type {
   RunContext,
   TurnEvent,
 } from "@/server/agent/contracts";
-import { listUnrelayedBoardEdits } from "@/server/entities/jobs/boardStance";
 import { flipDueInterviewsToDebrief } from "@/server/entities/jobs/flipDueInterviews";
 import { runWrapSegment } from "@/server/procedures/registry/wrapSegment";
 import { buildShowEvents } from "@/server/views/showEvents";
@@ -27,6 +27,7 @@ import {
   type ProfileGaps,
 } from "@/server/widgets/renderWhatsNext";
 
+import { openUserTurn } from "./openUserTurn";
 import { runChatTurn } from "./runChatTurn";
 
 // Safety cap on the silent wrappedUp → run-again chain so a runaway
@@ -40,6 +41,12 @@ export type ChatArgs = RunContext & {
 };
 
 export async function* runChat(args: ChatArgs): AsyncGenerator<TurnEvent> {
+  // 0. The user's message, before any work that can fail. Anything that throws
+  // from here on still leaves what they said in the transcript, next to the
+  // `run_error` row the failure writes — see openUserTurn for why that ordering
+  // is load-bearing rather than tidy.
+  const opened = await openUserTurn(args);
+
   // Promote any INTERVIEW_SCHEDULED whose interview date has passed to
   // INTERVIEW_DEBRIEF before any routing, so "user owes a debrief" surfaces on
   // THIS message (renderWhatsNext's Immediate section) rather than only when the
@@ -48,7 +55,6 @@ export async function* runChat(args: ChatArgs): AsyncGenerator<TurnEvent> {
   await flipDueInterviewsToDebrief();
 
   let userMessage = args.userMessage;
-  let attachmentIds = args.attachmentIds;
   // The entity a picker dispatch wants the ensuing silent-entry turn to dispatch
   // on — threaded in-memory (not via a focus slot). Consumed by the first
   // runChatTurn call below, then cleared so later silent transitions in the same
@@ -68,14 +74,12 @@ export async function* runChat(args: ChatArgs): AsyncGenerator<TurnEvent> {
   const submission = yield* dispatchTopLevelSubmission({
     ...args,
     userMessage,
-    attachmentIds,
   });
   if (submission.kind === "terminal") return;
   if (submission.kind !== "none") {
     // The submission WAS the message; whatever runs below is a silent
     // continuation of it.
     userMessage = "";
-    attachmentIds = [];
   }
   if (submission.kind === "enter") {
     pendingEntryTarget = submission.entryTarget;
@@ -84,15 +88,11 @@ export async function* runChat(args: ChatArgs): AsyncGenerator<TurnEvent> {
     pendingOpeningNudge = submission.openingNudge;
   }
 
-  // The user hit send with an empty composer because their board marks are the
+  // The user hit send with an empty composer because their panel marks are the
   // message. That's a real turn to answer, not the "nothing to run on" case
-  // below — the marks become this turn's user row (see buildPanelEditBlocks).
-  // Checked before anything settles them, and only when there's no text, since
-  // that's the only case where it changes the routing.
+  // below — the marks ARE the user row openUserTurn just wrote.
   const carriesPanelEdits =
-    submission.kind === "none" &&
-    !userMessage &&
-    (await listUnrelayedBoardEdits(args.userId)).length > 0;
+    submission.kind === "none" && !userMessage && opened.carriedPanelEdits;
 
   // 2. Nothing to run on — no text typed, nothing marked, no destination
   // picked, nothing to ask about. Ask what's next: either the rung-0 profile
@@ -134,9 +134,8 @@ export async function* runChat(args: ChatArgs): AsyncGenerator<TurnEvent> {
     for await (const ev of runChatTurn({
       ...args,
       userMessage,
-      attachmentIds,
-      // Only the FIRST pass carries them: by the time a silent transition comes
-      // round again the blocks are written and settled.
+      // Only the FIRST pass carries them — openUserTurn settled the marks into
+      // that pass's user row, so a silent transition after it has none.
       carriesPanelEdits: carriesPanelEdits && i === 0,
       profileGaps: pendingProfileGaps,
       entryTarget: iterEntryTarget,
@@ -183,6 +182,5 @@ export async function* runChat(args: ChatArgs): AsyncGenerator<TurnEvent> {
     yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
     // Silent re-entry — no new user message.
     userMessage = "";
-    attachmentIds = [];
   }
 }

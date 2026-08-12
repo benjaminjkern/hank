@@ -22,19 +22,14 @@ import type {
   TurnEvent,
 } from "@/server/agent/contracts";
 import { buildHankSystem } from "@/server/agent/hank";
-import { loadHankProfileContext } from "@/server/agent/hank/profileContext";
 import { loadHankDiscoveryContext } from "@/server/agent/hank/discoveryContext";
+import { loadHankProfileContext } from "@/server/agent/hank/profileContext";
 import { loadHankShortlistBoardContext } from "@/server/agent/hank/shortlistBoardContext";
 import { loadHankWatchlistContext } from "@/server/agent/hank/watchlistContext";
 import {
   runHankTurn,
   type TranscriptInfo,
 } from "@/server/agent/runtime/runHankTurn";
-import { newRunTreeId } from "@/server/agent/runTree/ids";
-import {
-  appendAssistantMessage,
-  appendUserMessage,
-} from "@/server/agent/session";
 import { isProfileObviouslyEnriched } from "@/server/entities/profile/profileInventory";
 import { loadRecentClientErrors } from "@/server/platform/clientEvents/recent";
 import { withCaptureContext } from "@/server/platform/usage/captureContext";
@@ -43,10 +38,7 @@ import type {
   WalkthroughResult,
 } from "@/server/procedures/registry/walkthrough";
 import { runWalkthrough } from "@/server/procedures/registry/walkthrough";
-import { buildPanelEditBlocks } from "@/server/widgets/panelEditRelay";
 import { parseWidgetSubmission } from "@/server/widgets/parse";
-
-import type Anthropic from "@anthropic-ai/sdk";
 
 // Cap on agent turns within a single user-message invocation. Headroom for the
 // CRUD-heavy case (create_job × N + log_event × N).
@@ -61,21 +53,10 @@ const PROFILE_INTAKE_NUDGE = "(Starting profile setup — greet me and begin.)";
 export const runChatTurn: ChatTurnRunner = async function* (args) {
   const isWidgetSubmission = !!parseWidgetSubmission(args.userMessage);
 
-  // An empty message whose board marks ARE the content still opens a user row:
-  // buildPanelEditBlocks puts them in it, so the row is never blank.
+  // Did this message open a user turn? An empty composer still does when the
+  // user's panel marks are the content — runChat wrote the row either way (see
+  // openUserTurn); this is only the routing read of what it decided.
   const opensUserTurn = !!args.userMessage || args.carriesPanelEdits === true;
-
-  if (opensUserTurn) {
-    await appendUserMessage(
-      args.sessionId,
-      args.userMessage,
-      args.attachmentIds,
-      {
-        runId: args.runId,
-        leadingBlocks: await buildPanelEditBlocks(args.userId),
-      },
-    );
-  }
 
   // Derived once per message (a Postgres read of three memory slots, no LLM):
   // is the user's profile still too thin to match roles against? Drives both the
@@ -99,7 +80,7 @@ export const runChatTurn: ChatTurnRunner = async function* (args) {
   // widget submission carries its ids in the marker (handleWidgetSubmission), so
   // entryTarget is undefined there and unused.
   if ((isWidgetSubmission || !opensUserTurn) && !openingNudge) {
-    const result = yield* runStateMachineAndPersist(args);
+    const result = yield* runStateMachine(args);
     yield {
       type: "done",
       wrappedUp: result.wrappedUp,
@@ -172,7 +153,7 @@ export const runChatTurn: ChatTurnRunner = async function* (args) {
   // needed against a competing surface: the deterministic layer owns every
   // wait-for-user surface, so no tool emits one of its own.
   if (calledHandoffTool) {
-    const result = yield* runStateMachineAndPersist({
+    const result = yield* runStateMachine({
       ...args,
       userMessage: "",
       entryTarget,
@@ -242,112 +223,28 @@ async function buildTurnSystem(
   });
 }
 
-// Wrap the state machine so its pipeline_status / pipeline_widget / text
-// output is buffered into ONE assistant ChatMessage at the end of the pass.
-// Three reasons:
-//   1. Persisting row-per-event leaves an "empty bubble" before a widget — a
-//      row holding only a widget segment renders null inline, because the
-//      widget itself shows above the composer.
-//   2. Related output (status line → widget, or several drafting status
-//      lines together) reads as a single thought when collapsed into one
-//      bubble.
-//   3. Persisting once at the end keeps the chat row count tight without
-//      requiring per-helper inline DB writes.
-// Live SSE streaming is unaffected — events still yield in real time; the
-// persistence happens after the state-machine return.
+// Run the state machine, with every sub-agent it drives stamped with this run.
 //
-// The row's id is minted up front and announced with a `message_start` before the
-// first event that lands in the buffer, so the single bubble the client paints
-// live IS the single row this flushes — the reconcile after the run finds the
-// same id and repaints nothing. The boundary is lazy rather than emitted at entry
-// because a pass that collects nothing must not open an empty bubble that later
-// events would then be misfiled into.
-async function* runStateMachineAndPersist(
+// It persists nothing: the events it yields reach the user through
+// recordTranscript, which writes them as they go. An outer buffer here used to
+// collect and flush them at the end of the pass, which double-wrote everything
+// the machine reached through a narrating procedure and stamped the copy with
+// the time the pass ENDED — so a finished batch repeated itself at the bottom
+// of the chat.
+async function* runStateMachine(
   args: WalkthroughArgs,
 ): AsyncGenerator<TurnEvent, WalkthroughResult> {
-  const collected: Anthropic.ContentBlock[] = [];
-  const messageId = newRunTreeId();
-  let openedRow = false;
   const sm = runWalkthrough(args);
-  try {
-    while (true) {
-      // Run-tree capture: wrap each generator STEP (not the generator body — ALS
-      // can't survive a yield) so any sub-agent the state machine drives in this
-      // step records the run's id. messageId/parentToolUseId stay unset here —
-      // the state machine has no main-agent tool_use to nest under.
-      // eslint-disable-next-line no-await-in-loop -- draining a generator — each step is produced by the previous one
-      const next = await withCaptureContext({ runId: args.runId }, () =>
-        sm.next(),
-      );
-      if (next.done) {
-        // eslint-disable-next-line no-await-in-loop -- flushes what the generator produced, so it can only run after it
-        await flushCollected(args.sessionId, collected, messageId, args.runId);
-        return next.value;
-      }
-      const ev = next.value;
-      if (collectBlock(collected, ev) && !openedRow) {
-        openedRow = true;
-        yield { type: "message_start", messageId };
-      }
-      yield ev;
-    }
-  } catch (err) {
-    // Persist whatever made it before re-throwing so the partial run doesn't
-    // vanish. Focus is ephemeral now, so there's no paused-drafting marker to
-    // stamp — re-entering the job re-derives from JobInteraction.status and the
-    // saved partial draft, and continues where it left off.
-    await flushCollected(args.sessionId, collected, messageId, args.runId);
-    throw err;
+  while (true) {
+    // Run-tree capture: wrap each generator STEP (not the generator body — ALS
+    // can't survive a yield) so any sub-agent the state machine drives in this
+    // step records the run's id. There's no messageId/parentToolUseId to set —
+    // the state machine has no main-agent tool_use to nest under.
+    // eslint-disable-next-line no-await-in-loop -- draining a generator — each step is produced by the previous one
+    const next = await withCaptureContext({ runId: args.runId }, () =>
+      sm.next(),
+    );
+    if (next.done) return next.value;
+    yield next.value;
   }
-}
-
-// Returns whether the event landed in the buffer — i.e. whether it is content
-// this pass will persist, which is what the caller opens the row on.
-function collectBlock(
-  collected: Anthropic.ContentBlock[],
-  ev: TurnEvent,
-): boolean {
-  if (ev.type === "text") {
-    // Coalesce consecutive text into one block — Anthropic-friendly and
-    // reads naturally when the state machine yields a sentence in pieces. The
-    // client's mergeTextDelta applies the same rule to the same events, so the
-    // live bubble and the persisted row agree block for block.
-    const last = collected[collected.length - 1];
-    if (last && last.type === "text") {
-      (last as { text: string }).text += ev.text;
-      return true;
-    }
-    collected.push({ type: "text", text: ev.text } as Anthropic.ContentBlock);
-    return true;
-  }
-  if (ev.type === "pipeline_status") {
-    collected.push({
-      type: "pipeline_status",
-      text: ev.text,
-    } as unknown as Anthropic.ContentBlock);
-    return true;
-  }
-  if (ev.type === "pipeline_widget") {
-    collected.push({
-      type: "pipeline_widget",
-      toolUseId: ev.toolUseId,
-      kind: ev.kind,
-      payload: ev.payload,
-    } as unknown as Anthropic.ContentBlock);
-    return true;
-  }
-  // tool_use_*, ui, widget (live transient — handled by chatStore.currentWidget
-  // on the client), message_start, stopped, done, error — none of these are
-  // content blocks; they're stream control.
-  return false;
-}
-
-async function flushCollected(
-  sessionId: string,
-  collected: Anthropic.ContentBlock[],
-  messageId: string,
-  runId?: string,
-): Promise<void> {
-  if (collected.length === 0) return;
-  await appendAssistantMessage(sessionId, collected, { id: messageId, runId });
 }

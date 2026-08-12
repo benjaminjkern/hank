@@ -12,8 +12,8 @@
 // question, so it's reported back and the caller stops rather than stacking
 // another widget under an unanswered one.
 
+import { statusEvent, widgetEvent } from "@/server/agent/contracts";
 import type { TurnEvent } from "@/server/agent/contracts";
-import { narrateStatus, narrateText } from "@/server/agent/session";
 import { prisma } from "@/server/db/prisma";
 import { createCompanyStubs } from "@/server/entities/companies/createCompanyStubs";
 import type {
@@ -22,16 +22,8 @@ import type {
 } from "@/server/widgets/parse";
 
 import { runEnrichCompanies } from "./enrichCompanies";
-import { persistWidget, type WatchlistAddArgs } from "./persistWidget";
 
-import type { CompanyEnrichResult } from "./types";
-
-// Every line this procedure emits goes through narrateStatus / narrateText
-// (agent/session/narrate.ts), which stream the event AND persist it as its own
-// assistant ChatMessage row. The row is not optional here: a top-level dispatch
-// has no outer buffer collecting and persisting its events the way the
-// walkthrough state machine does, so without it the streamed line vanishes on
-// refresh.
+import type { CompanyEnrichResult, WatchlistAddArgs } from "./types";
 
 // Shape the disambiguation widget renders + round-trips. `companyId` is the
 // stub (unresolved, NEW) the picker resolves on selection; each candidate
@@ -111,21 +103,19 @@ export async function* runChecklistAdd(
     }));
 
   if (toEnrich.length === 0) {
-    yield* narrateText(
-      args.sessionId,
-      picks.length === 1
-        ? `That one's already on your list.`
-        : `Those are already on your list.`,
-      args.runId,
-    );
+    yield {
+      type: "text",
+      text:
+        picks.length === 1
+          ? `That one's already on your list.`
+          : `Those are already on your list.`,
+    };
     return { awaitingDisambiguation: false, added: [] };
   }
 
   const willRun = toEnrich.length;
-  yield* narrateStatus(
-    args.sessionId,
+  yield statusEvent(
     `Looking up ${willRun} ${willRun === 1 ? "company" : "companies"} — I check each careers page, so give me a moment…`,
-    args.runId,
   );
 
   const it = runEnrichCompanies({ ...args, companies: toEnrich });
@@ -139,11 +129,7 @@ export async function* runChecklistAdd(
   while (!step.done) {
     const ev = step.value;
     if (ev.type === "company_started") {
-      yield* narrateStatus(
-        args.sessionId,
-        `Looking up ${ev.name}…`,
-        args.runId,
-      );
+      yield statusEvent(`Looking up ${ev.name}…`);
     } else {
       const { result } = ev;
       if (landed(result)) added.push(result.name);
@@ -159,7 +145,7 @@ export async function* runChecklistAdd(
         });
       } else {
         const line = lineFor(result);
-        if (line) yield* narrateText(args.sessionId, line, args.runId);
+        if (line) yield { type: "text", text: line };
         // This company is now persisted — show it on the dashboard immediately
         // rather than waiting for the whole batch to finish.
         yield { type: "refresh_viewed_state" };
@@ -172,14 +158,14 @@ export async function* runChecklistAdd(
   // Name collisions: surface the disambiguation picker (a genuine wait-for-user
   // question). Resolving it chains into runDisambiguationResolution.
   if (ambiguous.length > 0) {
-    yield* narrateText(
-      args.sessionId,
-      ambiguous.length === 1
-        ? `One name matched more than one company — which did you mean?`
-        : `A few names matched more than one company — pick which you meant.`,
-      args.runId,
-    );
-    yield* persistWidget(args, "company_disambiguation", {
+    yield {
+      type: "text",
+      text:
+        ambiguous.length === 1
+          ? `One name matched more than one company — which did you mean?`
+          : `A few names matched more than one company — pick which you meant.`,
+    };
+    yield widgetEvent("company_disambiguation", {
       companies: ambiguous,
     });
     return { awaitingDisambiguation: true, added };
@@ -222,15 +208,11 @@ export async function* runDisambiguationResolution(
   while (!step.done) {
     const ev = step.value;
     if (ev.type === "company_started") {
-      yield* narrateStatus(
-        args.sessionId,
-        `Setting up ${ev.name}…`,
-        args.runId,
-      );
+      yield statusEvent(`Setting up ${ev.name}…`);
     } else {
       if (landed(ev.result)) added.push(ev.result.name);
       const line = lineFor(ev.result);
-      if (line) yield* narrateText(args.sessionId, line, args.runId);
+      if (line) yield { type: "text", text: line };
       yield { type: "refresh_viewed_state" };
     }
     // eslint-disable-next-line no-await-in-loop -- draining a generator — each step is produced by the previous one

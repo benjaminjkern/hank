@@ -13,16 +13,14 @@
 // `passedCount` rides along so the submission can report whether this round
 // decided anything at all, which is what gates the session wrap on "Done".
 
+import { widgetEvent } from "@/server/agent/contracts";
 import type { TurnEvent } from "@/server/agent/contracts";
 
-import { persistWidget, type WatchlistAddArgs } from "./persistWidget";
-
-export async function* promptAddMoreCompanies(
+export function addMoreCompaniesWidget(
   added: string[],
   passedCount: number,
-  args: WatchlistAddArgs,
-): AsyncGenerator<TurnEvent> {
-  yield* persistWidget(args, "add_more_companies", {
+): TurnEvent {
+  return widgetEvent("add_more_companies", {
     addedThisBatch: added,
     passedCount,
   });

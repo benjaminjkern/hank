@@ -103,36 +103,43 @@ export async function loadSessionMessages(
   rows.forEach((r, i) => {
     const rawBlocks = r.content as unknown as Anthropic.ContentBlockParam[];
 
-    // Pipeline-internal blocks (status narration + widget payloads emitted by the
-    // deterministic state machine) are things the user SAW on screen — the agent
-    // did NOT write them. Render each as a provenance note in a non-assistant
-    // channel (a role:"system" message) so the model reads it as a record, not its
-    // own prose. See uiProvenance.ts.
-    // Pipeline rows are always pure (a status/widget block, role=ASSISTANT); a
-    // pipeline block never shares a row with regular assistant text or tool_use.
-    const isPipelineRow =
-      rawBlocks.length > 0 &&
-      rawBlocks.every((b) =>
-        PIPELINE_BLOCK_TYPES.has((b as { type?: string }).type ?? ""),
-      );
-    if (isPipelineRow) {
-      const note = pipelineRowNoteText(rawBlocks);
+    // Pipeline-internal blocks (status narration + widget payloads the
+    // deterministic layer put on screen) are things the user SAW — the agent did
+    // NOT write them. Render them as a provenance note in a non-assistant
+    // channel (a role:"system" message) so the model reads them as a record, not
+    // its own prose. See uiProvenance.ts.
+    //
+    // They routinely SHARE a row with the agent-channel text around them:
+    // recordTranscript fills one row per contiguous run of streamed content, and
+    // a run that narrates ("Looking up Box…") between saying things ("✓ Added
+    // n8n.") holds both. So the row is SPLIT — pipeline blocks become the note,
+    // the rest stays the assistant's — rather than tested for purity, which
+    // silently dropped the narration half of every mixed row from Hank's
+    // context. Splitting can't break the tool_use ↔ tool_result adjacency the
+    // repair passes rely on: only a Hank turn writes tool_use blocks, and it
+    // writes its own status lines and widgets as separate rows.
+    const pipelineBlocks = rawBlocks.filter((b) =>
+      PIPELINE_BLOCK_TYPES.has((b as { type?: string }).type ?? ""),
+    );
+    if (pipelineBlocks.length > 0) {
+      const note = pipelineRowNoteText(pipelineBlocks);
       if (note) {
         replayed.push(buildProvenanceMessage(note));
-        // A provenance row is an ASSISTANT row with no tool_use, so it reads as
+        // A provenance note is an ASSISTANT row with no tool_use, so it reads as
         // a terminal — nothing for the agent to respond to.
         tailIsAssistantNoTool = true;
       }
-      // Recompute like every other row; a pipeline row is never a stopped human
-      // reply, so this resets a pending note.
-      resumeNotePending = r.role === Role.ASSISTANT && r.stoppedByUser === true;
-      return;
+      if (pipelineBlocks.length === rawBlocks.length) {
+        // Recompute like every other row; a pipeline row is never a stopped
+        // human reply, so this resets a pending note.
+        resumeNotePending =
+          r.role === Role.ASSISTANT && r.stoppedByUser === true;
+        return;
+      }
     }
 
-    // Non-pipeline rows pass through unchanged. A pipeline block never shares a
-    // row with other content, but filter defensively (into a fresh array, so the
-    // resume-note unshift below doesn't mutate the source) so a stray one can't
-    // reach the API as an unknown block type.
+    // What's left is the agent's own channel. Filtered into a fresh array, so
+    // the resume-note unshift below doesn't mutate the source.
     const blocks = rawBlocks
       .filter(
         (b) => !PIPELINE_BLOCK_TYPES.has((b as { type?: string }).type ?? ""),
@@ -309,9 +316,9 @@ function normalizeThinkingForReplay(
 // message is what keeps it off that channel; an assistant-authored stage
 // direction ("[Shown to the user …]") is not a substitute, whatever it's tagged.
 // The block types Anthropic would reject — every one of them goes through
-// pipelineRowNoteText instead. One list, because the two places that need it
-// (detect a pure-pipeline row; strip strays from a mixed row) drifting apart
-// would send an unknown block type straight to the API.
+// pipelineRowNoteText instead. One list, because the two halves of the split
+// (what becomes the note; what stays on the agent channel) drifting apart would
+// either lose a block or send an unknown type straight to the API.
 const PIPELINE_BLOCK_TYPES = new Set([
   "pipeline_status",
   "pipeline_widget",
