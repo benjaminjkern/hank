@@ -20,10 +20,10 @@ import type { WalkthroughArgs, WalkthroughResult } from "./types";
 // the list that comes back is the same names filtered against what the user just
 // said rather than a replay of a batch they'd walked away from.
 export async function* runDiscoveryArm(
-  direction: string | undefined,
+  entry: { direction?: string; append?: boolean },
   args: WalkthroughArgs,
 ): AsyncGenerator<TurnEvent, WalkthroughResult> {
-  const r = await runFindCompanies({ direction }, args);
+  const r = await runFindCompanies(entry, args);
 
   // Both empty cases have to speak for themselves — a handoff already ended
   // Hank's turn, so there's no reply coming after this.
@@ -47,11 +47,20 @@ export async function* runDiscoveryArm(
   //
   // That pointer is a CHIP, not plain words: the list hangs off no entity and
   // sits in no menu, so once the user navigates the panel elsewhere this line in
-  // their scrollback is the way back to it.
+  // their scrollback is the way back to it. Its label NAMES THE DESTINATION and
+  // never the contents — the panel is a live singleton, so a chip reading "8
+  // companies" would still say 8 next to a list that has since become 6, or
+  // another batch entirely. The count belongs in the sentence, which is a
+  // report of what just happened and stays true.
+  //
+  // The provenance sentence leads: how a batch was found is what separates a bad
+  // search from a bad thesis, and the user can only judge that if they see it.
   const count = `${r.candidates.length} ${r.candidates.length === 1 ? "company" : "companies"}`;
+  const chip = formatFocusRefToken("discovery", null, "Companies to add");
+  const opener = r.provenance ? `${r.provenance.trim()} ` : "";
   yield {
     type: "text",
-    text: `Put ${formatFocusRefToken("discovery", null, count)} on the right — they're all set to add, so uncheck any you don't want and send. Tell me what's off about them and I'll look again instead.`,
+    text: `${opener}Put ${count} on ${chip} — they're all set to add, so uncheck any you don't want and send. Tell me what's off about them and I'll look again instead.`,
   };
   yield* yieldUiEvents((await buildDiscoveryEvents(args.userId)).events);
   return { wrappedUp: false };

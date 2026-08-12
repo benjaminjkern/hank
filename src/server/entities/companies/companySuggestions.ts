@@ -27,8 +27,28 @@ import { nowMs } from "@/utils/now";
 export type SuggestionToRecord = {
   name: string;
   reason: string;
+  // What the search established about the company, a few sentences. Absent when
+  // nothing wrote one — a row Hank put on the list himself did no searching.
+  summary?: string;
   url?: string;
 };
+
+// Which open rows are the batch ON SCREEN: the ones from the run that produced
+// the newest of them. Both the panel's loader and every write that has to land
+// "on the current list" go through this, so a row Hank adds can't miss the list
+// the user is looking at.
+//
+// A null runId (a hand-driven or replayed write) can't be told apart from any
+// other, so those rows only ever form a batch among themselves.
+export function currentBatch<T extends { runId: string | null }>(
+  openRowsNewestFirst: T[],
+): T[] {
+  const newest = openRowsNewestFirst[0];
+  if (!newest) return [];
+  return openRowsNewestFirst.filter((r) =>
+    newest.runId === null ? r.runId === null : r.runId === newest.runId,
+  );
+}
 
 // One name's history as the search reads it. Counts and dates are here so the
 // prompt can weigh a repeated recent decline differently from a lone stale one
@@ -83,16 +103,26 @@ export function suggestionKey(name: string): string {
 // delete-then-insert keeps it to two statements flat in N, and moving the
 // proposal date forward is what holds a still-believed-in candidate inside the
 // freshness window while one the search stops emitting ages out.
+//
+// `append` decides whether this is a NEW list or more of the one on screen, and
+// it's a runId question rather than a delete: the panel draws one run, so
+// writing under the open batch's runId puts these rows beside it and writing
+// under this run's starts a fresh one. Appending onto nothing is just a new
+// batch.
 export async function recordSuggestions(args: {
   userId: string;
   runId?: string;
   sessionId?: string;
+  append?: boolean;
   suggestions: SuggestionToRecord[];
 }): Promise<void> {
   if (args.suggestions.length === 0) return;
   const byKey = new Map(
     args.suggestions.map((s) => [suggestionKey(s.name), s] as const),
   );
+  const runId = args.append
+    ? ((await openBatchRunId(args.userId)) ?? args.runId ?? null)
+    : (args.runId ?? null);
 
   await prisma.$transaction(async (tx) => {
     await tx.companySuggestion.deleteMany({
@@ -108,12 +138,25 @@ export async function recordSuggestions(args: {
         name: s.name,
         nameKey,
         reason: s.reason,
+        summary: s.summary ?? null,
         url: s.url ?? null,
-        runId: args.runId ?? null,
+        runId,
         sessionId: args.sessionId ?? null,
       })),
     });
   });
+}
+
+// The runId of the batch on screen, or null when nothing is open. Null is also
+// what a batch of hand-driven rows reports, which is correct: they group with
+// each other and with nothing else.
+export async function openBatchRunId(userId: string): Promise<string | null> {
+  const newest = await prisma.companySuggestion.findFirst({
+    where: { userId, verdict: null },
+    orderBy: { createdAt: "desc" },
+    select: { runId: true },
+  });
+  return newest?.runId ?? null;
 }
 
 export type SuggestionDecision = {

@@ -127,7 +127,10 @@ function CandidateRow({ row }: { row: DiscoveryRow }) {
         disabled={busy || readOnly}
         onChange={() => void toggle()}
       />
-      <Body>
+      {/* The search's own notes on the company, as a native tooltip: the row is
+          a <label>, so an inline expander would fight the click target that
+          toggles the checkbox. Hank answers from the same text in chat. */}
+      <Body title={row.summary ?? undefined}>
         <Name>{row.name}</Name>
         <Reason>{row.reason}</Reason>
       </Body>

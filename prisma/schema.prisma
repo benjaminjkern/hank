@@ -346,8 +346,16 @@ model CompanySuggestion {
   // vs "Evertune") still matches an earlier verdict — and matches Company.slug,
   // which is minted the same way.
   nameKey String
-  // The search's own one-line case for this candidate.
+  // The search's own one-line case for this candidate — why it's on the list.
+  // This is the line the panel row renders, so it stays one sentence.
   reason  String
+  // What the search actually established about the company, in a few sentences:
+  // the grounding Hank elaborates from when the user asks about a candidate.
+  // Null on a row Hank added himself (he didn't search) and on rows predating
+  // the field — he falls back to `reason` and says the rest is general
+  // knowledge. Kept apart from `reason` because one is a fit case the user
+  // skims and the other is facts, and merging them makes the panel unscannable.
+  summary String?
   url     String?
   // What the commit SETTLED. Null while the candidate is still on the table —
   // an unmarked row, or a marked one Hank hasn't committed yet.
@@ -356,6 +364,12 @@ model CompanySuggestion {
   // Null = unmarked, which is a real state: still on the table, and what the
   // next search carries forward.
   userMark    CompanySuggestionMark?
+  // Hank's own mark, set when he marks a row on the user's behalf ("drop H") or
+  // puts a company on the list himself. Null = the search's default, which is
+  // ADD — so the mark in force is `userMark ?? agentMark ?? ADD` and the user's
+  // override still wins. Separate from `userMark` so the panel's "you changed
+  // this" accent can't light up for something Hank did.
+  agentMark   CompanySuggestionMark?
   // What Hank has already been told. Divergence from `userMark` is what makes a
   // mark unrelayed — the same two-column test the board runs on
   // userVerdict vs placementVerdict, so re-marking a row back to where it

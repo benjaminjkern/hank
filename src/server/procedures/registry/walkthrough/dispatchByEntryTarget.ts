@@ -30,7 +30,7 @@ export async function* dispatchByEntryTarget(
     return yield* runOpportunityArm(target.id, args);
   }
   if (target?.kind === "discovery") {
-    return yield* runDiscoveryArm(target.direction, args);
+    return yield* runDiscoveryArm(target, args);
   }
   if (target?.kind === "discovery_commit") {
     return yield* runDiscoveryCommitArm(args);
