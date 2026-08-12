@@ -15,6 +15,7 @@ import { DiscoveryView } from "./DiscoveryView";
 import { DocumentsView } from "./DocumentsView";
 import { JobDetailView } from "./JobDetailView";
 import { OpportunityDetailView } from "./OpportunityDetailView";
+import { NegotiationFooter } from "./shared/negotiation";
 import { ShortlistBoardView } from "./ShortlistBoardView";
 
 // Mirrors theme.breakpoints.narrow — inlined because matchMedia runs outside
@@ -35,7 +36,13 @@ function useIsNarrow() {
 
 const Root = styled.div`
   display: grid;
-  grid-template-rows: auto 1fr;
+  /* Breadcrumb bar · scrolling body · the negotiation footer, which is a real
+     row rather than something sticky inside the body: pinned inside the
+     scroll area it sat above the panel's own bottom padding, leaving a strip
+     of panel showing beneath it. The row collapses to nothing when
+     NegotiationFooter renders null, which is every mode but a settled
+     negotiation panel. */
+  grid-template-rows: auto 1fr auto;
   height: 100%;
 `;
 
@@ -245,6 +252,7 @@ export function RightPanel() {
           {body}
         </ClientErrorBoundary>
       </Content>
+      <NegotiationFooter />
     </Root>
   );
 }

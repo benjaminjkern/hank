@@ -14,19 +14,13 @@ import { useState } from "react";
 import styled from "styled-components";
 
 import { SuggestionCheckbox } from "@/components/Chat/widgets/sharedStyles";
-import { buildWidgetSubmissionMessage } from "@/components/Chat/widgets/types";
 import { useChatStore } from "@/lib/chatStore";
 import type {
   DiscoveryListView,
   DiscoveryRow,
 } from "@/server/views/discoveryList";
 
-import {
-  NegotiationBar,
-  NegotiationButton,
-  PanelRowCard,
-  PendingTag,
-} from "./shared/negotiation";
+import { PanelRowCard } from "./shared/negotiation";
 
 const Root = styled.div`
   display: flex;
@@ -134,15 +128,11 @@ function CandidateRow({ row }: { row: DiscoveryRow }) {
         <Name>{row.name}</Name>
         <Reason>{row.reason}</Reason>
       </Body>
-      <PendingTag pending={row.pending} />
     </Row>
   );
 }
 
 export function DiscoveryView({ discovery }: { discovery: DiscoveryListView }) {
-  const send = useChatStore((s) => s.send);
-  const readOnly = useChatStore((s) => s.impersonateSessionId !== null);
-  const streaming = useChatStore((s) => s.streaming);
   const checked = discovery.rows.filter((r) => r.checked).length;
 
   return (
@@ -169,27 +159,6 @@ export function DiscoveryView({ discovery }: { discovery: DiscoveryListView }) {
             <CandidateRow key={row.id} row={row} />
           ))}
         </List>
-      )}
-
-      {!readOnly && (
-        // Only when there is nothing left to send: adding the list as it stands
-        // is what Hank proposed by finding these, so the press settles it
-        // directly rather than buying a turn in which he agrees with himself.
-        <NegotiationBar state={discovery}>
-          <NegotiationButton
-            disabled={streaming}
-            onClick={() =>
-              void send(
-                buildWidgetSubmissionMessage(
-                  { kind: "commit_negotiation", panel: "discovery" },
-                  "[The company list looks right — add them]",
-                ),
-              )
-            }
-          >
-            Looks good to me
-          </NegotiationButton>
-        </NegotiationBar>
       )}
     </Root>
   );

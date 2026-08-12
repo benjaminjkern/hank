@@ -16,7 +16,6 @@
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 
-import { buildWidgetSubmissionMessage } from "@/components/Chat/widgets/types";
 import { wasStockItem } from "@/lib/applicationItem";
 import { useChatStore } from "@/lib/chatStore";
 import type {
@@ -31,11 +30,6 @@ import {
   ReuseSwitch,
 } from "./shared/applicationArtifacts";
 import { AuthorMark } from "./shared/AuthorMark";
-import {
-  NegotiationBar,
-  NegotiationButton,
-  PendingTag,
-} from "./shared/negotiation";
 
 const Root = styled.div`
   display: flex;
@@ -367,10 +361,6 @@ const FINDING_MARK: Record<FindingTone, string> = {
   answered: "✓",
 };
 
-function countThings(n: number): string {
-  return n === 1 ? "one thing" : `${n} things`;
-}
-
 const PLACEHOLDER: Record<ApplicationItemStatus, string> = {
   written_by_you: "",
   drafted: "",
@@ -384,22 +374,7 @@ export function ApplicationView({
 }: {
   application: ApplicationViewPayload;
 }) {
-  const send = useChatStore((s) => s.send);
-  const streaming = useChatStore((s) => s.streaming);
   const readOnly = !!useChatStore((s) => s.impersonateSessionId);
-  const open = application.openThreadCount;
-  // Submitting with something still open takes two taps, and the first one is
-  // not a client-side warning: it ASKS HANK, because what's outstanding is a
-  // question about this person that only they can settle ("is that venture
-  // still running?"), and he can put it in words a count can't. The second tap
-  // submits regardless — this is the last honest moment to catch a
-  // contradiction, but it's the user's call and never a gate.
-  const [confirmingSubmit, setConfirmingSubmit] = useState(false);
-  // Answering the flagged item settles its thread, so the ask can evaporate
-  // between the two taps — in which case there's nothing left to confirm and
-  // the button goes back to plain submit.
-  const asking = confirmingSubmit && open > 0;
-  const needsConfirm = open > 0 && !confirmingSubmit;
 
   // A stock field with an answer saved against it keeps its editor in the main
   // list — the verdict says nobody needs to DRAFT it, not that the text it
@@ -424,13 +399,6 @@ export function ApplicationView({
             You&apos;ve submitted this one. It stays here to read or reuse —
             edits from now on are just for you, and Hank won&apos;t be asked to
             look again.
-          </Note>
-        )}
-        {asking && !application.submitted && (
-          <Note>
-            {countThings(open)} below {open === 1 ? "is" : "are"} still open —
-            Hank&apos;s asking about {open === 1 ? "it" : "them"} in chat.
-            Sending is your call: tap again and I&apos;ll mark it submitted.
           </Note>
         )}
         {!readOnly && (
@@ -475,48 +443,6 @@ export function ApplicationView({
           described by hand. */}
       {!readOnly && <AddQuestion jobId={application.jobId} />}
       {fillInYourself.length > 0 && <StockFields items={fillInYourself} />}
-
-      {!readOnly && !application.submitted && (
-        // The application's settle button is "I submitted" — what ends this
-        // negotiation is having actually sent the form, not agreeing that it
-        // reads well. So there is no separate "looks good to me" here: with no
-        // unsent changes and nothing open, saying so to Hank would be a turn
-        // spent on nothing.
-        //
-        // Two taps while something is open, and the first one ASKS HIM rather
-        // than printing a count — what's outstanding is a question about this
-        // person that only they can settle, and he can put it in words. The
-        // second submits regardless: it's their call, never a gate.
-        <NegotiationBar state={application}>
-          <NegotiationButton
-            disabled={streaming}
-            onClick={() => {
-              if (needsConfirm) {
-                setConfirmingSubmit(true);
-                void send(
-                  "I'm ready to mark this one submitted — is there anything still open on it I should deal with first?",
-                );
-                return;
-              }
-              void send(
-                buildWidgetSubmissionMessage(
-                  {
-                    kind: "confirm_application_submit",
-                    jobId: application.jobId,
-                  },
-                  "[I submitted ✓]",
-                  {
-                    jobTitle: application.jobTitle,
-                    companyName: application.companyName,
-                  },
-                ),
-              );
-            }}
-          >
-            {asking ? "Yes, mark it submitted" : "I submitted ✓"}
-          </NegotiationButton>
-        </NegotiationBar>
-      )}
     </Root>
   );
 }
@@ -871,7 +797,6 @@ function ApplicationItemCard({
               prompt="Remove it and its answer?"
             />
           )}
-          <PendingTag pending={item.pending} change={item.change} />
           {item.author && <AuthorMark author={item.author} />}
         </HeadMarks>
       </ItemHead>

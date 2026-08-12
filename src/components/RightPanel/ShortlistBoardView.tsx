@@ -23,7 +23,6 @@
 import { useState } from "react";
 import styled from "styled-components";
 
-import { buildWidgetSubmissionMessage } from "@/components/Chat/widgets/types";
 import { useChatStore } from "@/lib/chatStore";
 import {
   BOARD_GROUP_OF_TIER,
@@ -36,12 +35,7 @@ import type {
   ShortlistBoardRow,
 } from "@/server/views/shortlistBoard";
 
-import {
-  NegotiationBar,
-  NegotiationButton,
-  PanelRowCard,
-  PendingTag,
-} from "./shared/negotiation";
+import { PanelRowCard } from "./shared/negotiation";
 import {
   StanceMarks,
   STANCE_OF_VERDICT,
@@ -231,7 +225,6 @@ function BoardRow({
     <PanelRowCard $pending={row.pending}>
       <RowTop>
         <RowTitle>{row.title}</RowTitle>
-        <PendingTag pending={row.pending} />
       </RowTop>
       {rowMeta(row) && <RowMeta>{rowMeta(row)}</RowMeta>}
       {row.reason && <RowReason>{row.reason}</RowReason>}
@@ -291,10 +284,6 @@ function DiscardGroup({
 }
 
 export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
-  const send = useChatStore((s) => s.send);
-  const readOnly = useChatStore((s) => s.impersonateSessionId !== null);
-  const streaming = useChatStore((s) => s.streaming);
-
   // The server's tier order IS the render order within each group, so
   // flattening keeps picks ahead of borderline ahead of pass.
   const keep: PlacedRow[] = [];
@@ -343,33 +332,6 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
       </TierSection>
       {discard.length > 0 && (
         <DiscardGroup companyId={board.companyId} placed={discard} />
-      )}
-
-      {!readOnly && (
-        // Only when there is nothing left to send: every row already carries the
-        // mark Hank proposed and the user agreed with, so the turn he'd spend
-        // re-reading the board buys nothing.
-        <NegotiationBar state={board}>
-          <NegotiationButton
-            disabled={streaming}
-            onClick={() =>
-              void send(
-                buildWidgetSubmissionMessage(
-                  {
-                    kind: "commit_negotiation",
-                    panel: "shortlist-board",
-                    companyId: board.companyId,
-                  },
-                  "[The board looks right — lock it in]",
-                ),
-              )
-            }
-          >
-            {nothingKept
-              ? "Nothing here — mark them caught up"
-              : "Looks good to me"}
-          </NegotiationButton>
-        </NegotiationBar>
       )}
     </Root>
   );
