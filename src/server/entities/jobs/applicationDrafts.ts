@@ -493,10 +493,14 @@ export async function discardUnrelayedApplicationEdits(
   const edited = relays
     .map((r) => ({
       jobId: r.jobId,
-      // A hand-added question has no text to restore — it is a structural add,
-      // undone by removing the question, which is its own explicit button.
+      // Adding or removing a question is structural, not text: there is nothing
+      // to put back, and each is undone by its own explicit button (remove it
+      // again / describe it again). A removal also took its answer with it, so
+      // there is no state left here to restore even in principle.
       itemIds: new Set(
-        r.edits.filter((e) => e.change !== "added").map((e) => e.itemId),
+        r.edits
+          .filter((e) => e.change !== "added" && e.change !== "removed")
+          .map((e) => e.itemId),
       ),
     }))
     .filter((r) => r.itemIds.size > 0);
@@ -504,7 +508,7 @@ export async function discardUnrelayedApplicationEdits(
 
   const rows = await prisma.jobInteraction.findMany({
     where: { userId, jobId: { in: edited.map((r) => r.jobId) } },
-    select: { id: true, jobId: true, shortAnswers: true, proposedDrafts: true },
+    select: { id: true, jobId: true, shortAnswers: true, relayedDrafts: true },
   });
   const touchedByJob = new Map(edited.map((r) => [r.jobId, r.itemIds]));
 
@@ -514,7 +518,10 @@ export async function discardUnrelayedApplicationEdits(
     rows.flatMap((row) => {
       const touched = touchedByJob.get(row.jobId);
       if (!touched) return [];
-      const baseline = readProposedDrafts(row.proposedDrafts);
+      // What he last SAW, which is what "undo my unsent changes" means. Reading
+      // what he last WROTE would throw away the user's own earlier text along
+      // with the edit — it was never his to restore.
+      const baseline = readProposedDrafts(row.relayedDrafts);
       // An answer with no baseline entry was written from scratch, so undoing it
       // removes the entry rather than blanking it — a blank one renders as an
       // orphan item, which reads as the undo not having worked.

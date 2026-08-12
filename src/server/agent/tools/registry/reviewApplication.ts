@@ -57,8 +57,12 @@ export const reviewApplicationTool: ToolDef<{ job?: string }> = {
       );
     }
     if (result.open.length > 0) {
+      // He is told what came up so he can characterise it, and told not to
+      // reprint it: each one is already drawn against the answer it objects to,
+      // and a copy in chat is the same words twice — the second time three
+      // paragraphs from the text they're about. Say how many and what kind.
       parts.push(
-        `Still unresolved — each is marked against its answer on the page, and each needs the USER to settle it (you can't). Tell them plainly what came up and leave the call to them:`,
+        `${result.open.length} thing${result.open.length === 1 ? "" : "s"} still unresolved, each already marked against its own answer on the page — the user reads them there, so DON'T list them back. Say how many came up and what kind of thing they are, and leave the call to them; each needs the USER to settle it (you can't).`,
         ...result.open.map((f) => `- ${f.label}: ${f.note}`),
       );
     } else {

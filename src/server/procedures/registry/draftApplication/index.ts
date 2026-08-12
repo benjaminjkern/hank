@@ -41,7 +41,7 @@ import type {
   DraftVerdict,
 } from "@/server/subagents/registry/applicationDecider";
 
-import { critiqueAndReviseForm } from "./critiqueAndRevise";
+import { critiqueAndReviseForm, type CritiqueStop } from "./critiqueAndRevise";
 import {
   decideApplicationForm,
   decisionCoversForm,
@@ -81,6 +81,11 @@ type DraftApplicationOutcome = {
   // The reviewer's one line to the user about what's on the page, written by
   // the critic and printed verbatim. Null when nothing was reviewed this pass.
   note: string | null;
+  // How the read-back ended — finished clean, or stopped with something only
+  // the user can settle. Null when nothing was reviewed this pass. The caller
+  // says which: a draft that arrives with no word on that reads as finished
+  // whether it is or not.
+  reviewStop: CritiqueStop | null;
   // What the recruiter-lens review concluded, when one ran this pass. Null when
   // nothing was drafted, so nothing was reviewed. The caller narrates it: a
   // review that finished with findings still open has to be SAID, or the draft
@@ -121,6 +126,7 @@ export async function* runDraftApplication(
   let didWork = false;
   let review: ApplicationReview | null = null;
   let note: string | null = null;
+  let reviewStop: CritiqueStop | null = null;
 
   // Starting a pass is what separates the role being written from the ones
   // queued behind it — both read SHORTLISTED otherwise, so nothing could tell
@@ -311,6 +317,7 @@ export async function* runDraftApplication(
     }
     review = await persistApplicationReview(args.userId, jobId, step.value);
     note = step.value.note.trim() || null;
+    reviewStop = step.value.stop;
 
     const refreshed = await prisma.jobInteraction.findUnique({
       where: { userId_jobId: { userId: args.userId, jobId } },
@@ -335,6 +342,7 @@ export async function* runDraftApplication(
     companyDisplay,
     notice: decision?.notice ?? null,
     note,
+    reviewStop,
     review,
   };
 }

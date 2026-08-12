@@ -14,7 +14,7 @@
 import type { RunContext } from "@/server/agent/contracts";
 import type { ReviewFinding } from "@/server/entities/jobs/applicationReview";
 
-import { critiqueAndReviseForm } from "./critiqueAndRevise";
+import { critiqueAndReviseForm, type CritiqueStop } from "./critiqueAndRevise";
 import { persistApplicationReview } from "./persistApplicationReview";
 
 export type ReviewApplicationResult = {
@@ -26,6 +26,9 @@ export type ReviewApplicationResult = {
   open: ReviewFinding[];
   // Items it rewrote itself along the way (Hank's own text only).
   revisedTargets: string[];
+  // Why it stopped — whether it finished or gave up is the thing a reader of
+  // the result has no other way to know.
+  stop: CritiqueStop;
   failed: boolean;
 };
 
@@ -52,6 +55,7 @@ export async function runReviewApplication(
     note: step.value.note,
     open: review?.open ?? [],
     revisedTargets: step.value.revisedTargets,
-    failed: step.value.finalVerdict === "error",
+    stop: step.value.stop,
+    failed: step.value.stop === "error",
   };
 }

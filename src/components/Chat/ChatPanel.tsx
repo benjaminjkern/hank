@@ -490,18 +490,34 @@ const Composer = styled.div<{ $centered: boolean }>`
       : ""}
 `;
 
-// What the chip calls the surface its changes are on. The user is looking at
-// one of three screens and needs to know which batch the × would throw away.
-const PANEL_NOUN: Record<NegotiationPanel, string> = {
-  "shortlist-board": "shortlist",
-  discovery: "company",
-  application: "application",
+// How the chip names one surface: its glyph, the stage it belongs to, what its
+// changes are counted in, and what to call them in a screen-reader label. One
+// row per panel rather than a record per field, so a fourth surface is one entry
+// and can't be added to three tables and missed in the fourth.
+const PANEL_CHIP: Record<
+  NegotiationPanel,
+  { icon: string; stage: string; unit: string; noun: string }
+> = {
+  "shortlist-board": {
+    icon: "◧",
+    stage: "Shortlist",
+    unit: "mark",
+    noun: "shortlist",
+  },
+  discovery: { icon: "⌕", stage: "Companies", unit: "mark", noun: "company" },
+  application: {
+    icon: "✎",
+    stage: "Application",
+    unit: "edit",
+    noun: "application",
+  },
 };
 
-// "Stripe shortlist · 2 changes" — the surface named by what it's ABOUT, not
-// just by its type. A count on its own leaves the user guessing which of three
-// screens (and which company) the × would throw away, and the instructions that
-// used to make up the difference cost more room than the answer does.
+// "Application · SRE @ Stripe — 2 edits". Three facts, in the order they answer
+// the user's question: which stage of the work, which company/role, how much.
+// A count on its own left them guessing which of three screens (and which
+// company) the × would throw away, and the instructions that used to make up
+// the difference cost more room than the answer does.
 //
 // `scope` comes off the viewed payload the count came from, so the two are as
 // fresh as each other by construction; null where the surface has no single
@@ -511,9 +527,17 @@ function panelEditLabel(
   count: number,
   scope: string | null,
 ): string {
-  const noun = panel === "discovery" ? "mark" : `${PANEL_NOUN[panel]} change`;
-  const what = `${count} ${noun}${count === 1 ? "" : "s"}`;
-  return scope ? `${scope} · ${what}` : what;
+  const { stage } = PANEL_CHIP[panel];
+  const head = scope ? `${stage} · ${scope}` : stage;
+  return `${head} — ${panelEditCount(panel, count)}`;
+}
+
+// Just the amount, for the armed state — the chip named its subject a moment
+// ago and only one chip arms at a time, so re-stating it there is a long line
+// asking a short question.
+function panelEditCount(panel: NegotiationPanel, count: number): string {
+  const { unit } = PANEL_CHIP[panel];
+  return `${count} ${unit}${count === 1 ? "" : "s"}`;
 }
 
 const AttachmentRow = styled.div`
@@ -1103,8 +1127,12 @@ export function ChatPanel() {
   // beside a live count isn't reachable: `newChat` is the only thing that drops
   // a viewed payload, and it zeroes the counts in the same set().
   const boardScope = useChatStore((s) => s.viewedBoard?.companyName ?? null);
+  // The role AND the company: a job title alone ("Senior Software Engineer") is
+  // the one thing on this screen that doesn't identify anything.
   const applicationScope = useChatStore((s) =>
-    s.viewedApplication ? s.viewedApplication.jobTitle : null,
+    s.viewedApplication
+      ? `${s.viewedApplication.jobTitle} @ ${s.viewedApplication.companyName}`
+      : null,
   );
   const panelScope: Record<NegotiationPanel, string | null> = {
     "shortlist-board": boardScope,
@@ -1477,10 +1505,10 @@ export function ChatPanel() {
                 $status="uploaded"
                 title="Send a message and Hank picks these up. The × throws them away."
               >
-                ☰{" "}
+                {PANEL_CHIP[panel].icon}{" "}
                 <PendingName>
                   {discarding === panel
-                    ? `Discard ${panelEditLabel(panel, pendingPanelEdits[panel], panelScope[panel])}?`
+                    ? `Discard ${panelEditCount(panel, pendingPanelEdits[panel])}?`
                     : panelEditLabel(
                         panel,
                         pendingPanelEdits[panel],
@@ -1499,7 +1527,7 @@ export function ChatPanel() {
                     </ChipConfirm>
                     <ChipClose
                       onClick={() => setDiscarding(null)}
-                      aria-label={`keep my ${PANEL_NOUN[panel]} changes`}
+                      aria-label={`keep my ${PANEL_CHIP[panel].noun} changes`}
                     >
                       ×
                     </ChipClose>
@@ -1507,7 +1535,7 @@ export function ChatPanel() {
                 ) : (
                   <ChipClose
                     onClick={() => setDiscarding(panel)}
-                    aria-label={`discard my ${PANEL_NOUN[panel]} changes`}
+                    aria-label={`discard my ${PANEL_CHIP[panel].noun} changes`}
                     title="Discard these changes — this panel goes back to what Hank last saw"
                   >
                     ×

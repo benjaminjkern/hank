@@ -136,9 +136,11 @@ export async function* runJobArm(
         type: "text",
         text: narrateApplicationReady({
           note: outcome.note,
-          openFindings: (outcome.review?.open ?? []).map(
-            (f) => `**${f.label}** — ${f.note}`,
-          ),
+          // The count is of what the PAGE will draw, not of what the critic
+          // raised — only blocking findings with user-facing wording survive to
+          // the row, so counting issues would point at things that aren't there.
+          openCount: (outcome.review?.open ?? []).length,
+          stop: outcome.reviewStop,
         }),
       };
     }

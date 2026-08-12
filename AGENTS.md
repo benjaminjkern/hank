@@ -181,7 +181,7 @@ A `"use client"` file importing a **value** out of a `src/server/` module pulls 
 
 **Nothing catches this but `pnpm run build`.** `tsc --noEmit` resolves the module and is happy, ESLint's boundaries plugin governs `src/server/` internals rather than the client edge, and Turbopack dev is permissive enough to serve the page. So: **run `pnpm run build` before handing back any change that adds an import across the components ↔ server line**, in either direction.
 
-The fix is never to duplicate the constant — that's the drift the shared one removed. Move it to [src/lib/](src/lib/), the tier that knows the app and is importable from both sides ([`shortlistTiers.ts`](src/lib/shortlistTiers.ts), [`panelMode.ts`](src/lib/panelMode.ts), [`statusColors.ts`](src/lib/statusColors.ts) all exist for exactly this), and have the server module import it too. A payload TYPE stays in `views/` — only the shared vocabulary moves.
+The fix is never to duplicate the constant — that's the drift the shared one removed. Move it to [src/lib/](src/lib/), the tier that knows the app and is importable from both sides ([`shortlistBoardTiers.ts`](src/lib/shortlistBoardTiers.ts), [`panelMode.ts`](src/lib/panelMode.ts), [`statusColors.ts`](src/lib/statusColors.ts) all exist for exactly this), and have the server module import it too. A payload TYPE stays in `views/` — only the shared vocabulary moves.
 
 ## React Compiler purity lint fires on `Date.now()` / `Math.random()`
 

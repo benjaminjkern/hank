@@ -41,19 +41,35 @@ import { draftSingleApplicationItem } from "./draftSingleApplicationItem";
 import { loadApplicationCriticInput } from "./loadApplicationCriticInput";
 
 // The loop stops on its own as soon as a round fixes nothing new, so this is a
-// runaway backstop rather than the usual exit. It was 2, which is why problems a
-// rewrite could have fixed ended up in front of the user.
+// runaway backstop rather than the usual exit — set it high enough that a
+// fixable problem never reaches the user just because the counter ran out.
 const MAX_REVISION_ROUNDS = 5;
 
 type CritiqueLoopEvent =
   { type: "progress"; label: string } | { type: "revised"; target: string };
+
+// Why the loop stopped. It is the honest answer to "did it finish, or give up?"
+// — the question the user is left with when a draft arrives and nothing says
+// which happened. `needs_user` is the ordinary ending: a pass found things only
+// the candidate can settle, so there is nothing left to rewrite.
+export type CritiqueStop =
+  // A pass read the whole form and raised nothing.
+  | "clean"
+  // What's left turns on a fact only the user has, or is their own writing.
+  | "needs_user"
+  // Ran out of revision rounds with fixable problems still open.
+  | "capped"
+  // A round produced no revision at all (every redraft call failed).
+  | "stalled"
+  // A pass couldn't run.
+  | "error";
 
 export type CritiqueLoopResult = {
   // false when there was nothing to review (empty form) — the critic never ran.
   ran: boolean;
   critiqueRounds: number;
   revisionRounds: number;
-  finalVerdict: "clean" | "revise" | "error";
+  stop: CritiqueStop;
   // Human-facing labels of the items actually re-drafted ("cover_letter" or the
   // question text).
   revisedTargets: string[];
@@ -111,7 +127,7 @@ async function* critiqueAndRevise(
       ran: false,
       critiqueRounds: 0,
       revisionRounds: 0,
-      finalVerdict: "clean",
+      stop: "clean",
       revisedTargets: [],
       unresolvedIssues: [],
       note: "",
@@ -121,7 +137,7 @@ async function* critiqueAndRevise(
   const revised = new Set<string>();
   let critiqueRounds = 0;
   let revisionRounds = 0;
-  let finalVerdict: "clean" | "revise" | "error" = "clean";
+  let stop: CritiqueStop = "clean";
   let unresolved: CritiqueIssue[] = [];
   let note = "";
 
@@ -138,7 +154,7 @@ async function* critiqueAndRevise(
       shortAnswers: form.shortAnswers,
     });
     if (!context.ok) {
-      finalVerdict = "error";
+      stop = "error";
       break;
     }
     // eslint-disable-next-line no-await-in-loop -- same round: the critic reads what the loop above just assembled
@@ -148,7 +164,7 @@ async function* critiqueAndRevise(
       args,
     );
     if (!crit.ok) {
-      finalVerdict = "error";
+      stop = "error";
       break;
     }
     critiqueRounds++;
@@ -157,13 +173,15 @@ async function* critiqueAndRevise(
     note = crit.output.note;
     // No issues IS the clean verdict — the critic reports nothing else.
     if (crit.output.issues.length === 0) {
-      finalVerdict = "clean";
+      stop = "clean";
       unresolved = [];
       break;
     }
-    finalVerdict = "revise";
     unresolved = crit.output.issues;
-    if (revisionRounds >= MAX_REVISION_ROUNDS) break;
+    if (revisionRounds >= MAX_REVISION_ROUNDS) {
+      stop = "capped";
+      break;
+    }
 
     // Resolve each flagged target to a revisable item, collecting the notes that
     // target it. Unmatched targets drop out.
@@ -187,7 +205,10 @@ async function* critiqueAndRevise(
         byItem.set(key, entry);
       }
     }
-    if (byItem.size === 0) break; // nothing we're allowed / able to revise
+    if (byItem.size === 0) {
+      stop = "needs_user"; // nothing we're allowed / able to revise
+      break;
+    }
 
     let anyRevised = false;
     for (const { item, notes } of byItem.values()) {
@@ -228,7 +249,10 @@ async function* critiqueAndRevise(
         yield { type: "revised", target: tgt };
       }
     }
-    if (!anyRevised) break; // couldn't revise anything this round — avoid a spin
+    if (!anyRevised) {
+      stop = "stalled"; // every redraft failed — don't spin on it
+      break;
+    }
     revisionRounds++;
   }
 
@@ -236,7 +260,7 @@ async function* critiqueAndRevise(
     ran: true,
     critiqueRounds,
     revisionRounds,
-    finalVerdict,
+    stop,
     revisedTargets: [...revised],
     unresolvedIssues: unresolved,
     note,

@@ -28,7 +28,9 @@ import { useChatStore } from "@/lib/chatStore";
 import {
   BOARD_GROUP_OF_TIER,
   type ShortlistBoardTier,
-} from "@/lib/shortlistTiers";
+} from "@/lib/shortlistBoardTiers";
+// Types only — the loader beside them opens a database connection, so a VALUE
+// from that module would follow Prisma into the browser bundle.
 import type {
   ShortlistBoardView as ShortlistBoardData,
   ShortlistBoardRow,

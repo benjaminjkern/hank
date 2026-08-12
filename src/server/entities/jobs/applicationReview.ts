@@ -17,11 +17,6 @@ import type { Prisma } from "@/generated/prisma/client";
 import { fnv1a } from "@/utils/hash";
 import { normalizeForCompare } from "@/utils/text";
 
-// What the last review pass concluded. "clean" is a real verdict from a real
-// pass, distinct from a null review (nothing has looked at this yet) and from
-// "error" (we tried and couldn't).
-export type ReviewOutcome = "clean" | "unresolved" | "error";
-
 export type ReviewFinding = {
   // COVER_LETTER_ID or a questionId — the same ids the panel and the agent's
   // tools address items by.
@@ -42,12 +37,13 @@ export function findingAnchor(text: string | null | undefined): string {
   return fnv1a(normalizeForCompare(text ?? ""));
 }
 
-// There is deliberately no timestamp here. "Is this finding still about the text
-// on the page?" is answered by whether the item has been rewritten since — a
-// rewrite clears it — so a stored time would be a second, weaker way to ask the
-// same question.
+// The findings and nothing else — no verdict word and no timestamp. Both would
+// be second, weaker ways to ask what the findings already answer: whether a
+// finding is still about the text on the page is decided by comparing the words,
+// and "how did the pass end" is a fact about ONE pass that the row outlives (a
+// drained finding left a stored "unresolved" standing over an empty list). The
+// pass reports its own ending to whoever ran it — see CritiqueStop.
 export type ApplicationReview = {
-  outcome: ReviewOutcome;
   open: ReviewFinding[];
   // Findings the user answered by rewriting the item, held until the relay
   // carries them to Hank. A rewrite prompted by a specific objection says more
@@ -62,12 +58,7 @@ export function readApplicationReview(
 ): ApplicationReview | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const obj = raw as Record<string, unknown>;
-  const outcome =
-    obj.outcome === "clean" || obj.outcome === "error"
-      ? obj.outcome
-      : "unresolved";
   return {
-    outcome,
     open: readFindings(obj.open),
     settled: readFindings(obj.settled),
   };

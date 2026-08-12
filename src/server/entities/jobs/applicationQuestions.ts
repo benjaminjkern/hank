@@ -521,12 +521,12 @@ function rekeyQuestion(
 // The merge-upsert for one application item: replaces the cover letter and/or
 // upserts one short answer WITHOUT disturbing siblings.
 //
-// `author` says whose words these are, and it drives both side-effects. Hank's
-// text stamps "hank" and sets reuse FALSE — nothing he drafts feeds his next
-// draft until the user opts it in. The user's own words (dictated in chat and
-// saved verbatim by save_application_answer) stamp "user" and set reuse TRUE,
-// the same as typing them into the panel: which surface they came through
-// isn't the question the flag answers.
+// `author` says whose words these are, and it decides which baselines move.
+// Hank's own text moves both (it's his, and he's seen it) and clears reuse —
+// nothing he drafts feeds his next draft until the user opts it in. The user's
+// dictated words move only the seen baseline and leave reuse exactly as it was:
+// the switch lives on the page, and a chat message can't flip a control the
+// user isn't looking at.
 export async function persistApplicationAnswer(
   userId: string,
   jobId: string,

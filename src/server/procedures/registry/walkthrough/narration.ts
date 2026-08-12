@@ -22,6 +22,7 @@ import {
 import { formatFocusRefToken } from "@/lib/focusRefToken";
 import { humanCompanyBlockReason } from "@/server/entities/companies/humanCompanyReasonLabels";
 import { humanJobCloseReason } from "@/server/entities/jobs/humanJobReasonLabels";
+import type { CritiqueStop } from "@/server/procedures/registry/draftApplication/critiqueAndRevise";
 
 // Appended to the company set-asides the machine performs so the user sees one
 // coherent transition instead of [action] + [silent gap] + [next picker]. Same
@@ -90,34 +91,51 @@ export function narrateJobClose(args: {
   return `Closed ${jobRef(args)} — ${humanJobCloseReason(args.reason)}.${noteSuffix(args.note)}`;
 }
 
-// What the runner says when it puts a finished application on screen. The
-// reviewer's own words lead — it read the writing and nothing deterministic can
-// say what's in it — and every finding it couldn't settle is printed in full
-// underneath, because a finding is only useful next to the words it objects to
-// and the count alone told the user nothing they could act on.
+// What the runner says when it puts a finished application on screen: the
+// reviewer's own line about the writing, then how the read-back ended.
 //
-// The frame is one sentence and holds only what the model has no way to know:
-// what the button is called.
+// It does NOT restate the findings. Each one is drawn against the answer it
+// objects to, and a finding read three paragraphs above the words it's about is
+// the version that can't be acted on — so chat carries the count and the panel
+// carries the text. What chat must not do is go quiet: a draft that arrives with
+// no word on whether the read-back finished reads as finished either way, which
+// is the one thing the user can't check for themselves.
 export function narrateApplicationReady(args: {
   note: string | null;
-  openFindings: string[];
+  openCount: number;
+  stop: CritiqueStop | null;
 }): string {
   const parts: string[] = [];
   if (args.note?.trim()) parts.push(args.note.trim());
-  if (args.openFindings.length > 0) {
-    // Deliberately NOT "things I need from you" — that phrasing belongs to the
-    // items the decider couldn't draft at all, and using it here made a
-    // finished draft read as a request for more information. This is the
-    // opposite situation: the writing is done and these are what to watch.
-    parts.push(
-      "I've taken this as far as I can on my own. I'd keep an eye on these before you send it:",
-    );
-    parts.push(args.openFindings.map((f) => `- ${f}`).join("\n"));
-  }
+  parts.push(reviewEnding(args.openCount, args.stop));
   parts.push(
-    "It's on the right — change anything that doesn't sound like you, and tap **I submitted ✓** once you've applied.",
+    "Change anything that doesn't sound like you, and tap **I submitted ✓** once you've applied.",
   );
   return parts.join("\n\n");
+}
+
+// Deliberately NOT "things I need from you" — that phrasing belongs to the items
+// the decider couldn't draft at all, and using it here made a finished draft read
+// as a request for more information. This is the opposite situation: the writing
+// is done, and these are what to look at before it goes.
+function reviewEnding(openCount: number, stop: CritiqueStop | null): string {
+  if (openCount > 0) {
+    const things =
+      openCount === 1
+        ? "one thing I'd look at, flagged on the right next to the answer it's about"
+        : `${openCount} things I'd look at, flagged on the right next to the answers they're about`;
+    return stop === "capped"
+      ? `I've stopped rewriting rather than keep going in circles — there's ${things}.`
+      : `I've taken this as far as I can on my own — there's ${things}.`;
+  }
+  switch (stop) {
+    case "clean":
+      return "I read the whole thing back and there's nothing left I'd change. It's on the right.";
+    case "error":
+      return "I couldn't finish reading it back just now, so treat it as unchecked — it's on the right.";
+    default:
+      return "I've taken this as far as I can on my own. It's on the right.";
+  }
 }
 
 export function narrateJobApplied(args: {

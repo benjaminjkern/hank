@@ -16,7 +16,7 @@ import {
   BOARD_GROUP_OF_TIER,
   SHORTLIST_BOARD_TIERS,
   type ShortlistBoardTier,
-} from "@/lib/shortlistTiers";
+} from "@/lib/shortlistBoardTiers";
 import { prisma } from "@/server/db/prisma";
 import {
   closedThisRoundJobIds,

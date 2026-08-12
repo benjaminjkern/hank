@@ -79,13 +79,27 @@ export type ApplicationItem = NegotiationRow & {
   // question is what the form actually says, and someone else's wording isn't
   // theirs to change — both render read-only.
   addedByYou: boolean;
-  // What the review couldn't settle about THIS item, in the reviewer's own
-  // words, sitting against the text it's about and clearing when those words
-  // change. The register follows who wrote the text: an objection to Hank's
-  // draft is something he needs SETTLED, and rendering it as a fault would be
-  // showing the user a warning about writing they didn't do.
-  findings: Array<{ note: string; register: "question" | "note" }>;
+  // What the review raised about THIS item, in the reviewer's own words,
+  // sitting against the text it's about. `tone` is the whole of how it renders,
+  // and it answers two questions at once — see FindingTone.
+  findings: ApplicationFinding[];
 };
+
+// How one finding reads on the page. The split is not decoration: an objection
+// to HANK's draft is a question he needs settled, and drawing it as a fault
+// would be showing the user a warning about writing they didn't do. And a
+// finding whose words have since changed doesn't disappear — it goes quiet and
+// stays put until the relay carries it to him, so the user can see what their
+// edit was answering instead of watching the reason for it vanish mid-edit.
+export type FindingTone =
+  // Open, on Hank's draft — quiet: he's asking about his own words.
+  | "question"
+  // Open, on the user's own words — the only one drawn as a fault.
+  | "note"
+  // The words it objected to are gone. Muted, and clears on the next message.
+  | "answered";
+
+export type ApplicationFinding = { note: string; tone: FindingTone };
 
 export type ApplicationView = NegotiationState & {
   jobId: string;
@@ -129,8 +143,10 @@ function openThreadCount(items: ApplicationItem[]): number {
     (n, i) =>
       n +
       // Counted per finding, not per item: one answer can carry two separate
-      // objections, and settling one doesn't settle the other.
-      i.findings.length +
+      // objections, and settling one doesn't settle the other. An answered one
+      // is still drawn (muted, until the relay clears it) but is nobody's open
+      // thread any more.
+      i.findings.filter((f) => f.tone !== "answered").length +
       (i.verdict === "ask_user" && !(i.text ?? "").trim() ? 1 : 0),
     0,
   );
@@ -188,23 +204,27 @@ export async function loadApplicationView(
   }
 
   const review = readApplicationReview(row.applicationReview);
-  const openFindings = partitionFindings(review, (itemId) =>
+  const partitioned = partitionFindings(review, (itemId) =>
     itemId === COVER_LETTER_ID
       ? row.coverLetter
       : (readShortAnswers(row.shortAnswers).find(
           (a) => questionId(a.question) === itemId,
         )?.answer ?? null),
-  ).open;
+  );
   const findingsFor = (
     itemId: string,
     author: DraftAuthor | null,
-  ): Array<{ note: string; register: "question" | "note" }> =>
-    openFindings
+  ): ApplicationFinding[] => [
+    ...partitioned.open
       .filter((f) => f.itemId === itemId)
       .map((f) => ({
         note: f.note,
-        register: author === "user" ? ("note" as const) : ("question" as const),
-      }));
+        tone: author === "user" ? ("note" as const) : ("question" as const),
+      })),
+    ...partitioned.settled
+      .filter((f) => f.itemId === itemId)
+      .map((f) => ({ note: f.note, tone: "answered" as const })),
+  ];
   // ONE source for "does this diverge from what Hank last wrote" — the same
   // function the relay reports the divergence to him with, so the page's tag and
   // the message he reads can never disagree about what changed, and both treat
@@ -375,7 +395,7 @@ function buildItem(input: {
   author: DraftAuthor | null;
   change: ApplicationEdit["change"] | null;
   addedByYou: boolean;
-  findings: Array<{ note: string; register: "question" | "note" }>;
+  findings: ApplicationFinding[];
 }): ApplicationItem {
   const hasText = (input.text ?? "").trim().length > 0;
   // Anything written that Hank didn't write reads as the user's — the same
