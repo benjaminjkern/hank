@@ -333,15 +333,6 @@ type State = {
   // the field. Used by the ALREADY_STREAMING reject path so the user doesn't
   // lose their typed message when the server bounces a concurrent send.
   restoreComposerText: string | null;
-  // The active pipeline widget (sticky bar above composer). Set when an SSE
-  // `widget` event arrives; cleared on the next user send (the submission is
-  // implicit in the user message — the widget shouldn't linger after its
-  // answer ships). Only one widget is active at a time.
-  currentWidget: {
-    toolUseId: string;
-    kind: WidgetKind;
-    payload: unknown;
-  } | null;
 };
 
 export type ApiKeyBlockerReason =
@@ -479,7 +470,6 @@ const initial: State = {
   apiKeyBlocker: null,
   impersonateSessionId: null,
   restoreComposerText: null,
-  currentWidget: null,
 };
 
 // Map of tempId → AbortController for in-flight uploads. Kept outside state
@@ -1312,10 +1302,6 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       // A fresh send supersedes any prior "connection dropped" notice.
       streamInterrupted: false,
       stopController,
-      // Clear any active pipeline widget — the user is sending a message
-      // (which may or may not be a widget submission). Next pipeline event
-      // can re-arm currentWidget.
-      currentWidget: null,
       pendingAttachments: [],
       // Board edits made since the last message relay with THIS one (the
       // server snapshots them into the persisted user row at append time), so
@@ -1794,12 +1780,6 @@ type LoopEventJson =
           }
         | { type: "panel_mode"; mode: PanelMode };
     }
-  | {
-      type: "widget";
-      toolUseId: string;
-      kind: WidgetKind;
-      payload: unknown;
-    }
   | { type: "pipeline_status"; text: string }
   | {
       type: "pipeline_widget";
@@ -1919,21 +1899,6 @@ function applyEvent(
       if (ev.affectsViewedState) {
         scheduleViewedStateRefresh();
       }
-      break;
-    case "widget":
-      // Sticky-bar widget. Replaces the latest currentWidget; the dispatcher
-      // in components/Chat/widgets/ renders by `kind`. Only one widget active
-      // at a time; cleared on user send(). This is the *transient* path —
-      // streams the widget live for the next_company_picker flow so the user
-      // doesn't have to wait for a history refetch. The persisted
-      // pipeline_widget block (below) handles refresh durability.
-      set(() => ({
-        currentWidget: {
-          toolUseId: ev.toolUseId,
-          kind: ev.kind,
-          payload: ev.payload,
-        },
-      }));
       break;
     case "pipeline_status":
       // Append a status segment to the current assistant message. Distinct

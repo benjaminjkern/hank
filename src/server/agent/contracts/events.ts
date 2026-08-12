@@ -56,13 +56,20 @@ export type { WidgetKind };
 export type StreamEventOf<TUi, TWidgetKind extends string> =
   // A new assistant ChatMessage row is opening. Every content event after it
   // belongs to that row until the next boundary, and `messageId` is the row's
-  // PRE-MINTED `ChatMessage.id` — so the bubbles the client paints live carry
-  // the same ids and the same grouping as the rows the end-of-turn reconcile
-  // loads back. Without it the client had one bubble per send() while the DB had
-  // one row per narration, and every run ended by visibly re-shuffling itself.
-  // Re-entering an id already opened is fine and expected (a turn's tool loop
-  // alternates between its own row and the follow-up widget/status rows).
+  // PRE-MINTED `ChatMessage.id` — so the bubble the client paints live IS the
+  // row the end-of-turn reconcile loads back, and the reconcile repaints
+  // nothing. Re-announcing an already-open id is a no-op and expected (a turn's
+  // tool loop alternates between its own row and its widget/status rows).
   | { type: "message_start"; messageId: string }
+  // The emitter that announced the preceding row (or rows) has WRITTEN them
+  // itself, and content from here on belongs to whoever comes next.
+  //
+  // It exists because recordTranscript persists everything on the stream that
+  // nobody else claimed, and a claim needs a way to end — which is also why it
+  // never reaches the client: recordTranscript consumes it. It names no id on
+  // purpose, since a Hank turn announces up to three rows and releases them
+  // together.
+  | { type: "message_end" }
   | { type: "text"; text: string; parentToolUseId?: string }
   | {
       type: "tool_use_start";
@@ -97,18 +104,10 @@ export type StreamEventOf<TUi, TWidgetKind extends string> =
   // remembers what narration the user saw without mistaking it for its own prose
   // (see uiProvenance.ts).
   | { type: "pipeline_status"; text: string }
-  // Transient widget — streams live over SSE so the client's chatStore can
-  // populate `currentWidget` and show it before any history refetch. Emitted
-  // alongside (or before) the `pipeline_widget` persistence block; the two paths
-  // converge in the client's dispatcher (history wins over transient).
-  | {
-      type: "widget";
-      toolUseId: string;
-      kind: TWidgetKind;
-      payload: unknown;
-    }
-  // The persisted form. The client appends a WidgetSegment to message history;
-  // on refresh the segment is re-loaded from the `pipeline_widget` content block.
+  // A widget. The client appends a WidgetSegment to message history and
+  // PipelineWidgetSlot renders the newest one above the composer — live and
+  // after a refresh alike, since recordTranscript writes the matching
+  // `pipeline_widget` block as the event goes out.
   | {
       type: "pipeline_widget";
       toolUseId: string;
@@ -158,9 +157,10 @@ export type LoopEvent = StreamEvent | { type: "done" };
 export type ChatTurnRunner = (
   args: RunContext & {
     sessionId: string;
-    // First user message of this turn. "" on silent entry.
+    // First user message of this turn. "" on silent entry. The row for it is
+    // already written (runChat's openUserTurn) — this is the text to ROUTE on,
+    // and the attachments that rode with it are not this layer's business.
     userMessage: string;
-    attachmentIds: string[];
     // The user sent with no text because their panel marks ARE the
     // message. Empty text alone means silent entry (the deterministic layer
     // drives); with this set the turn opens a real user row — the panel-edit
@@ -196,12 +196,13 @@ export type ChatTurnRunner = (
 // annotated "mirror the walkthrough state machine's", which is the drift warning
 // in comment form. They live with the type they construct.
 //
-// The caller buffers whatever it yields (alongside any regular `text` events) and
-// persists the buffer as ONE assistant message at the end of the pass. That
-// single-message persistence keeps related output in one chat bubble and avoids
-// the "empty bubble between status and widget" artifact you get when each event
-// persists inline.
+// A caller yields these and is done: recordTranscript persists what goes out.
 
+// Deterministic machine narration ("Pulling in roles for 3 companies…"), as
+// opposed to a plain `text` event. The difference is what the MODEL reads back:
+// a status line replays as a system record of what the user was shown, while
+// text replays as Hank's own prose (see session/uiProvenance.ts). So narrate
+// with this whenever the words are the machine's rather than his.
 export function statusEvent(text: string): TurnEvent {
   return { type: "pipeline_status", text };
 }

@@ -3,15 +3,22 @@
 //
 // It owns THE RUN and nothing else: everything here is true of any message
 // regardless of what the message says.
-//   1. API-key gate. NO_DEEPSEEK_KEY surfaces as a typed error event for the
-//      client modal (the authoritative first-turn gate).
-//   2. Concurrency guard via claimSessionForNewRun — if a LIVE prior run is in
+//   1. Concurrency guard via claimSessionForNewRun — if a LIVE prior run is in
 //      flight, yield ALREADY_STREAMING and bail before persisting anything (a
 //      stale/aborted-but-wedged run is reclaimed instead of blocking).
-//   3. An AbortController the Stop endpoint can find, and a runId every row the
+//   2. An AbortController the Stop endpoint can find, and a runId every row the
 //      run produces is stamped with.
-//   4. Hand the whole message to `runChat` — the chat procedure — and relay what
-//      it yields to the SSE stream.
+//   3. Hand the whole message to `runChat` — the chat procedure — through
+//      `recordTranscript`, which persists every content event the run streams.
+//   4. Classify how the run ENDED: a user Stop is a clean end, a missing key is
+//      the modal's to fix, and anything else is a failure that gets a
+//      transcript row of its own.
+//
+// The key gate is a CATCH, not a pre-flight, and it has to stay one: `runChat`
+// opens by writing the user's message, so bailing before it runs would drop
+// what they typed on the floor of the very failure the modal asks them to fix.
+// Every path to a missing key throws one of two error types, so catching them
+// here needs no probe of its own.
 //
 // What the message MEANS is deliberately not here. Which widget submission
 // commits, when the walkthrough state machine drives, whether the profile is
@@ -23,7 +30,6 @@
 // through the procedure → sub-agents.
 
 import type { LoopEvent } from "@/server/agent/contracts";
-import { HANK_MODEL } from "@/server/agent/hank";
 import {
   clearActiveRun,
   claimSessionForNewRun,
@@ -33,12 +39,12 @@ import { newRunTreeId } from "@/server/agent/runTree/ids";
 import {
   appendRunError,
   getOrCreateActiveSession,
+  recordTranscript,
 } from "@/server/agent/session";
 import { classifyLlmError } from "@/server/platform/llm/classifyLlmError";
 import {
   NoAnthropicKeyError,
   NoDeepseekKeyError,
-  resolveLlmClient,
 } from "@/server/platform/llm/resolveClient";
 // The one sanctioned runtime→domain edge: runUserMessage opens THE RUN and
 // hands the message to runChat. This import IS the handoff — see AGENTS.md
@@ -74,25 +80,6 @@ const RUN_MAX_AGE_MS = 5 * 60_000;
 export async function* runUserMessage(
   args: RunUserMessageArgs,
 ): AsyncGenerator<LoopEvent> {
-  // 0. API key gate. Resolving HANK_MODEL throws if the user has neither their
-  // own key for that model's provider nor a usable server key — today
-  // NoDeepseekKeyError (→ NO_DEEPSEEK_KEY); the Anthropic arm covers HANK_MODEL
-  // ever moving to Claude. This is the authoritative chat gate (page.tsx's
-  // first-load check is best-effort, and can't see whether DEEPSEEK_API_KEY is
-  // set in the server env).
-  try {
-    await resolveLlmClient(args.userId, { model: HANK_MODEL });
-  } catch (err) {
-    if (
-      err instanceof NoAnthropicKeyError ||
-      err instanceof NoDeepseekKeyError
-    ) {
-      yield { type: "error", code: err.code, message: err.message };
-      return;
-    }
-    throw err;
-  }
-
   // 1. Get/create the active session. Scenarios can pass `sessionIdOverride` to
   // target the test session instead.
   const sessionId =
@@ -138,15 +125,22 @@ export async function* runUserMessage(
   const runId = newRunTreeId();
 
   try {
-    for await (const ev of runChat({
-      userId: args.userId,
-      sessionId,
-      userMessage: args.userMessage,
-      attachmentIds: args.attachmentIds ?? [],
-      timeZone: args.timeZone,
-      signal: runController.signal,
-      runId,
-    })) {
+    // recordTranscript is the ONE writer of streamed chat content — wrapping the
+    // whole procedure here is what makes "anything the user saw has a row" true
+    // of every path rather than of whichever emitters remembered to persist.
+    const stream = recordTranscript(
+      runChat({
+        userId: args.userId,
+        sessionId,
+        userMessage: args.userMessage,
+        attachmentIds: args.attachmentIds ?? [],
+        timeZone: args.timeZone,
+        signal: runController.signal,
+        runId,
+      }),
+      { sessionId, runId },
+    );
+    for await (const ev of stream) {
       // The procedure's `done` carries the turn's outcome, which it has already
       // acted on by the time it surfaces here. The client only needs the one
       // terminal below.
@@ -163,6 +157,18 @@ export async function* runUserMessage(
     // chat error banner instead of the stopped pill.
     if (isUserAbortError(err)) {
       yield { type: "stopped" };
+      yield { type: "done" };
+    } else if (
+      err instanceof NoAnthropicKeyError ||
+      err instanceof NoDeepseekKeyError
+    ) {
+      // No usable key for HANK_MODEL — today NoDeepseekKeyError (→
+      // NO_DEEPSEEK_KEY); the Anthropic arm covers HANK_MODEL ever moving to
+      // Claude. The blocking modal is the fix path, so this gets no transcript
+      // row (same reason the classified key/credit faults below don't) — but
+      // the user's message is already persisted, so it's waiting for them once
+      // they've pasted a key.
+      yield { type: "error", code: err.code, message: err.message };
       yield { type: "done" };
     } else {
       // A genuine failure. Record it in the transcript BEFORE re-throwing: the

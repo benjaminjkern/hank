@@ -20,8 +20,9 @@ export {
   runDisambiguationResolution,
   type ChecklistAddResult,
 } from "./runChecklistAdd";
-export { promptAddMoreCompanies } from "./promptAddMoreCompanies";
+export { addMoreCompaniesWidget } from "./addMoreCompaniesWidget";
 export type {
+  WatchlistAddArgs,
   CompanyToEnrich,
   CompanyEnrichResult,
   EnrichCompaniesResult,

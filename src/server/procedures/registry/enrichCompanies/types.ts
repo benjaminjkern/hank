@@ -21,8 +21,12 @@ export type CompanyToEnrich = {
   };
 };
 
-export type EnrichCompaniesArgs = RunContext & {
-  sessionId: string;
+// What the two watchlist-add entries (the checklist commit and the
+// disambiguation tail) are handed. Same shape as EnrichCompaniesArgs minus the
+// batch, because both work out their own list before calling the chain.
+export type WatchlistAddArgs = RunContext & { sessionId: string };
+
+export type EnrichCompaniesArgs = WatchlistAddArgs & {
   companies: CompanyToEnrich[];
   // Re-hunt + re-verify even when both flags are stamped. Use when the details
   // on file look wrong, not to fill gaps — gaps fill themselves.

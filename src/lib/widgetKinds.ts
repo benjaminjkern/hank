@@ -32,11 +32,7 @@ export type WidgetKind =
   // next-company picker. The "I want this one" override for an auto-skip.
   | "confirm_revive_company"
   | "confirm_application_submit"
-  // Emitted by runUserMessage's handleWhatsNext as a `widget` SSE event
-  // (live transient via chatStore.currentWidget) AND persisted as a
-  // `pipeline_widget` block (for refresh). The double-write is intentional:
-  // the SSE path delivers the widget live without waiting for a history
-  // refetch; the persisted block survives reload.
+  // The between-things chooser, emitted by renderWhatsNext.
   | "next_company_picker"
   // Emitted by the walkthrough state machine inside a company arm after
   // SCANNED jobs have been triaged. Replaces the silent auto-focus onto the

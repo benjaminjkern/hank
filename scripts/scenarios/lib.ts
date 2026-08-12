@@ -143,7 +143,6 @@ export async function drainPipeline(userMessage: string): Promise<{
     userId: USER_ID,
     sessionId: SESSION_ID,
     userMessage,
-    attachmentIds: [],
   })) {
     if (ev.type === "text") events.push({ type: "text", text: ev.text });
     else if (ev.type === "pipeline_status")

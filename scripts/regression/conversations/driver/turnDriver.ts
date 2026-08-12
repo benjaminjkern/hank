@@ -78,10 +78,9 @@ export async function driveTurn(args: {
         case "pipeline_status":
           statusLines.push(ev.text);
           break;
-        case "widget":
         case "pipeline_widget":
-          // Last widget in the turn wins (transient + persisted converge on the
-          // same toolUseId; the latest payload is the live one).
+          // Last widget in the turn wins — a turn can replace one it already
+          // put up (a status line, then the picker under it).
           widgetEvent = { kind: ev.kind, payload: ev.payload };
           break;
         case "ui":

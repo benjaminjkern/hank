@@ -109,7 +109,7 @@ They are a **mutation layer, not a step-chaining procedure**: a coherent set of 
 
 ## Widget event protocol
 
-Widgets stream as `{type:"widget", toolUseId, kind, payload}`; `runUserMessage` marshals to SSE, and client-side [`chatStore`](../src/lib/chatStore.ts) `applyEvent` writes it to `State.currentWidget` for [`PipelineWidgetSlot`](../src/components/Chat/widgets/index.tsx) to dispatch on `kind`. The kind union is single-sourced in [widgetKinds.ts](../src/lib/widgetKinds.ts); each widget is a folder under [widgets/registry/](../src/components/Chat/widgets/registry/) holding `def.ts` + `Widget.tsx`.
+Widgets stream as `{type:"pipeline_widget", toolUseId, kind, payload}` — built by [`widgetEvent`](../src/server/agent/contracts/events.ts), so a producer yields one event and is done. [`recordTranscript`](../src/server/agent/session/recordTranscript.ts) writes the matching block to its assistant row as it passes, `runUserMessage` marshals it to SSE, and client-side [`chatStore`](../src/lib/chatStore.ts) `applyEvent` appends a `WidgetSegment` to that row's bubble. [`PipelineWidgetSlot`](../src/components/Chat/widgets/index.tsx) renders the newest such segment above the composer and dispatches on `kind` — the same lookup live and after a refresh, so there is **one** widget channel, not a transient one racing a persisted one. The kind union is single-sourced in [widgetKinds.ts](../src/lib/widgetKinds.ts); each widget is a folder under [widgets/registry/](../src/components/Chat/widgets/registry/) holding `def.ts` + `Widget.tsx`.
 
 | `kind` | Submission shape |
 | --- | --- |
@@ -122,23 +122,23 @@ Widgets stream as `{type:"widget", toolUseId, kind, payload}`; `runUserMessage` 
 | `next_company_picker` | `{choice:"company", companyId}` \| `{choice:"opportunity", opportunityId}` \| `{choice:"job", jobId}` (a DEFERRED job revives to SHORTLISTED) \| `{choice:"add_companies"}` |
 | `next_job_picker` | `{companyId, choice:"pick", jobId}` \| `{companyId, choice:"caught_up"}` (DEFERRED rows auto-revive on pick) |
 
-Submissions become an ordinary user chat message via [`buildWidgetSubmissionMessage`](../src/components/Chat/widgets/types.ts) — the marker `<!--widget-response:{kind, …}-->` plus a visible label — so there's no custom endpoint. Only one widget is active at a time; `chatStore.send()` clears `currentWidget` at the start of every send.
+Submissions become an ordinary user chat message via [`buildWidgetSubmissionMessage`](../src/components/Chat/widgets/types.ts) — the marker `<!--widget-response:{kind, …}-->` plus a visible label — so there's no custom endpoint. Only one widget shows at a time, and answering one retires it: `PipelineWidgetSlot` scans back from the newest message and stops at the first user row, which is the typing-dismisses-widget rule.
 
 **Transient sibling: `refresh_viewed_state`.** A payload-free ping telling the client to refetch the dashboard + viewed entity mid-turn. Not persisted (pure stream control). Deterministic steps that write visible state without a tool — persisting a drafted cover letter, each company in a batch add — emit it right after the write. Rationale: [tools.md](tools.md#deterministic-pipeline-steps-refresh-via-refresh_viewed_state).
 
-## Message boundaries: the live stream groups the way the DB does
+## Who owns a chat row
 
-One user message produces **many** assistant `ChatMessage` rows — each narrated line is its own row ([`narrateStatus`/`narrateText`](../src/server/agent/session/narrate.ts)), each Hank turn writes up to three (content+tool_use, emitted widgets, emitted status lines), and a state-machine pass flushes one for the whole pass. The client, meanwhile, gets a flat event stream. Nothing in that stream said where one row ended and the next began, so the client painted the entire run into a single bubble — and the end-of-turn `refetchSession`, which loads the rows, then visibly re-cut the conversation into its real shape and dropped anything that had streamed without being persisted.
+**Anything the user saw has a `ChatMessage` row behind it, and exactly one writer puts it there.** The client reconciles from the DB on every terminal `done`, so an event that streamed without being persisted is an event that erases itself a beat after it appears — and an event persisted twice is a run that repeats itself the moment it ends. Both happened, in the same codebase, because five emitters each half-owned the problem.
 
-So **every producer of an assistant row announces it**: `{type:"message_start", messageId}`, carrying the row's **pre-minted** `ChatMessage.id`, yielded before the first content event that belongs to it. `applyEvent` opens an empty bubble under that id and routes subsequent segments into it, so the reconcile finds the same ids in the same order and repaints nothing.
+[`recordTranscript`](../src/server/agent/session/recordTranscript.ts) wraps the whole of `runChat` inside `runUserMessage` and writes every content event on the stream — `text`, `pipeline_status`, `pipeline_widget` — into an assistant row as it passes, upserting per event. Per event and not per group, because `/api/session` is what a reconnecting or polling client reads: a row that only lands when a long batch finishes is a batch nobody can watch.
 
-Three rules for anything new that persists an assistant row:
+One emitter still writes its own rows: a **Hank turn**. Its assistant row carries `thinking` / `tool_use` blocks that never reach the stream at all, so it cannot be built from stream events. It says so on the wire — `{type:"message_start", messageId}` claims a row, `{type:"message_end"}` releases it, and `recordTranscript` keeps out in between. `runAgentTurn` re-announces freely as its tool loop alternates between the assistant row and the follow-up widget/status rows (announcing an open row is a no-op); [`runHankTurn`](../src/server/agent/runtime/runHankTurn.ts) releases once, after all three rows are written.
 
-- **Mint the id first** (`newRunTreeId`), announce it, then write the row with `appendAssistantMessage({id})`. A row whose id the stream never named is a bubble that appears out of nowhere when the run ends.
-- **Announce lazily where the row is conditional.** `runStateMachineAndPersist` opens its row on the first event it actually buffers — announcing at entry would leave an empty bubble that later events get misfiled into when the pass turns out to yield nothing.
-- **Re-announcing an already-open row is free and expected.** A turn's tool loop alternates between the assistant row and the widget/status rows, so `runAgentTurn` re-announces (deduped) rather than tracking which group it's in.
+`message_start` is also the client's grouping signal, and `recordTranscript` emits one for each row it opens. The id is **pre-minted**, so the bubble the client paints live is the row the reconcile loads back and nothing repaints. Without it the client had one bubble per send while the DB had many rows, and every run ended by visibly re-cutting itself.
 
-A bare `yield {type:"pipeline_status", …}` outside the state machine's buffer is the failure this prevents: it streams, it renders, and it dies at the next reconcile, because no row was ever written for it.
+So for anything new that streams to chat: **yield the event and stop.** Don't write a row, don't mint an id, don't announce a boundary. Reach for `message_start` / `message_end` only if you're persisting blocks the stream can't carry — which today means Hank's turn and nothing else.
+
+The user's own message follows the same rule from the other end: [`openUserTurn`](../src/server/procedures/registry/chat/openUserTurn.ts) is the first thing `runChat` does, ahead of every fallible step. Written any later, a failure in between deleted what the user typed off their screen — they'd be left looking at an error row for a message that no longer existed.
 
 ## Provenance: the system-note channel
 
