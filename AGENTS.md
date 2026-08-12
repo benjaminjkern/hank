@@ -175,6 +175,14 @@ When adding NOT NULL to a column with existing data, backfill first in the migra
 
 **If `pnpm db:migrate` reports "migrations … diverge from the local migrations directory" or "migration X was modified after it was applied" — do NOT accept the offered `prisma migrate reset`** (it drops all data on a shared DB). Instead: cherry-pick the missing migration, or apply the additive change directly via `psql` and hand-insert a `_prisma_migrations` row. When you hand-insert, the `checksum` must be the real SHA-256 of the file (`shasum -a 256 <file> | awk '{print $1}'`) — a placeholder triggers the "modified after applied" error, which also only offers reset. Recovery for a bad checksum: `UPDATE _prisma_migrations SET checksum = '<real sha>' WHERE migration_name = '…'`.
 
+## A client component may only TYPE-import from `src/server/`
+
+A `"use client"` file importing a **value** out of a `src/server/` module pulls that whole module into the browser bundle — and every view imports `prisma`, so the build dies on `node:module` with an import trace through the panel. `import type { … }` is erased at compile and is always fine; `import { SOME_CONST }` is not, and the two look identical in review.
+
+**Nothing catches this but `pnpm run build`.** `tsc --noEmit` resolves the module and is happy, ESLint's boundaries plugin governs `src/server/` internals rather than the client edge, and Turbopack dev is permissive enough to serve the page. So: **run `pnpm run build` before handing back any change that adds an import across the components ↔ server line**, in either direction.
+
+The fix is never to duplicate the constant — that's the drift the shared one removed. Move it to [src/lib/](src/lib/), the tier that knows the app and is importable from both sides ([`shortlistTiers.ts`](src/lib/shortlistTiers.ts), [`panelMode.ts`](src/lib/panelMode.ts), [`statusColors.ts`](src/lib/statusColors.ts) all exist for exactly this), and have the server module import it too. A payload TYPE stays in `views/` — only the shared vocabulary moves.
+
 ## React Compiler purity lint fires on `Date.now()` / `Math.random()`
 
 `pnpm lint` runs `react-hooks/purity`, which flags impure calls in a render scope **syntactically** — no awareness of server components / async / helpers. So `const now = Date.now()` inside a server component errors. Fix: hoist into a one-line top-level helper (`function nowMs() { return Date.now() }`) — the linter only inspects the call site, not the helper body. Don't add `eslint-disable`. Same for a render-time `new Date()`.

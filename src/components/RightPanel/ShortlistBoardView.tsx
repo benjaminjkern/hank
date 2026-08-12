@@ -27,9 +27,11 @@ import { buildWidgetSubmissionMessage } from "@/components/Chat/widgets/types";
 import { useChatStore } from "@/lib/chatStore";
 import {
   BOARD_GROUP_OF_TIER,
-  type ShortlistBoardView as ShortlistBoardData,
-  type ShortlistBoardRow,
   type ShortlistBoardTier,
+} from "@/lib/shortlistTiers";
+import type {
+  ShortlistBoardView as ShortlistBoardData,
+  ShortlistBoardRow,
 } from "@/server/views/shortlistBoard";
 
 import {
