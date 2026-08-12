@@ -25,12 +25,9 @@
 // mode="cold_start"; the company keeps whatever status it had (NEW at add time)
 // and whats_next lands on the top-up-sparse-memory rung next turn.
 
-import { CompanyEventType } from "@/generated/prisma/client";
 import type { RunContext, RunTrace } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
-import { logCompanyEvents } from "@/server/entities/companies/logCompanyEvent";
-import { closeJobs } from "@/server/entities/jobs/closeJobs";
-import { humanJobCloseReason } from "@/server/entities/jobs/humanJobReasonLabels";
+import { passOnJobs } from "@/server/entities/jobs/passOnJobs";
 import { withTraceSpan } from "@/server/platform/trace/span";
 import { traceText } from "@/server/platform/trace/traceText";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
@@ -165,11 +162,7 @@ async function preScan(args: PreScanArgs): Promise<PreScanResult> {
   const turns = chunkResults.reduce((sum, c) => sum + c.result.turns, 0);
 
   if (!args.dryRun) {
-    await closeSkippedJobs({
-      userId: args.userId,
-      companyId: args.companyId,
-      merged,
-    });
+    await passOnSkippedJobs({ userId: args.userId, merged });
     // Stamp what survived, so a scan that dies before reading these doesn't send
     // the next entry back through this pass. Survivors only: a skipped role is
     // CLOSED and out of the pool by status, and a role no chunk reached has to
@@ -197,24 +190,23 @@ async function preScan(args: PreScanArgs): Promise<PreScanResult> {
   };
 }
 
-// Close the skipped roles — the only write pre-scan makes. Each reason bucket
-// closes as one batch, every job carrying the note the sub-agent wrote for THAT
-// job (per-job JobEvents fan out inside closeJobsWithReason), and collapses to
-// ONE summary CompanyEvent — the batch-seam rule.
-async function closeSkippedJobs(args: {
+// Propose passing on the skipped roles — the only write pre-scan makes. Every
+// bucket in ONE call: they are separate buckets only because they carry
+// different reasons, and the write takes a reason per job, so splitting them
+// would buy nothing but an extra round trip each.
+//
+// Nothing is CLOSED here and no event is logged, because nothing has happened to
+// these roles yet — the user sees them on the board with the reason, and the
+// commit is what closes the ones they leave alone.
+async function passOnSkippedJobs(args: {
   userId: string;
-  companyId: string;
   merged: MergedPreScan;
 }): Promise<void> {
   const buckets = args.merged.buckets.filter((b) => b.jobs.length > 0);
   if (buckets.length === 0) return;
-
-  // Every bucket in ONE call. They're separate buckets only because they carry
-  // different reasons, and the close seam takes a reason per job — so splitting
-  // them would buy nothing but an extra transaction each. Their feed rows go out
-  // as a single insert for the same reason.
-  await closeJobs({
+  await passOnJobs({
     userId: args.userId,
+    eliminatedBy: "PRE_SCAN",
     jobs: buckets.flatMap((bucket) =>
       bucket.jobs.map((job) => ({
         id: job.id,
@@ -224,14 +216,6 @@ async function closeSkippedJobs(args: {
       })),
     ),
   });
-  await logCompanyEvents(
-    buckets.map((bucket) => ({
-      userId: args.userId,
-      companyId: args.companyId,
-      type: CompanyEventType.JOBS_CLOSED,
-      notes: `Closed ${bucket.jobs.length} role${bucket.jobs.length === 1 ? "" : "s"}: ${humanJobCloseReason(bucket.reason)}`,
-    })),
-  );
 }
 
 function emitStartCaption(

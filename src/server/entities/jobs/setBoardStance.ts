@@ -32,7 +32,7 @@ import {
   ProposedVerdict,
 } from "@/generated/prisma/client";
 
-import { canHoldStance } from "./shortlistPool";
+import { isStanceable } from "./shortlistPool";
 
 export type SetBoardStanceResult =
   | { ok: true; title: string; priorVerdict: ProposedVerdict | null }
@@ -71,7 +71,7 @@ export async function setBoardStance(
     },
   });
   if (!row) return { ok: false, code: "NOT_FOUND", status: null, title: null };
-  if (!canHoldStance(row.status)) {
+  if (!isStanceable(row.status)) {
     return {
       ok: false,
       code: "NOT_ON_BOARD",

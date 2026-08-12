@@ -61,6 +61,25 @@ const H2 = styled.h2`
   color: ${({ theme }) => theme.colors.text};
 `;
 
+// The empty-round state. The only illustration in the panel, and deliberately
+// the same 1.5px stroke-on-currentColor language as the stance marks rather than
+// a picture: it is punctuation for one short sentence, not a thing to look at.
+const EmptyRound = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${({ theme }) => theme.space.sm};
+  color: ${({ theme }) => theme.colors.textMuted};
+`;
+
+const EmptyRoundMark = styled.span`
+  display: inline-flex;
+  color: ${({ theme }) => theme.colors.textSubtle};
+`;
+
+const EmptyRoundText = styled.span`
+  font-size: 13px;
+`;
+
 const OpenNote = styled.div`
   font-size: 12px;
   color: ${({ theme }) => theme.colors.textMuted};
@@ -163,7 +182,7 @@ const ScanTag = styled.span`
 
 const DISCARD_LABEL = "Closing these";
 const DISCARD_HINT =
-  "Marked pass, or ruled out before the shortlist. Committing closes them — mark one Shortlist or Defer to pull it back.";
+  "Everything Hank passed on, whichever pass ruled it out — strongest first. Nothing here is closed yet; committing is what closes them, so mark one Shortlist or Defer to pull it back.";
 
 function rowMeta(row: ShortlistBoardRow): string {
   return [row.location, row.compensation, row.employmentType]
@@ -181,10 +200,6 @@ function stanceOf(
   if (tier === "picks") return "pick";
   if (tier === "borderline") return "borderline";
   if (tier === "pass") return "pass";
-  // A row the filtering closed is already a close — showing Close selected is
-  // what makes the three marks say the same thing on every card, and it's why
-  // there's no separate revive button: the other two marks un-close it.
-  if (tier === "filteredThisRound") return "pass";
   return null;
 }
 
@@ -205,7 +220,6 @@ function BoardRow({
   const [busy, setBusy] = useState(false);
 
   const stance = stanceOf(row, tier);
-  const filtered = tier === "filteredThisRound";
 
   // Every row carries exactly one of the three, so re-clicking the mark it
   // already has is a no-op rather than an un-select. Defer is the "leave it
@@ -241,7 +255,6 @@ function BoardRow({
             stance={stance}
             onMark={(next) => void mark(next)}
             disabled={busy}
-            filtered={filtered}
             label={`Your call on ${row.title}`}
           />
         )}
@@ -299,7 +312,12 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
   // What changes is the framing: there is nothing to approve, only a verdict to
   // overturn, so the note says what committing does instead of leaving "Looks
   // good to me" to mean "close this company out".
-  const nothingKept = keep.length === 0 && discard.length > 0;
+  // Nothing PICKED, not nothing kept: a board whose only survivors are holds has
+  // nothing to work on either, and routing there means "choose one to apply to"
+  // over roles Hank recommended against. Deferrals still show; the settle just
+  // stops pretending there is a shortlist to approve.
+  const nothingPicked =
+    keep.every(({ tier }) => tier !== "picks") && discard.length > 0;
 
   return (
     <Root>
@@ -310,14 +328,29 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
             This shortlist is locked in — nothing left to decide here. To change
             your mind on a role, just tell Hank in chat.
           </OpenNote>
-        ) : nothingKept ? (
-          <OpenNote>
-            None of the roles Hank looked at this round are a fit, so there is
-            nothing to shortlist. Disagree on one? Mark it Shortlist or Defer
-            and he will pull it back. Otherwise settling this closes them out
-            and leaves {board.companyName} on your list, watched for new
-            postings.
-          </OpenNote>
+        ) : nothingPicked ? (
+          // Short on purpose. Hank explains what happened in the chat beside
+          // this; a second copy of that reasoning on the panel is the same
+          // paragraph twice, in the surface with less room for it.
+          <EmptyRound>
+            <EmptyRoundMark aria-hidden>
+              <svg
+                width="28"
+                height="28"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20 20l-4.2-4.2" />
+                <path d="M8.5 11h5" />
+              </svg>
+            </EmptyRoundMark>
+            <EmptyRoundText>Nothing to shortlist this round.</EmptyRoundText>
+          </EmptyRound>
         ) : null}
       </Header>
       <TierSection>

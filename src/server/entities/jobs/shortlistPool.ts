@@ -22,8 +22,17 @@ import { prisma } from "@/server/db/prisma";
 // committed to. It is ranked in place and never demoted on the way in — the
 // status changes at commit like every other row's, so nothing about a started
 // draft moves before the user has seen it on the board.
+// The rows a fresh round RANKS. Narrower than "on the board": a role one of the
+// automatic passes already stanced is judged for this round, so re-ranking it
+// would pay the ranker to re-litigate a call the user can already see and
+// overturn with one click.
 export function shortlistPoolStatusWhere(): Prisma.JobInteractionWhereInput {
   return {
+    // No stance from this round. A commit clears every stance, so "unstanced"
+    // means "not yet judged by the round in progress" without any date to
+    // compare against.
+    agentVerdict: null,
+    userVerdict: null,
     OR: [
       {
         status: {
@@ -56,9 +65,9 @@ export function onBoardWhere(): Prisma.JobInteractionWhereInput {
 }
 
 // Roles the board still considers. Everything else is decided and lives on the
-// company page's never-pursued list — with one exception the view adds back
-// (this round's automatic closes, shown collapsed so the filtering is
-// auditable). Those rows are read-only; every other row can take a stance.
+// company page's never-pursued list. The roles the automatic passes ruled out
+// are in here too — they keep their status until the commit, so they are ordinary
+// considered rows carrying a PASS stance rather than a special read-only tail.
 export const CONSIDERED_STATUSES: JobInteractionStatus[] = [
   JobInteractionStatus.NEW,
   JobInteractionStatus.SCANNED,
@@ -69,18 +78,6 @@ export const CONSIDERED_STATUSES: JobInteractionStatus[] = [
 
 export function isStanceable(status: JobInteractionStatus): boolean {
   return CONSIDERED_STATUSES.includes(status);
-}
-
-// Whether a row can hold a board stance. Wider than the pool by exactly one
-// status: a role the automatic filtering CLOSED is markable from the board, and
-// the mark is what un-closes it — which happens when the mark is relayed, not
-// when it's clicked, so the row is genuinely still CLOSED while it carries one.
-//
-// WHICH closed rows the board offers is the view's call (only this round's), and
-// the edit route gates on a proposal being open. This predicate only says the
-// combination is representable.
-export function canHoldStance(status: JobInteractionStatus): boolean {
-  return isStanceable(status) || status === JobInteractionStatus.CLOSED;
 }
 
 // Companies with an open negotiation for this user, most recently touched

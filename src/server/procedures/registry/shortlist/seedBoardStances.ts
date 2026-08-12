@@ -126,6 +126,9 @@ export async function seedBoardStances(args: {
         // mark leaves placement behind (see setBoardStance).
         placementVerdict: verdict,
         agentReason: args.picks.reasons[c.id] ?? null,
+        // Only a pass carries an elimination — the board orders its closing pile
+        // by how far each role got, and a picked or held role got all the way.
+        eliminatedBy: verdict === ProposedVerdict.PASS ? "SHORTLIST" : null,
         stanceAt: now,
       },
     });

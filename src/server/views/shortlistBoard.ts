@@ -19,7 +19,6 @@ import {
 } from "@/lib/shortlistBoardTiers";
 import { prisma } from "@/server/db/prisma";
 import {
-  closedThisRoundJobIds,
   isOnBoard,
   isOverridden,
   isPending,
@@ -29,7 +28,7 @@ import {
   type PlaceableRow,
 } from "@/server/entities/jobs/boardStance";
 import {
-  canHoldStance,
+  isStanceable,
   CONSIDERED_STATUSES,
 } from "@/server/entities/jobs/shortlistPool";
 import type {
@@ -128,7 +127,6 @@ function scanDissent(
 }
 
 function tierFor(row: PlaceableRow): ShortlistBoardTier {
-  if (row.status === JobInteractionStatus.CLOSED) return "filteredThisRound";
   // The board groups by DECISION, not by how much is known about the role: a
   // still-unread role someone marked belongs with the other roles carrying that
   // mark, or the proposal reads as if it were never made.
@@ -153,11 +151,6 @@ export async function loadShortlistBoard(
   });
   if (!company) return null;
 
-  // This round's automatic closes, resolved to job ids first so the row query
-  // stays bounded: a company worked for months carries hundreds of closes and
-  // the board only ever wants the current round's.
-  const closedJobIds = await closedThisRoundJobIds(userId, companyId);
-
   const rows = await prisma.jobInteraction.findMany({
     // Considered roles, plus this round's closes. Skipping the decided tail in
     // the QUERY keeps a long-worked company cheap to load (a board showing 30
@@ -165,13 +158,7 @@ export async function loadShortlistBoard(
     where: {
       userId,
       job: { companyId },
-      OR: [
-        { status: { in: CONSIDERED_STATUSES } },
-        {
-          status: JobInteractionStatus.CLOSED,
-          jobId: { in: closedJobIds },
-        },
-      ],
+      status: { in: CONSIDERED_STATUSES },
     },
     select: {
       status: true,
@@ -197,11 +184,21 @@ export async function loadShortlistBoard(
         },
       },
     },
-    // Strongest read first, then alphabetical — and NOTHING here may derive from
-    // a write timestamp. `updatedAt` is `@updatedAt`, so ordering by it made
-    // every mark bump its own row to the top of the group: the button moved out
-    // from under the cursor the instant it was pressed.
+    // How far the role got, then how strong the read was, then alphabetical —
+    // and NOTHING here may derive from a write timestamp. `updatedAt` is
+    // `@updatedAt`, so ordering by it made every mark bump its own row to the
+    // top of the group: the button moved out from under the cursor the instant
+    // it was pressed.
+    //
+    // `eliminatedBy` leads because it is the only fit signal most of the closing
+    // pile has: a role dropped by the metadata pass was never read, so it has no
+    // matchBucket at all, and sorting those rows by a column that is null on
+    // nearly all of them left the pile alphabetical. Its enum is declared
+    // furthest-first (PRE_SCAN, SCAN, SHORTLIST), so DESC puts the roles that
+    // survived longest on top; nulls (nothing eliminated them) sort first, which
+    // is where the live rows belong anyway.
     orderBy: [
+      { eliminatedBy: { sort: "desc", nulls: "first" } },
       { matchBucket: { sort: "asc", nulls: "last" } },
       { matchScore: { sort: "desc", nulls: "last" } },
       { job: { title: "asc" } },
@@ -260,7 +257,7 @@ export async function loadShortlistBoard(
       // ("actually, close that one"), not a click here. This round's filtered
       // rows are included — correcting the filtering is the point of showing
       // it, and committing closes that door with the rest of the board.
-      markable: open && canHoldStance(r.status),
+      markable: open && isStanceable(r.status),
     });
     byTier.set(tier, list);
   }
@@ -286,7 +283,6 @@ const TIER_LABELS: Record<ShortlistBoardTier, string> = {
   undecided: "Undecided",
   notReadYet: "Not read yet",
   onHold: "On hold",
-  filteredThisRound: "Filtered out this round",
 };
 
 // Agent-facing compact rendering — one line per role in the negotiation tiers,

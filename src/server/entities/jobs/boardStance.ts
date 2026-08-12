@@ -12,13 +12,11 @@
 import {
   CompanyEventType,
   JobDeferReason,
-  JobEventType,
   JobInteractionStatus,
   ProposedVerdict,
 } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 
-import { reviveFilteredJobs } from "./reviveFilteredJobs";
 import { onBoardWhere } from "./shortlistPool";
 
 export const STANCE_WORDS: Record<ProposedVerdict, string> = {
@@ -119,31 +117,6 @@ export async function roundStartedAt(
   return scraped > committed ? scraped : committed;
 }
 
-// The roles this round's automatic filtering closed, newest round only. Three
-// callers need the same answer and must not drift: the board shows them as its
-// auditable tail, the seed stances them when they're ALL that's left, and the
-// walkthrough asks whether there's a round to show at all.
-//
-// Scoped by `roundStartedAt`, so a commit ends the round and the next call comes
-// back empty — which is also what stops the walkthrough re-opening a board it
-// just settled.
-export async function closedThisRoundJobIds(
-  userId: string,
-  companyId: string,
-): Promise<string[]> {
-  const roundStart = await roundStartedAt(userId, companyId);
-  if (!roundStart) return [];
-  const closed = await prisma.jobEvent.findMany({
-    where: {
-      type: JobEventType.CLOSED,
-      occurredAt: { gte: roundStart },
-      jobInteraction: { userId, job: { companyId } },
-    },
-    select: { jobInteraction: { select: { jobId: true } } },
-  });
-  return [...new Set(closed.map((e) => e.jobInteraction.jobId))];
-}
-
 export type BoardEditRelay = {
   jobId: string;
   title: string;
@@ -230,25 +203,12 @@ export async function settleRelayedBoardEdits(
       }),
     ),
   );
-
-  // Only a mark that wants the role back re-opens it — a pass on an already
-  // closed row is agreement, and leaves it closed.
-  const reopening = edits
-    .filter(
-      (e) =>
-        e.verdict === ProposedVerdict.PICK ||
-        e.verdict === ProposedVerdict.BORDERLINE,
-    )
-    .map((e) => e.jobId);
-  if (reopening.length > 0) {
-    await reviveFilteredJobs({ userId, jobIds: reopening });
-  }
 }
 
 // Undo every unrelayed mark: put each row's live stance back to where it's
 // DRAWN, which is by definition the last thing Hank saw. Marks are the only
-// thing to undo — the un-close waits for the relay, so a discarded row never
-// left the pile it's sitting in.
+// thing there is to undo — a round changes no status until it is committed, so a
+// discarded row was never anywhere but the pile it is sitting in.
 //
 // A row Hank proposed keeps his verdict (userVerdict cleared to null); a row he
 // never ranked goes back to no mark at all.

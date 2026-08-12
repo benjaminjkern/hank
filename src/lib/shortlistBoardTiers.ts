@@ -23,16 +23,14 @@ export type ShortlistBoardTier =
   | "undecided" // on the board with no stance — nobody has called it yet
   // Still in the running, just not part of this round's ranking:
   | "notReadYet" // NEW — surfaced but the body was never read
-  | "onHold" // deliberately deferred for a reason of its own
-  // Decided by the passes that BUILT this board — shown so the automatic
-  // filtering is auditable while the round is still open:
-  | "filteredThisRound";
+  | "onHold"; // deliberately deferred for a reason of its own
 
-// Render order. The last two are the ones the panel collapses, and they're
-// adjacent on purpose: together they are exactly what committing this board
-// CLOSES. Everything above survives the commit in some form, which is why
-// "not read yet" and "on hold" sit with the live groups rather than in the tail
-// — they're still in play, they just haven't been ranked.
+// Render order. `pass` is the one the panel collapses, and it is exactly what
+// committing this board CLOSES — including the roles the automatic passes ruled
+// out, which carry an ordinary PASS stance rather than a tier of their own.
+// Everything above survives the commit in some form, which is why "not read yet"
+// and "on hold" sit with the live groups — they're still in play, they just
+// haven't been ranked.
 export const SHORTLIST_BOARD_TIERS: ShortlistBoardTier[] = [
   "picks",
   "borderline",
@@ -40,7 +38,6 @@ export const SHORTLIST_BOARD_TIERS: ShortlistBoardTier[] = [
   "notReadYet",
   "onHold",
   "pass",
-  "filteredThisRound",
 ];
 
 // The board renders TWO groups, and the line between them is what COMMITTING
@@ -54,5 +51,4 @@ export const BOARD_GROUP_OF_TIER: Record<ShortlistBoardTier, BoardGroup> = {
   notReadYet: "keep",
   onHold: "keep",
   pass: "discard",
-  filteredThisRound: "discard",
 };

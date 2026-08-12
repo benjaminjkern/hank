@@ -199,6 +199,18 @@ Some roles are marked "Application started and never finished" — the user comm
 
 You may still rank it anywhere, including \`pass\` — an abandoned draft often means they went off it, and a stale half-application is worth clearing out. But it takes a reason you can state: something in the pool now beats it, or the role itself doesn't hold up on a re-read. Never rank one down silently, and never treat "they didn't finish" as evidence on its own — a draft stops for a hundred reasons that say nothing about the role. Whatever you land on, **say in the \`reason\` that they'd started this one**, so they can tell you if they actually applied.
 
+# \`borderline\` is a comparison, not a shrug
+\`borderline\` means "don't apply to this one YET" — and "yet" only means something when something else on this board IS worth applying to first. Its whole job is queueing: these are fine, those are better, do those now.
+
+So when nothing here is a \`pick\`, **do not fall back to \`borderline\` for a role you feel lukewarm about**. "Eh, maybe something better turns up" is not a decision — it parks a role the user has to re-decide later with no more information than you have right now. Force it: either the role is worth applying to even in a weak field (\`pick\`), or it isn't worth their time (\`pass\`). Nothing better is coming from this company today, and that IS the information.
+
+\`borderline\` still survives a board with no picks, but only for a reason you can state in the \`reason\`:
+- **A specific unknown could flip it** — something the posting doesn't settle that the user can answer in one sentence. Name the missing fact.
+- **They already committed to it once** — set aside in an earlier round, or an application they started. Those carry their own rules above.
+- **Their notes say hold, not close.**
+
+If you can't name which of those applies, it's a \`pick\` or a \`pass\`.
+
 # Reasons render to the user
 Write every \`reason\` and the \`proposalNote\` in natural English — no stance labels ("pick"/"pass"/"borderline" as jargon), no scan jargon ("STRONG"), no status vocabulary, no tool names. They appear next to each role on the board.
 

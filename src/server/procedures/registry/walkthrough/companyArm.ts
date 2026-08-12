@@ -18,10 +18,7 @@ import { prisma } from "@/server/db/prisma";
 import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { markCompanyReady } from "@/server/entities/companies/markCompanyStatus";
 import { caughtUpCompany } from "@/server/entities/companies/setCompanyAside";
-import {
-  closedThisRoundJobIds,
-  roundStartedAt,
-} from "@/server/entities/jobs/boardStance";
+import { roundStartedAt } from "@/server/entities/jobs/boardStance";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
 import { runPreScan } from "@/server/procedures/registry/preScan";
 import { preScanPoolWhere } from "@/server/procedures/registry/preScan/pool";
@@ -254,21 +251,13 @@ export async function* runCompanyArm(
           },
         })
       : 0;
-  // A round that ruled EVERY role out still gets a board. Where the pool
-  // happened to empty — the metadata pass, the full read, or the ranker passing
-  // on the one survivor — is an implementation boundary the user can't see, and
-  // it was deciding whether they got a screen to disagree with or a company that
-  // silently went caught-up. Bounded by `roundStartedAt`, so the commit that
-  // settles this board ends the round and the next entry falls through.
-  const filteredThisRound = (
-    await closedThisRoundJobIds(args.userId, companyId)
-  ).length;
-  if (
-    scannedCount > 0 ||
-    openStanceCount > 0 ||
-    rerankable > 0 ||
-    filteredThisRound > 0
-  ) {
+  // A round that ruled EVERY role out still gets a board, and `openStanceCount`
+  // is what carries that: the automatic passes stance the roles they rule out
+  // rather than closing them, so "everything was filtered" leaves a boardful of
+  // passes exactly like "the ranker passed on the survivors" does. The commit
+  // clears every stance, which is also what stops this re-entering the board it
+  // just settled.
+  if (scannedCount > 0 || openStanceCount > 0 || rerankable > 0) {
     yield* runShortlist({ ...args, companyId, direction });
     return { wrappedUp: false };
   }

@@ -31,7 +31,6 @@ import { buildShortlistBoardEvents } from "@/server/views/showEvents";
 
 import { loadShortlistJobsInput } from "./loadShortlistJobsInput";
 import { seedBoardStances } from "./seedBoardStances";
-import { seedFilteredStances } from "./seedFilteredStances";
 
 export type ShortlistArgs = RunContext & {
   sessionId: string;
@@ -41,41 +40,6 @@ export type ShortlistArgs = RunContext & {
   // terms instead of re-showing the board as it stands.
   direction?: string;
 };
-
-// How many per-role reasons to spell out when every role got a pass. A pool of
-// 3 wants them all; a 25-role board passed in one sweep wants the shared reason
-// and a tail count, not a wall of text.
-const ALL_PASSED_REASON_LINES = 6;
-
-// The reply when nothing survived to a pick: the ranker's shared top-line, then
-// the per-role reasons it wrote for the roles it actually read. Nothing is
-// closed yet — that's the commit's job — so the framing is "here's where I
-// landed", not "I closed them".
-//
-// The counts come from the BOARD, not from the ranker: the roles the earlier
-// passes ruled out never reached it, and quoting its tally next to a screen
-// showing all of them read as a contradiction.
-function describeAllPassed(
-  picks: ShortlistJobsOutput,
-  candidates: Array<{ id: string; title: string }>,
-  counts: BoardCounts,
-  companyDisplayName: string,
-): string {
-  const n = counts.total;
-  const lead =
-    picks.proposalNote?.trim() ||
-    `I went through ${n === 1 ? "the one role" : `all ${n} roles`} at ${companyDisplayName} — none of them look worth applying to.`;
-  const lines = candidates
-    .filter((c) => picks.reasons[c.id])
-    .slice(0, ALL_PASSED_REASON_LINES)
-    .map((c) => `- **${c.title}** — ${picks.reasons[c.id]}`);
-  const hidden = n - lines.length;
-  if (hidden > 0 && lines.length > 0) {
-    lines.push(`- …and ${hidden} more, for the same kind of reason.`);
-  }
-  const body = lines.length > 0 ? `${lead}\n\n${lines.join("\n")}` : lead;
-  return `${body}\n\nThey're all on the board with my reasoning — if you agree I'll clear them out, or point me at any you want a closer look at.`;
-}
 
 function describeSeed(
   proposalNote: string | null,
@@ -92,6 +56,34 @@ function describeSeed(
     `The board on the right has every role with where I landed and why — ${pieces.join(", ")}. Change anything you disagree with (or tell me and I'll move it), and when it looks right I'll lock it in.`,
   );
   return parts.join("\n\n");
+}
+
+// Nothing came out worth applying to. The panel says one line and stops, so the
+// explanation lives HERE: what got looked at, why none of it landed, and what
+// settling actually does. A user who just watched a company produce nothing is
+// owed the reasoning, and chat is the surface with room for it.
+//
+// Holds are named apart from passes because they mean different things to the
+// user: a hold survives the settle, a pass doesn't.
+function describeNothingPicked(
+  board: ShortlistBoardView,
+  counts: BoardCounts,
+  proposalNote: string | null,
+): string {
+  const looked =
+    counts.total === 1 ? "the one role" : `all ${counts.total} roles`;
+  const lead =
+    proposalNote?.trim() ||
+    `I went through ${looked} at ${board.companyName} and there's nothing here I'd tell you to apply to right now.`;
+  const held =
+    counts.borderline > 0
+      ? ` ${counts.borderline === 1 ? "One I've held" : `${counts.borderline} I've held`} rather than closed — worth keeping, just not worth an application today.`
+      : "";
+  return [
+    lead,
+    `They're all on the right with my reasoning on each, strongest first — including the ones I ruled out early, so you can see what I passed over and why.${held}`,
+    `Nothing's closed yet. If I've got one wrong, mark it and I'll pull it back; otherwise settle it and I'll clear them out and keep watching ${board.companyName} for new postings.`,
+  ].join("\n\n");
 }
 
 // Roles whose application was started and abandoned, called out by name.
@@ -125,15 +117,6 @@ function describeUnfinished(
     ...lines,
     "If you actually applied to any of these, say so and I'll record it — otherwise they're yours to re-decide like anything else on the board.",
   ].join("\n");
-}
-
-// The reply when a whole round ended with nothing to weigh — every role was
-// ruled out before the ranker ever saw one. Deliberately the same SHAPE as a
-// normal seed (here's the board, change what you disagree with, say the word and
-// I'll settle it), because from the user's side one step happened either way.
-function describeNothingKept(board: ShortlistBoardView): string {
-  const { closing } = countBoard(board);
-  return `I went through ${closing === 1 ? "the one role" : `all ${closing} roles`} at ${board.companyName} and none of them look like a fit — they're on the right with my reasoning for each. If I've got one wrong, mark it and I'll pull it back; otherwise say the word and I'll clear them out and keep watching for new postings.`;
 }
 
 function describeReshow(board: ShortlistBoardView): string {
@@ -178,13 +161,13 @@ export async function* runShortlist(
     extraContext: args.direction,
   });
   if (!context.ok) {
-    // Nothing survived to rank. The board still opens, over the roles the
-    // earlier passes ruled out — from the user's side prescan, scan and
-    // shortlist are one step, so "everything was filtered" and "the ranker
-    // passed on the one survivor" must not produce different screens. Stancing
-    // those closes is what makes the board editable: without a stance nothing
-    // is on it, and the rows render read-only.
-    const stanced = await seedFilteredStances({ userId, companyId });
+    // Nothing survived to rank — but the earlier passes have already stanced
+    // everything they ruled out, so the board is on the table either way. From
+    // the user's side prescan, scan and shortlist are one step, and where the
+    // pool happened to empty must not decide whether they get a screen.
+    const stanced = await prisma.jobInteraction.count({
+      where: { userId, job: { companyId }, ...onBoardWhere() },
+    });
     if (stanced === 0) {
       yield {
         type: "text",
@@ -199,7 +182,11 @@ export async function* runShortlist(
     );
     yield* yieldUiEvents(events);
     if (board) {
-      yield { type: "text", text: describeNothingKept(board) };
+      const counts = countBoard(board);
+      yield {
+        type: "text",
+        text: describeNothingPicked(board, counts, null),
+      };
     }
     return;
   }
@@ -232,14 +219,14 @@ export async function* runShortlist(
   const counts = board
     ? countBoard(board)
     : { picked: 0, borderline: 0, closing: 0, total: 0 };
+  // Nothing PICKED is the branch, not nothing kept: a round whose survivors are
+  // all holds has produced nothing to work on either, and saying "here's your
+  // shortlist" over it is the thing that made an empty round feel like a
+  // shrug. Holds get named inside that explanation rather than counted as a
+  // result.
   const body =
-    counts.picked === 0 && counts.borderline === 0
-      ? describeAllPassed(
-          picks,
-          context.input.candidates,
-          counts,
-          context.companyName,
-        )
+    board && counts.picked === 0
+      ? describeNothingPicked(board, counts, picks.proposalNote)
       : describeSeed(picks.proposalNote, counts);
   const unfinished = describeUnfinished(context.input.candidates, picks);
   yield {
