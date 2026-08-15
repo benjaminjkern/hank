@@ -11,10 +11,7 @@ import {
 import { readMemory } from "@/server/memory/store";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import { enrichJobSubAgent } from "@/server/subagents/registry/enrichJob";
-import {
-  scanJobSubAgent,
-  type ScanCloseReason,
-} from "@/server/subagents/registry/scanJob";
+import { scanJobSubAgent } from "@/server/subagents/registry/scanJob";
 
 import { applyJobEnrichment } from "./applyJobEnrichment";
 import { applyScanMatch } from "./applyScanMatch";
@@ -25,11 +22,7 @@ export type EnrichmentOutcome = "enriched" | "cached" | "no_body";
 
 export type ScanJobOutcome =
   | { kind: "matched"; enrichment: EnrichmentOutcome }
-  | {
-      kind: "skipped";
-      closeReason: ScanCloseReason;
-      enrichment: EnrichmentOutcome;
-    }
+  | { kind: "skipped"; enrichment: EnrichmentOutcome }
   | { kind: "not_enriched"; enrichment: EnrichmentOutcome }
   | { kind: "error" }
   | { kind: "rate_limited" };
@@ -164,9 +157,5 @@ export async function scanOneJob(
 
   return match.output.decision === "match"
     ? { kind: "matched", enrichment }
-    : {
-        kind: "skipped",
-        closeReason: match.output.closeReason,
-        enrichment,
-      };
+    : { kind: "skipped", enrichment };
 }

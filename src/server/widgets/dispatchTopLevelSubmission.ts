@@ -122,6 +122,9 @@ export async function* dispatchTopLevelSubmission(
     // opening discovery and backing straight out is not a boundary, and the
     // wrap costs two LLM calls.
     if (addMoreSubmission.settled > 0) {
+      // Same legibility rule as the company wrap in runChat: the wrap is a
+      // ~30s silent stretch, so name the wait without naming the mechanism.
+      yield statusEvent("Filing away what I learned from that round…");
       await runWrapSegment({ ...args, subject: "discovery" });
     }
     return { kind: "consumed" };

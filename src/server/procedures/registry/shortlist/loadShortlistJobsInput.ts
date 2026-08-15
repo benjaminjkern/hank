@@ -13,15 +13,24 @@
 import { JobInteractionStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import {
+  liveVerdict,
+  placedVerdict,
+  STANCE_WORDS,
+} from "@/server/entities/jobs/boardStance";
+import {
   ROLE_ATTR_SELECT,
   toRoleAttrs,
 } from "@/server/entities/jobs/roleAttrs";
-import { shortlistPoolStatusWhere } from "@/server/entities/jobs/shortlistPool";
+import {
+  onBoardWhere,
+  shortlistPoolStatusWhere,
+} from "@/server/entities/jobs/shortlistPool";
 import { readResumeBackground } from "@/server/entities/resume/store";
 import { readMemory } from "@/server/memory/store";
 import type {
   ShortlistJobsInput,
   ShortlistCandidate,
+  ShortlistStance,
 } from "@/server/subagents/registry/shortlistJobs";
 
 export type ShortlistJobsInputLoad =
@@ -102,23 +111,44 @@ export async function loadShortlistJobsInput(args: {
     };
   }
 
-  const [profile, resume, companyNote, jobNotes] = await Promise.all([
-    readMemory(args.userId, "profile.md"),
-    readResumeBackground(args.userId),
-    readMemory(args.userId, `companies/${company.slug}.md`),
-    // The candidates' own jobs/{slug}.md notes, in one query. Keyed on the
-    // denormalized jobId rather than built from slugs: only 43% of Job rows
-    // carry a slug, and this way a note on a slug-less job is still found.
-    // (`path` stays authoritative — the prefix is what identifies a job note.)
-    prisma.memoryNote.findMany({
-      where: {
-        userId: args.userId,
-        jobId: { in: rows.map((j) => j.id) },
-        path: { startsWith: "jobs/" },
-      },
-      select: { jobId: true, content: true },
-    }),
-  ]);
+  const [profile, resume, companyNote, jobNotes, boardRows] = await Promise.all(
+    [
+      readMemory(args.userId, "profile.md"),
+      readResumeBackground(args.userId),
+      readMemory(args.userId, `companies/${company.slug}.md`),
+      // The candidates' own jobs/{slug}.md notes, in one query. Keyed on the
+      // denormalized jobId rather than built from slugs: only 43% of Job rows
+      // carry a slug, and this way a note on a slug-less job is still found.
+      // (`path` stays authoritative — the prefix is what identifies a job note.)
+      prisma.memoryNote.findMany({
+        where: {
+          userId: args.userId,
+          jobId: { in: rows.map((j) => j.id) },
+          path: { startsWith: "jobs/" },
+        },
+        select: { jobId: true, content: true },
+      }),
+      // Stanced rows already on an open board. Non-empty only when this call is
+      // ranking late arrivals into a round in progress — the ranker sees them as
+      // context (its pick ceiling counts theirs) but never re-judges them.
+      prisma.jobInteraction.findMany({
+        where: {
+          userId: args.userId,
+          job: { companyId: args.companyId },
+          ...onBoardWhere(),
+        },
+        select: {
+          status: true,
+          deferReason: true,
+          agentVerdict: true,
+          agentReason: true,
+          userVerdict: true,
+          placementVerdict: true,
+          job: { select: { title: true } },
+        },
+      }),
+    ],
+  );
   const jobNoteByJobId = new Map(
     jobNotes.flatMap((n) => (n.jobId ? [[n.jobId, n.content] as const] : [])),
   );
@@ -140,6 +170,20 @@ export async function loadShortlistJobsInput(args: {
       j.jobInteractions[0]?.status === JobInteractionStatus.APPLYING,
   }));
 
+  // STANCE_WORDS's values are exactly the ShortlistStance vocabulary; the cast
+  // lives here because entities may not import a sub-agent's types.
+  const openBoard = boardRows.flatMap((r) => {
+    const verdict = liveVerdict(r) ?? placedVerdict(r);
+    return verdict
+      ? [
+          {
+            title: r.job.title,
+            stance: STANCE_WORDS[verdict] as ShortlistStance,
+          },
+        ]
+      : [];
+  });
+
   return {
     ok: true,
     companyName: company.name,
@@ -151,6 +195,7 @@ export async function loadShortlistJobsInput(args: {
       resume,
       companyNote,
       ...(args.extraContext ? { extraContext: args.extraContext } : {}),
+      ...(openBoard.length > 0 ? { openBoard } : {}),
     },
   };
 }

@@ -20,7 +20,11 @@ import styled from "styled-components";
 
 import { buildWidgetSubmissionMessage } from "@/components/Chat/widgets/types";
 import { useChatStore } from "@/lib/chatStore";
+import { BOARD_GROUP_OF_TIER } from "@/lib/shortlistBoardTiers";
 import type { NegotiationState } from "@/server/views/negotiationPanel";
+// Type only — the loader beside it opens a database connection, so a VALUE
+// from that module would follow Prisma into the browser bundle.
+import type { ShortlistBoardView } from "@/server/views/shortlistBoard";
 
 // The bordered row card the negotiation panels draw.
 //
@@ -74,10 +78,21 @@ export const NegotiationButton = styled.button`
 // button ends it.
 const Footer = styled.div`
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: ${({ theme }) => theme.space.sm};
   padding: ${({ theme }) => theme.space.md} ${({ theme }) => theme.space.xl};
   border-top: 1px solid ${({ theme }) => theme.colors.border};
   background: ${({ theme }) => theme.colors.bg};
+`;
+
+// One sentence above the settle button, for the single consequence the screen
+// itself can't show (closing an application the user already started).
+const FooterNote = styled.div`
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.textMuted};
+  text-align: center;
+  max-width: 420px;
 `;
 
 // Filled rather than outlined, and wider than the panel's inline controls: it's
@@ -125,27 +140,7 @@ export function NegotiationFooter() {
   if (readOnly) return null;
 
   if (panelMode === "shortlist-board" && settled(board)) {
-    return (
-      <Footer>
-        <SettleButton
-          disabled={streaming}
-          onClick={() =>
-            void send(
-              buildWidgetSubmissionMessage(
-                {
-                  kind: "commit_negotiation",
-                  panel: "shortlist-board",
-                  companyId: board.companyId,
-                },
-                "[The board looks right — lock it in]",
-              ),
-            )
-          }
-        >
-          Looks good to me
-        </SettleButton>
-      </Footer>
-    );
+    return <ShortlistSettleFooter board={board} />;
   }
 
   if (panelMode === "discovery" && settled(discovery)) {
@@ -207,6 +202,87 @@ export function NegotiationFooter() {
   }
 
   return null;
+}
+
+// The shortlist board's settle control — the one place the commit's consequence
+// is spelled out before it happens. The label branches on what the commit will
+// DO: with picks it's a plain agreement; with only holds it says they're kept;
+// with nothing kept it says the company gets marked caught up. And when locking
+// in would close an application the user already started, the first press asks
+// — naming the roles — and only the second sends, carrying `confirmed` so the
+// deterministic commit may pass the same gate Hank's confirmed re-call does.
+function ShortlistSettleFooter({ board }: { board: ShortlistBoardView }) {
+  const streaming = useChatStore((s) => s.streaming);
+  const boardSettling = useChatStore((s) => s.boardSettling);
+  const setBoardSettling = useChatStore((s) => s.setBoardSettling);
+  const send = useChatStore((s) => s.send);
+  const [confirmingClose, setConfirmingClose] = useState(false);
+
+  // The footer only renders with no pending marks, so a row's TIER is its live
+  // stance — counting tiers is counting the decision.
+  let picks = 0;
+  let kept = 0;
+  const closingStarted: string[] = [];
+  for (const { tier, rows } of board.tiers) {
+    if (BOARD_GROUP_OF_TIER[tier] === "keep") {
+      kept += rows.length;
+      if (tier === "picks") picks += rows.length;
+      continue;
+    }
+    for (const row of rows) {
+      if (row.status === "APPLYING") closingStarted.push(row.title);
+    }
+  }
+
+  const asking = confirmingClose && closingStarted.length > 0;
+  const label = boardSettling
+    ? "Settling…"
+    : asking
+      ? closingStarted.length === 1
+        ? "Yes — close it and lock in"
+        : "Yes — close them and lock in"
+      : picks > 0
+        ? "Looks good to me"
+        : kept > 0
+          ? `Lock it in — keep ${kept} for later`
+          : `Close these out — mark ${board.companyName} caught up`;
+
+  return (
+    <Footer>
+      {asking && !boardSettling && (
+        <FooterNote>
+          {closingStarted.length === 1
+            ? `Locking in closes “${closingStarted[0]}” — an application you started.`
+            : `Locking in closes ${closingStarted.length} roles you'd started applying to.`}
+        </FooterNote>
+      )}
+      <SettleButton
+        disabled={streaming || boardSettling}
+        onClick={() => {
+          if (closingStarted.length > 0 && !confirmingClose) {
+            setConfirmingClose(true);
+            return;
+          }
+          setBoardSettling(true);
+          void send(
+            buildWidgetSubmissionMessage(
+              {
+                kind: "commit_negotiation",
+                panel: "shortlist-board",
+                companyId: board.companyId,
+                ...(closingStarted.length > 0
+                  ? { confirmed: true as const }
+                  : {}),
+              },
+              "[The board looks right — lock it in]",
+            ),
+          );
+        }}
+      >
+        {label}
+      </SettleButton>
+    </Footer>
+  );
 }
 
 // Narrows away the null payload as well as answering the question, so each

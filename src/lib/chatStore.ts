@@ -288,6 +288,11 @@ type State = {
   viewedJob: FocusedJobView;
   viewedOpportunity: FocusedOpportunityView;
   viewedBoard: ShortlistBoardView | null;
+  // A shortlist commit is in flight — set by the settle footer's press and by a
+  // commit_shortlist tool starting mid-turn, cleared when the turn ends. The
+  // board freezes on it: a mark made while the commit runs is silently raced
+  // by the commit's stance clear, so the panel refuses to take one.
+  boardSettling: boolean;
   viewedApplication: ApplicationView | null;
   viewedDiscovery: DiscoveryListView | null;
   // Per negotiation panel, how much the user has changed since their last chat
@@ -411,6 +416,9 @@ type Actions = {
   // dismiss. A real undo, not a dismissal: each surface puts its rows back to
   // what Hank last saw.
   discardPanelEdits: (panel: NegotiationPanel) => Promise<void>;
+  // Freeze the board for a commit the client is about to start (the settle
+  // footer press). The turn's end clears it.
+  setBoardSettling: (settling: boolean) => void;
   // The discovery list's equivalent: POSTs one candidate's mark, which decides
   // nothing until Hank's commit_discovery.
   markSuggestion: (suggestionId: string, mark: "add" | "pass") => Promise<void>;
@@ -457,6 +465,7 @@ const initial: State = {
   viewedJob: null,
   viewedOpportunity: null,
   viewedBoard: null,
+  boardSettling: false,
   viewedDiscovery: null,
   viewedApplication: null,
   pendingPanelEdits: {
@@ -1158,6 +1167,9 @@ export const useChatStore = create<State & Actions>((set, get) => ({
 
   async editShortlistBoard(companyId, jobId, verdict, reason) {
     if (get().impersonateSessionId) return;
+    // A commit is mid-flight: its stance clear would silently race this write.
+    // The panel disables the marks on the same flag; this is the backstop.
+    if (get().boardSettling) return;
     try {
       const res = await fetch(
         `/api/companies/${companyId}/shortlist-board/edit`,
@@ -1202,6 +1214,10 @@ export const useChatStore = create<State & Actions>((set, get) => ({
     } catch {
       // ignore — the board re-derives from the server on the next refresh
     }
+  },
+
+  setBoardSettling(settling) {
+    set({ boardSettling: settling });
   },
 
   // Throw away every unsent board mark. This is a real undo, not a "skip this
@@ -1456,7 +1472,13 @@ export const useChatStore = create<State & Actions>((set, get) => ({
         ) {
           sawTerminal = true;
         }
-        if (ev.type === "tool_use_start") lastToolName = ev.name;
+        if (ev.type === "tool_use_start") {
+          lastToolName = ev.name;
+          // Freeze the board the moment a commit starts, whichever path
+          // started it — a mark made while the commit runs is silently raced
+          // by its stance clear.
+          if (ev.name === "commit_shortlist") set({ boardSettling: true });
+        }
         // Server refused to start a second runUserMessage on the same
         // session because one is already in flight (see the ALREADY_STREAMING
         // guard in src/server/agent/runtime/runUserMessage.ts). Nothing was
@@ -1530,6 +1552,9 @@ export const useChatStore = create<State & Actions>((set, get) => ({
       set({
         streaming: false,
         stopController: null,
+        // The commit (if one ran) is over either way — the end-of-turn refetch
+        // repaints the board in whatever state it landed.
+        boardSettling: false,
         // Surface the soft "connection dropped — catching up…" notice; the
         // reconcile below (and the return-to-app listeners) clear it once the
         // real state loads.

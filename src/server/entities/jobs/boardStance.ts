@@ -54,8 +54,15 @@ export function liveVerdict(row: StancedRow): ProposedVerdict | null {
 
 // The user has overruled Hank on this row — the one case worth showing his
 // reasoning next to theirs, since on an untouched row his reason IS the row's.
+// Requires a real proposal to overrule: a mark on a row Hank never stanced is
+// the user's first word on it, not a disagreement, and treating it as one
+// blanked the row's reason line and attributed a null verdict to Hank.
 export function isOverridden(row: StancedRow): boolean {
-  return row.userVerdict !== null && row.userVerdict !== row.agentVerdict;
+  return (
+    row.agentVerdict !== null &&
+    row.userVerdict !== null &&
+    row.userVerdict !== row.agentVerdict
+  );
 }
 
 // On the board at all: someone has a verdict, or it's drawn somewhere.

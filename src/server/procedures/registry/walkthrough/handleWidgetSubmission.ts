@@ -96,13 +96,16 @@ export async function* handleWidgetSubmission(
       select: { companyId: true },
     });
     // Focus is ephemeral — nothing to clear; re-dispatch to the company arm
-    // (next-role picker) and show the company page.
+    // (next-role picker) and show the company page. A continuation: the tail
+    // of the application just submitted, never a fresh visit — no re-scrape.
     if (job?.companyId) {
       yield* yieldUiEvents(
         (await buildShowEvents(args.userId, { companyId: job.companyId }))
           .events,
       );
-      return yield* runCompanyArm(job.companyId, args);
+      return yield* runCompanyArm(job.companyId, args, undefined, {
+        continuation: true,
+      });
     }
     return { wrappedUp: true };
   }

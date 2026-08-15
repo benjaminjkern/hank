@@ -24,7 +24,9 @@ export async function* dispatchByEntryTarget(
     // Walk only — the machine is never handed a company it's meant to FINISH.
     // The segment wrap belongs to runUserMessage, which fires it off the
     // endedCompanyId a mutation reports.
-    return yield* runCompanyArm(target.id, args, target.direction);
+    return yield* runCompanyArm(target.id, args, target.direction, {
+      continuation: target.continuation,
+    });
   }
   if (target?.kind === "opportunity") {
     return yield* runOpportunityArm(target.id, args);
