@@ -52,6 +52,7 @@ import {
 // eslint-disable-next-line boundaries/dependencies -- documented handoff exception
 import { runChat } from "@/server/procedures/registry/chat";
 import { isUserAbortError } from "@/utils/abort";
+import { nowMs } from "@/utils/now";
 
 type RunUserMessageArgs = {
   userId: string;
@@ -137,6 +138,10 @@ export async function* runUserMessage(
         timeZone: args.timeZone,
         signal: runController.signal,
         runId,
+        // The route's cap and the stale-run reclaim share the same age bound,
+        // so this is when the cap will abort the run. Long fan-outs read it to
+        // stand down cleanly first.
+        deadlineAt: nowMs() + RUN_MAX_AGE_MS,
       }),
       { sessionId, runId },
     );

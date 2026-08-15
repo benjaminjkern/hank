@@ -15,14 +15,15 @@ import {
 import { statusEvent, widgetEvent } from "@/server/agent/contracts";
 import type { TurnEvent } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
-import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { markCompanyReady } from "@/server/entities/companies/markCompanyStatus";
 import { caughtUpCompany } from "@/server/entities/companies/setCompanyAside";
 import { roundStartedAt } from "@/server/entities/jobs/boardStance";
+import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
 import { runPreScan } from "@/server/procedures/registry/preScan";
 import { preScanPoolWhere } from "@/server/procedures/registry/preScan/pool";
 import { runScan } from "@/server/procedures/registry/scan";
+import { scanPoolWhere } from "@/server/procedures/registry/scan/pool";
 import { runShortlist } from "@/server/procedures/registry/shortlist";
 
 import { isScrapeStale, runBoardScrape } from "./boardScrape";
@@ -127,25 +128,22 @@ export async function* runCompanyArm(
   }
 
   // Step 1: triage NEW jobs. PRE_SCAN does the cheap metadata obvious-no
-  // filter, then the scan step (enrich + per-job match) reads each survivor's
-  // full posting, enriches the global Job, and decides SCANNED-vs-CLOSED per
-  // job. Together they drain the NEW bucket; whatever's left SCANNED goes to
-  // the shortlist rollup in step 2.
+  // filter (proposing PASS stances), then the scan step (enrich + per-job
+  // match) reads each survivor's full posting, enriches the global Job, and
+  // decides match-vs-pass per job. Together they judge the NEW bucket;
+  // whatever's SCANNED goes to the shortlist rollup in step 2.
   //
-  // The two phases gate on different counts because NEW is where a role waits
-  // for BOTH of them: `unjudged` is what the metadata pass hasn't seen, and the
-  // scan reads every NEW row regardless of which entry stamped it. Gating both
-  // on the same count is what made a half-finished scan re-run the metadata pass
-  // over roles it had already kept.
+  // The two phases gate on different counts because an unstanced NEW role
+  // waits for BOTH of them: `unjudged` is what the metadata pass hasn't seen
+  // (no `preScannedAt` stamp), and the scan reads every unstanced NEW row
+  // regardless of which entry stamped it. Gating both on the same count is
+  // what made a half-finished scan re-run the metadata pass over roles it had
+  // already kept.
   const unjudgedCount = await prisma.jobInteraction.count({
     where: { userId: args.userId, job: { companyId }, ...preScanPoolWhere() },
   });
   const newCount = await prisma.jobInteraction.count({
-    where: {
-      userId: args.userId,
-      status: JobInteractionStatus.NEW,
-      job: { companyId },
-    },
+    where: { userId: args.userId, job: { companyId }, ...scanPoolWhere() },
   });
   if (newCount > 0) {
     // Phase A — PRE_SCAN, the cheap metadata pass. Narrated distinctly from the
@@ -169,17 +167,13 @@ export async function* runCompanyArm(
       await runPreScan({ ...args, companyId });
     }
 
-    // Phase B — the scan step proper. Count what's still NEW (the metadata
-    // pass's survivors, plus anything an earlier entry stamped and never got to
-    // read) so the funnel is visible: "first pass over 218 → reading 17 in
-    // full". Skip the scan + its narration when nothing survived the metadata
-    // filter (the company wraps to caught-up in step 3).
+    // Phase B — the scan step proper. Count what's still unjudged (the
+    // metadata pass's survivors, plus anything an earlier entry stamped and
+    // never got to read) so the funnel is visible: "first pass over 218 →
+    // reading 17 in full". Skip the scan + its narration when nothing survived
+    // the metadata filter (the company wraps to caught-up in step 3).
     const survivorCount = await prisma.jobInteraction.count({
-      where: {
-        userId: args.userId,
-        status: JobInteractionStatus.NEW,
-        job: { companyId },
-      },
+      where: { userId: args.userId, job: { companyId }, ...scanPoolWhere() },
     });
     if (survivorCount === 0) {
       yield statusEvent(
@@ -198,13 +192,17 @@ export async function* runCompanyArm(
         `Reading ${survivorCount} that look promising in full and matching them to your thesis…`,
       );
       const scan = await runScan({ ...args, companyId });
-      if (scan.rateLimited) {
-        // Hit a rate-limit wall mid-scan — some jobs are still NEW. Don't run
-        // the shortlist on a partial pool. Bail with wrappedUp:false; the next
-        // turn re-enters this arm, re-runs scan (enrichment is cached on the
-        // Job and the match pass only touches NEW rows), and finishes the rest.
+      if (scan.rateLimited || scan.timedOut) {
+        // Partial scan — rate-limit wall or out of run budget; some jobs are
+        // still unjudged. Don't run the shortlist on a partial pool. Bail with
+        // wrappedUp:false; the next turn re-enters this arm, re-runs scan
+        // (enrichment is cached on the Job and the pool query only picks up
+        // the unjudged leftovers), and finishes the rest.
+        const readSoFar = scan.matched + scan.skipped + scan.errors;
         yield statusEvent(
-          "Hit a rate limit partway through — say the word and I'll pick up the rest.",
+          scan.timedOut
+            ? `Big board — I got through ${readSoFar} of ${scan.total} before running out of time. Say the word and I'll pick up the rest.`
+            : "Hit a rate limit partway through — say the word and I'll pick up the rest.",
         );
         return { wrappedUp: false };
       }

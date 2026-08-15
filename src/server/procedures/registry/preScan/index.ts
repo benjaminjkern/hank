@@ -165,7 +165,7 @@ async function preScan(args: PreScanArgs): Promise<PreScanResult> {
     await passOnSkippedJobs({ userId: args.userId, merged });
     // Stamp what survived, so a scan that dies before reading these doesn't send
     // the next entry back through this pass. Survivors only: a skipped role is
-    // CLOSED and out of the pool by status, and a role no chunk reached has to
+    // out of the pool by its PASS stance, and a role no chunk reached has to
     // stay reachable. One statement regardless of pool size.
     await prisma.jobInteraction.updateMany({
       where: {

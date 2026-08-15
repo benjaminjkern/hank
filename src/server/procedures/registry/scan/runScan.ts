@@ -1,12 +1,18 @@
-// The SCAN procedure's fan-out: for every prescan survivor (NEW JobInteraction) at
-// one company, run scanOneJob (enrich then per-user match) and fold the outcomes.
+// The SCAN procedure's fan-out: for every unjudged NEW role at one company
+// (scanPoolWhere — prescan's PASS-stanced rows are already judged and excluded),
+// run scanOneJob (enrich then per-user match) and fold the outcomes.
 //
 // Fan-out discipline:
 //   - Concurrency capped so we don't slam the rate limit.
 //   - On a 429/529 wall we ABORT the in-flight batch (chained AbortController)
 //     and return `rateLimited`. We do NOT retry into the wall — the SDK already
 //     backed off. Resumption is free: enrichment is cached on the Job and the
-//     match pass only touches NEW rows, so the next pass finishes the leftovers.
+//     match pass only touches unstanced NEW rows, so the next pass finishes the
+//     leftovers.
+//   - Approaching the run's `deadlineAt`, workers stop claiming new jobs and we
+//     return `timedOut` — same resumable shape as the rate-limit wall, so a
+//     board too big for one run ends with a clean partial instead of the cap
+//     ripping the fan-out mid-flight.
 //   - A per-job error (not a rate limit) is non-fatal: we leave that job NEW and
 //     a final sweep bumps it to SCANNED so the shortlist (which falls back to
 //     rawContent) still sees it — no job gets stranded in NEW limbo.
@@ -23,8 +29,10 @@ import { humanJobCloseReason } from "@/server/entities/jobs/humanJobReasonLabels
 import { withTraceSpan } from "@/server/platform/trace/span";
 import type { ScanCloseReason } from "@/server/subagents/registry/scanJob";
 import { isUserAbortError } from "@/utils/abort";
+import { nowMs } from "@/utils/now";
 
 import { loadScanContext } from "./loadContext";
+import { scanPoolWhere } from "./pool";
 import { scanOneJob, type ScanJobOutcome } from "./scanOneJob";
 
 // Max jobs scanned concurrently. Each worker does its job's enrich→match as two
@@ -36,13 +44,14 @@ const CONCURRENCY = 16;
 
 export type RunScanResult = {
   ok: true;
-  total: number; // NEW survivors at start
+  total: number; // pool size at start (scanPoolWhere)
   matched: number; // → SCANNED with a bucket
-  skipped: number; // → CLOSED at match
+  skipped: number; // → proposed PASS stance (the commit closes it)
   enriched: number; // enrich cache misses (newly computed)
   cached: number; // enrich cache hits
   errors: number; // non-fatal per-job failures
   rateLimited: boolean; // hit a 429/529 wall; remainder left NEW for next pass
+  timedOut: boolean; // ran out of run budget; remainder left NEW for next pass
 };
 
 type ScanArgs = RunContext & {
@@ -57,20 +66,25 @@ export async function runScan(args: ScanArgs): Promise<RunScanResult> {
     args.trace,
     (trace) => scan({ ...args, trace }),
     (r) =>
-      `${r.matched} matched, ${r.skipped} skipped, ${r.errors} error${r.errors === 1 ? "" : "s"}${r.rateLimited ? " (rate-limited)" : ""}`,
+      `${r.matched} matched, ${r.skipped} skipped, ${r.errors} error${r.errors === 1 ? "" : "s"}${r.rateLimited ? " (rate-limited)" : ""}${r.timedOut ? " (out of run budget)" : ""}`,
   );
 }
 
+// Stop claiming new jobs this long before the run's deadline: enough for the
+// in-flight wave (a worker's enrich + match are two sequential calls) to land
+// and for the walkthrough to narrate the partial before the cap aborts.
+const DEADLINE_MARGIN_MS = 60_000;
+
 async function scan(args: ScanArgs): Promise<RunScanResult> {
-  const survivors = await prisma.jobInteraction.findMany({
+  const pool = await prisma.jobInteraction.findMany({
     where: {
       userId: args.userId,
-      status: JobInteractionStatus.NEW,
       job: { companyId: args.companyId },
+      ...scanPoolWhere(),
     },
     select: { jobId: true },
   });
-  const jobIds = survivors.map((s) => s.jobId);
+  const jobIds = pool.map((s) => s.jobId);
 
   const result: RunScanResult = {
     ok: true,
@@ -81,6 +95,7 @@ async function scan(args: ScanArgs): Promise<RunScanResult> {
     cached: 0,
     errors: 0,
     rateLimited: false,
+    timedOut: false,
   };
   if (jobIds.length === 0) return result;
 
@@ -104,6 +119,16 @@ async function scan(args: ScanArgs): Promise<RunScanResult> {
     // `cursor++` is read-then-incremented with no await between, so it's a safe
     // atomic claim under the single-threaded event loop.
     while (!controller.signal.aborted) {
+      // Out of run budget → stop claiming; in-flight siblings finish and land.
+      // No abort: unlike a rate-limit wall there's nothing wrong with the work,
+      // we just can't START more of it and still end the run cleanly.
+      if (
+        args.deadlineAt !== undefined &&
+        nowMs() > args.deadlineAt - DEADLINE_MARGIN_MS
+      ) {
+        result.timedOut = true;
+        return;
+      }
       const idx = cursor++;
       if (idx >= jobIds.length) return;
 
@@ -176,15 +201,19 @@ async function scan(args: ScanArgs): Promise<RunScanResult> {
       })),
     );
 
-    // Final sweep: when we finished cleanly (not a rate-limit abort), promote any
-    // job still NEW (errored, or no body to match on) to SCANNED so the shortlist
-    // rollup considers it instead of leaving it stranded. Eventless bump.
-    if (!result.rateLimited) {
+    // Final sweep: ONLY when the pool was actually drained — promote any job
+    // still in it (errored, or no body to match on) to SCANNED so the shortlist
+    // rollup considers it instead of leaving it stranded. Eventless bump. A
+    // partial exit (rate-limit wall, run budget, Stop) must NOT sweep: the
+    // leftovers were never read, and SCANNED would tell the shortlist they were.
+    const drained =
+      !result.rateLimited && !result.timedOut && !controller.signal.aborted;
+    if (drained) {
       await prisma.jobInteraction.updateMany({
         where: {
           userId: args.userId,
-          status: JobInteractionStatus.NEW,
           job: { companyId: args.companyId },
+          ...scanPoolWhere(),
         },
         data: { status: JobInteractionStatus.SCANNED },
       });
