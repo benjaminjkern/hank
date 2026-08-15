@@ -94,6 +94,11 @@ export type ShortlistJobsInput = {
   companyNote: string | null;
   // Free-form steer forwarded from the chat ("infra roles only").
   extraContext?: string;
+  // Roles already stanced on an OPEN board, when this call ranks late arrivals
+  // into a round in progress rather than seeding a fresh one. Context only —
+  // they take no verdict entry, but the pick ceiling counts their picks and a
+  // new candidate has to beat them on the same terms.
+  openBoard?: Array<{ title: string; stance: ShortlistStance }>;
 };
 
 const SHORTLIST_STANCES = ["pick", "borderline", "pass"] as const;
@@ -189,6 +194,9 @@ A structural constraint stated in the user's profile or in the notes on this com
 
 Never ship a pick with a "confirm location before applying" caveat — if you'd warn the user about a structural issue you could detect, downgrade the pick instead.
 
+# Ranking into an open board
+Sometimes candidates arrive while a board is already on the table — new postings pulled in mid-round, or roles that re-entered play. Those earlier calls are listed under "Already on the board", NOT numbered as candidates, and take no verdict entry. Your \`verdicts\` array covers only the numbered candidates — but judge them as part of that whole board: the 5-pick ceiling counts the picks already standing, and a late arrival has to genuinely beat what's there to join them. The bar doesn't reset because it arrived late.
+
 # A role they already passed on
 Some roles carry a "Passed over earlier" note — the user saw this exact role in a previous round and set it aside. Treat it as a real signal about THIS role and nothing wider: if the note names a durable disqualifier ("wants no on-site days"), that still holds; if it says the pass had no stated reason, it means little on its own.
 
@@ -268,6 +276,13 @@ function renderUserContent(input: ShortlistJobsInput): string {
     "",
     renderCandidates(input.candidates),
   ];
+  if (input.openBoard?.length) {
+    sections.push(
+      "",
+      `# Already on the board (ranked earlier this round — not candidates)`,
+      ...input.openBoard.map((r) => `- ${r.title} — ${r.stance}`),
+    );
+  }
   if (input.companyDescription?.trim()) {
     sections.push(
       "",

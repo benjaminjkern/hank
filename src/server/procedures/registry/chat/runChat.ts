@@ -12,7 +12,7 @@
 // is deliberate: that file is true of any message regardless of what it says,
 // while every branch below is a decision about companies, roles, and profiles.
 
-import { yieldUiEvents } from "@/server/agent/contracts";
+import { statusEvent, yieldUiEvents } from "@/server/agent/contracts";
 import type {
   EntryTarget,
   RunContext,
@@ -162,6 +162,10 @@ export async function* runChat(args: ChatArgs): AsyncGenerator<TurnEvent> {
       // after would leave a closed company on screen for the whole wait.
       // eslint-disable-next-line no-await-in-loop -- a silent transition only exists because the previous turn wrapped
       yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
+      // The wrap is a ~30s silent stretch at the end of an already-answered
+      // message — say what the wait is, in the user's language (never the
+      // mechanism: no "notes", no "summary", no compaction talk).
+      yield statusEvent("Filing away what I learned from that stretch…");
       // eslint-disable-next-line no-await-in-loop -- the wrap reads the state the turn above it just wrote
       await runWrapSegment({ ...args, subject: "company" });
     }

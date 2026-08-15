@@ -17,17 +17,10 @@
 //     a final sweep bumps it to SCANNED so the shortlist (which falls back to
 //     rawContent) still sees it — no job gets stranded in NEW limbo.
 
-import {
-  JobInteractionStatus,
-  CompanyEventType,
-  type JobCloseReason,
-} from "@/generated/prisma/client";
+import { JobInteractionStatus } from "@/generated/prisma/client";
 import type { RunContext } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
-import { logCompanyEvents } from "@/server/entities/companies/logCompanyEvent";
-import { humanJobCloseReason } from "@/server/entities/jobs/humanJobReasonLabels";
 import { withTraceSpan } from "@/server/platform/trace/span";
-import type { ScanCloseReason } from "@/server/subagents/registry/scanJob";
 import { isUserAbortError } from "@/utils/abort";
 import { nowMs } from "@/utils/now";
 
@@ -101,10 +94,6 @@ async function scan(args: ScanArgs): Promise<RunScanResult> {
 
   const context = await loadScanContext(args.userId, args.companyId);
 
-  // Per-reason skip tally → one collapsed JOBS_CLOSED company event per reason
-  // (the per-job CLOSED JobEvents still fan out inside applyScanMatch).
-  const skipReasonCounts = new Map<ScanCloseReason, number>();
-
   // Internal controller chained to the caller's Stop signal so a rate-limit wall
   // (or a user Stop) tears down in-flight sub-agent calls promptly.
   const controller = new AbortController();
@@ -168,14 +157,7 @@ async function scan(args: ScanArgs): Promise<RunScanResult> {
       else if (outcome.enrichment === "cached") result.cached++;
 
       if (outcome.kind === "matched") result.matched++;
-      else if (outcome.kind === "skipped") {
-        result.skipped++;
-        // No await between get and set, so concurrent workers can't race here.
-        skipReasonCounts.set(
-          outcome.closeReason,
-          (skipReasonCounts.get(outcome.closeReason) ?? 0) + 1,
-        );
-      }
+      else if (outcome.kind === "skipped") result.skipped++;
       // kind === "not_enriched": no body to judge — leave NEW; the final sweep
       // promotes it to SCANNED so the shortlist sees it from metadata.
     }
@@ -189,18 +171,11 @@ async function scan(args: ScanArgs): Promise<RunScanResult> {
 
   if (args.signal) args.signal.removeEventListener("abort", onAbort);
 
+  // No company-feed event here: a skip is a PROPOSED pass, not a close — the
+  // commit is what closes rows, and its SHORTLIST_RAN event carries the real
+  // outcome. Writing "Closed N roles" at scan time put a decision in the feed
+  // that nothing had made yet.
   if (!args.dryRun) {
-    // One collapsed company-feed row per skip reason (best-effort), all inserted
-    // together rather than a round trip per reason.
-    await logCompanyEvents(
-      [...skipReasonCounts].map(([reason, count]) => ({
-        userId: args.userId,
-        companyId: args.companyId,
-        type: CompanyEventType.JOBS_CLOSED,
-        notes: `Closed ${count} role${count === 1 ? "" : "s"}: ${humanJobCloseReason(reason as JobCloseReason)}`,
-      })),
-    );
-
     // Final sweep: ONLY when the pool was actually drained — promote any job
     // still in it (errored, or no body to match on) to SCANNED so the shortlist
     // rollup considers it instead of leaving it stranded. Eventless bump. A

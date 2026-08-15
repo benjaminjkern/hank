@@ -42,12 +42,16 @@ function bucketPriority(bucket: string | null): number {
 
 // Trim `pickedJobIds` to the strongest SHORTLIST_CAP. Returns the kept ids
 // plus the raw count, so callers can report "model wanted N, shipped M".
+// `existingPickCount` is picks already standing on an open board when this
+// call ranks late arrivals into it — they share the one ceiling.
 export function capShortlistPicks(
   pickedJobIds: string[],
   candidates: ShortlistRankable[],
+  existingPickCount = 0,
 ): { kept: string[]; rawCount: number; capped: boolean } {
+  const cap = Math.max(0, SHORTLIST_CAP - existingPickCount);
   const rawCount = pickedJobIds.length;
-  if (rawCount <= SHORTLIST_CAP) {
+  if (rawCount <= cap) {
     return { kept: pickedJobIds, rawCount, capped: false };
   }
   const meta = new Map(
@@ -84,8 +88,15 @@ export async function seedBoardStances(args: {
   companyId: string;
   candidates: ShortlistRankable[];
   picks: ShortlistJobsOutput;
+  // Picks already standing on an open board, when this seed merges late
+  // arrivals into a round in progress. They count against the pick ceiling.
+  existingPickCount?: number;
 }): Promise<void> {
-  const { kept } = capShortlistPicks(args.picks.pickedJobIds, args.candidates);
+  const { kept } = capShortlistPicks(
+    args.picks.pickedJobIds,
+    args.candidates,
+    args.existingPickCount ?? 0,
+  );
   const keptSet = new Set(kept);
   const passedSet = new Set(args.picks.passedJobIds);
   const now = new Date();

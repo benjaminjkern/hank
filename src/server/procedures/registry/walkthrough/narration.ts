@@ -9,9 +9,10 @@
 // Wrapped up this company…"), these are written for the user. Same event, two
 // audiences, two strings.
 //
-// Keep it in the user's language. The wrap's consolidate + compact wait is never
-// narrated — the user has no notes/transcript model, so naming those leaks
-// internal jargon.
+// Keep it in the user's language. The wrap's consolidate + compact wait gets
+// exactly one generic line ("Filing away what I learned…", yielded by runChat)
+// — never the mechanism, since the user has no notes/transcript model and
+// naming those leaks internal jargon.
 
 import {
   CompanyStatus,
@@ -72,6 +73,25 @@ export function narrateCompanyCaughtUp(args: {
       : args.status === CompanyStatus.IN_FLIGHT
         ? `${ref} is in flight — application's in, waiting to hear back.`
         : `Marked ${ref} as caught up for now.`;
+  return `${line}${WRAP_DEBRIEF}`;
+}
+
+// The tail of a round the user just settled themselves (a committed board, a
+// submitted application). The commit already told them what closed, so this
+// never re-litigates the decision — it says what the settle means for the
+// company, keyed off the status that actually landed.
+export function narrateCompanySettled(args: {
+  companyId: string;
+  companyName: string | null;
+  status: CompanyStatus;
+}): string {
+  const ref = companyRef(args.companyId, args.companyName);
+  const line =
+    args.status === CompanyStatus.IN_PROCESS
+      ? `That settles ${ref} — an application there is still moving forward, so it stays in process.`
+      : args.status === CompanyStatus.IN_FLIGHT
+        ? `That settles ${ref} — your application's in, so it waits in flight while you hear back.`
+        : `That settles ${ref} — marked caught up. I'll flag anything new next time we look.`;
   return `${line}${WRAP_DEBRIEF}`;
 }
 

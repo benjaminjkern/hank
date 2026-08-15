@@ -24,7 +24,7 @@ export const commitShortlistTool: ToolDef<{
   name: "commit_shortlist",
   handoff: true,
   description:
-    "Lock in the shortlist board at a company — call this ONLY when the user has agreed the board is right ('looks good', 'lock it in', 'go with that'). Every stance becomes real: picks become the shortlist, borderline roles are set aside (reversible), and passes are closed. The role picker comes up on its own afterwards — calling this ends your turn, so say anything you want to say BEFORE the call. Never commit while the user is still pushing back. If the board would close a role they'd already started applying to, the tool asks you to check with them first; call again with confirmed:true once they say go. `company` is the company's slug.",
+    "Lock in the shortlist board at a company — call this ONLY when the user has agreed the board is right ('looks good', 'lock it in', 'go with that'). Every stance becomes real: picks become the shortlist, borderline roles are set aside (reversible), and passes are closed. The role picker comes up on its own afterwards — calling this ends your turn, so say anything you want to say BEFORE the call. IMPORTANT: when NOTHING on the board is a pick and nothing is held, committing settles the whole company — the passes close and the company reads as caught up until something new is posted. Tell the user that plainly BEFORE you commit an all-pass board; never let 'lock it in' silently mean 'we're done here'. Never commit while the user is still pushing back. If the board would close a role they'd already started applying to, the tool asks you to check with them first; call again with confirmed:true once they say go. `company` is the company's slug.",
   inputSchema: {
     type: "object",
     properties: {
@@ -68,7 +68,9 @@ export const commitShortlistTool: ToolDef<{
     return {
       content: `Committed the ${r.value.slug} shortlist: ${result.picked} shortlisted, ${result.setAside} set aside, ${result.closed} closed. The board is closed now — changing any of it from here is a normal record change (close_job / defer_job), not a board edit. The deterministic layer takes it from here.`,
       events: show.events,
-      entryTarget: { kind: "company", id: r.value.id },
+      // A continuation: the commit's tail surfaces what the round produced —
+      // it must not start new work at the company (no re-scrape).
+      entryTarget: { kind: "company", id: r.value.id, continuation: true },
     };
   },
 };

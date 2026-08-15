@@ -48,16 +48,20 @@ export async function dispatchCommitNegotiation(
     ...ctx,
     companyId: board.companyId,
     companyName: board.companySlug ?? board.companyName,
+    // The footer asks about closing a started application itself (a two-tap
+    // confirm naming the roles) and sends `confirmed` only after the user said
+    // go — the same meaning as Hank's confirmed:true re-call. An UNconfirmed
+    // press that still hits the gate (the payload was stale) falls through to
+    // Hank as ordinary text; he hits the same refusal on the tool and asks.
+    // Same shape as a stale button: the cost is the round trip this was
+    // saving, never a close the user didn't agree to.
+    confirmed: submission.confirmed,
   });
-  // Deliberately no `confirmed` here: the commit refuses a board that would
-  // close a role the user had started applying to, and this path has no way to
-  // ask them. Falling through hands the press to Hank as ordinary text, he hits
-  // the same refusal on the tool — which spells out which roles and why — and
-  // asks. Same shape as a stale button: the cost is the round trip this was
-  // saving, never a close the user didn't agree to.
   if (!result.ok) return null;
-  // The board closes with the commit, so the panel can't stay on it.
-  return { kind: "company", id: board.companyId };
+  // The board closes with the commit, so the panel can't stay on it. A
+  // continuation: the commit's tail surfaces what the round produced — it must
+  // not start new work at the company (no re-scrape).
+  return { kind: "company", id: board.companyId, continuation: true };
 }
 
 // Nothing left for Hank to react to: the surface is still settleable, the user

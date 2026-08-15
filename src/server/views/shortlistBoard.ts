@@ -8,7 +8,6 @@
 // commit that clears them (entities/companies/commitShortlist).
 
 import {
-  MatchBucket,
   JobInteractionStatus,
   ProposedVerdict,
 } from "@/generated/prisma/client";
@@ -73,10 +72,6 @@ export type ShortlistBoardRow = NegotiationRow & {
   // The one-line rationale for the row: the stance reason while a negotiation
   // is open, otherwise the deferNote a commit left on a set-aside role.
   reason: string | null;
-  // The scan pass's read, ONLY when it contradicts where the row ended up.
-  // Null on the ordinary agreeing row — the shortlist reason is written later
-  // and with more context, so repeating the earlier one just doubles the row.
-  scanDissent: string | null;
   // The LIVE stance — what the panel shows selected. Null = undecided.
   // Distinct from the row's tier, which follows `placementVerdict`.
   verdict: ProposedVerdict | null;
@@ -107,24 +102,6 @@ export type ShortlistBoardView = NegotiationState & {
   companySlug: string | null;
   tiers: ShortlistBoardTierRows[];
 };
-
-// The first read only earns a line when it genuinely contradicts the stance —
-// two steps apart on the same axis. A POSSIBLE bucket contradicts nothing, and
-// one step (STRONG demoted to borderline) is ordinary re-ranking, not a
-// disagreement worth a second line on every row.
-function scanDissent(
-  bucket: MatchBucket | null,
-  verdict: ProposedVerdict | null,
-): string | null {
-  if (!bucket || !verdict) return null;
-  if (bucket === MatchBucket.STRONG && verdict === ProposedVerdict.PASS) {
-    return "The first read called this a strong match.";
-  }
-  if (bucket === MatchBucket.WEAK && verdict === ProposedVerdict.PICK) {
-    return "The first read called this a stretch.";
-  }
-  return null;
-}
 
 function tierFor(row: PlaceableRow): ShortlistBoardTier {
   // The board groups by DECISION, not by how much is known about the role: a
@@ -169,8 +146,6 @@ export async function loadShortlistBoard(
       deferReason: true,
       deferNote: true,
       closeNote: true,
-      matchBucket: true,
-      matchReason: true,
       updatedAt: true,
       job: {
         select: {
@@ -222,16 +197,17 @@ export async function loadShortlistBoard(
     // renders it attributed to Hank. Leaving it here too printed one string
     // twice — the plain line and "Hank had this as X — <same string>".
     const overridden = isOverridden(r);
+    // The deferNote is the fallback even for a row that IS on the board: a
+    // previously-deferred role the user marked by hand carries a stance but no
+    // agentReason, and blanking its line erased the one piece of history the
+    // row had ("why was this parked?") the moment it was touched.
     const reason =
       r.status === JobInteractionStatus.CLOSED
         ? r.closeNote
         : overridden
           ? null
-          : onBoard
-            ? r.agentReason
-            : r.status === JobInteractionStatus.DEFERRED
-              ? r.deferNote
-              : null;
+          : ((onBoard ? r.agentReason : null) ??
+            (r.status === JobInteractionStatus.DEFERRED ? r.deferNote : null));
     const list = byTier.get(tier) ?? [];
     list.push({
       jobId: r.job.id,
@@ -242,9 +218,6 @@ export async function loadShortlistBoard(
       employmentType: r.job.employmentType,
       sourceUrl: r.job.sourceUrl,
       status: r.status,
-      // Only when the first read CONTRADICTS where the row ended up. Agreement
-      // is the boring case and repeating it doubles every row.
-      scanDissent: scanDissent(r.matchBucket, liveVerdict(r)),
       reason,
       verdict: liveVerdict(r),
       // Hank's side, shown only when the user has overruled him — on an
@@ -323,7 +296,6 @@ export function renderShortlistBoardText(
           : row.overriddenAgentVerdict
             ? `the user overruled your ${STANCE_WORDS[row.overriddenAgentVerdict]}`
             : null,
-        row.scanDissent,
       ].filter(Boolean);
       lines.push(
         `  - ${row.title}${bits.length ? ` (${bits.join(", ")})` : ""}${row.reason ? ` — ${row.reason}` : ""}`,

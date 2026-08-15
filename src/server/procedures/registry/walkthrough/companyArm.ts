@@ -6,6 +6,12 @@
 //
 // Every rung re-derives its position from the DB, so re-entering just lands on
 // the first thing that still needs doing.
+//
+// A CONTINUATION entry (the tail after a commit or a submitted application)
+// runs the same ladder minus the board-scrape rung, and settles with a short
+// confirmation instead of the close-rationale summary: it exists to surface
+// what the settle produced, never to start new work — a re-scrape here is how
+// "close these out" turned into a fresh round the user didn't ask for.
 
 import {
   CompanyStatus,
@@ -28,7 +34,7 @@ import { runShortlist } from "@/server/procedures/registry/shortlist";
 
 import { isScrapeStale, runBoardScrape } from "./boardScrape";
 import { runCompanyEnrichStep } from "./companyEnrichStep";
-import { narrateCompanyCaughtUp } from "./narration";
+import { narrateCompanyCaughtUp, narrateCompanySettled } from "./narration";
 import { summarizeCloseRationales } from "./summarizeCloseRationales";
 import { yieldStateChange } from "./yieldStateChange";
 
@@ -41,6 +47,7 @@ export async function* runCompanyArm(
   // `direction`. Only the shortlist rung reads it; the earlier rungs (revive,
   // prep, scrape, scan) are unconditional work that a steer can't change.
   direction?: string,
+  opts: { continuation?: boolean } = {},
 ): AsyncGenerator<TurnEvent, WalkthroughResult> {
   // Rebound by the enrich step: hunting a board URL another Company row already
   // holds merges this user's watchlist entry into that row and deletes the stub,
@@ -92,39 +99,45 @@ export async function* runCompanyArm(
   // surface today's roles instead of a weeks-old snapshot. After one scrape
   // lastScrapedJobsAt is fresh, so same-session re-entries skip it.
   //
+  // A continuation never scrapes, however stale the board: the user just
+  // settled something here, and pulling fresh postings now starts a round they
+  // didn't ask for. New postings wait for the next real visit.
+  //
   // Count THIS USER's roles, not the global Job table: a company can carry Job
   // rows from another user's scan while this user has zero JobInteractions.
   // Gating on the global count let those skip the scrape, hit newCount===0, and
   // fall through to "caught up" showing nothing — the user clicks a company and
   // it vanishes with no roles.
-  const userJobCount = await prisma.jobInteraction.count({
-    where: { userId: args.userId, job: { companyId } },
-  });
-  const ci0 = await prisma.companyInteraction.findUnique({
-    where: { userId_companyId: { userId: args.userId, companyId } },
-    select: {
-      lastScrapedJobsAt: true,
-      company: { select: { name: true, sourceUrl: true } },
-    },
-  });
   // Genuinely-new postings this entry pulled in. Step 1 narrates these
   // separately from the not-yet-reviewed backlog. 0 when no scrape ran.
   let scrapeDelta = 0;
-  if (
-    ci0?.company.sourceUrl &&
-    (userJobCount === 0 || isScrapeStale(ci0.lastScrapedJobsAt))
-  ) {
-    const scraped = yield* runBoardScrape(
-      companyId,
-      ci0.company.sourceUrl,
-      ci0.company.name,
-      userJobCount > 0,
-      args,
-    );
-    if (scraped.wrapped) {
-      return { wrappedUp: true, endedCompanyId: scraped.endedCompanyId };
+  if (!opts.continuation) {
+    const userJobCount = await prisma.jobInteraction.count({
+      where: { userId: args.userId, job: { companyId } },
+    });
+    const ci0 = await prisma.companyInteraction.findUnique({
+      where: { userId_companyId: { userId: args.userId, companyId } },
+      select: {
+        lastScrapedJobsAt: true,
+        company: { select: { name: true, sourceUrl: true } },
+      },
+    });
+    if (
+      ci0?.company.sourceUrl &&
+      (userJobCount === 0 || isScrapeStale(ci0.lastScrapedJobsAt))
+    ) {
+      const scraped = yield* runBoardScrape(
+        companyId,
+        ci0.company.sourceUrl,
+        ci0.company.name,
+        userJobCount > 0,
+        args,
+      );
+      if (scraped.wrapped) {
+        return { wrappedUp: true, endedCompanyId: scraped.endedCompanyId };
+      }
+      scrapeDelta = scraped.delta;
     }
-    scrapeDelta = scraped.delta;
   }
 
   // Step 1: triage NEW jobs. PRE_SCAN does the cheap metadata obvious-no
@@ -279,6 +292,31 @@ export async function* runCompanyArm(
       deferred: pickable.deferred,
     });
     return { wrappedUp: false };
+  }
+
+  // Step 3, continuation form: the user just settled this company themselves —
+  // a committed board, a submitted application — and nothing is left to pick.
+  // The commit already told them what closed, so the close-rationale summary
+  // below would re-litigate their own decision; land the right engagement tail
+  // and confirm the settle in one line instead.
+  if (opts.continuation) {
+    const { status } = await caughtUpCompany({
+      userId: args.userId,
+      companyId,
+      derive: true,
+    });
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { name: true },
+    });
+    yield* yieldStateChange(
+      narrateCompanySettled({
+        companyId,
+        companyName: company?.name ?? null,
+        status,
+      }),
+    );
+    return { wrappedUp: true, endedCompanyId: companyId };
   }
 
   // Step 3: nothing pickable at this company (no SHORTLISTED, no DEFERRED).

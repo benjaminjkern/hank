@@ -61,13 +61,19 @@ const H2 = styled.h2`
   color: ${({ theme }) => theme.colors.text};
 `;
 
-// The empty-round state. The only illustration in the panel, and deliberately
-// the same 1.5px stroke-on-currentColor language as the stance marks rather than
-// a picture: it is punctuation for one short sentence, not a thing to look at.
+// The empty-round state — shown only when the keep side is LITERALLY empty
+// (every row on the board is in the closing pile), so nothing sits above the
+// fold. A full-width centered block: big icon, one sentence under it. Same
+// 1.5px stroke-on-currentColor language as the stance marks rather than a
+// picture.
 const EmptyRound = styled.div`
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: ${({ theme }) => theme.space.sm};
+  justify-content: center;
+  gap: ${({ theme }) => theme.space.md};
+  width: 100%;
+  padding: ${({ theme }) => theme.space.xl} ${({ theme }) => theme.space.lg};
   color: ${({ theme }) => theme.colors.textMuted};
 `;
 
@@ -78,6 +84,7 @@ const EmptyRoundMark = styled.span`
 
 const EmptyRoundText = styled.span`
   font-size: 13px;
+  text-align: center;
 `;
 
 const OpenNote = styled.div`
@@ -217,6 +224,10 @@ function BoardRow({
   const viewJob = useChatStore((s) => s.viewJob);
   const editShortlistBoard = useChatStore((s) => s.editShortlistBoard);
   const readOnly = useChatStore((s) => s.impersonateSessionId !== null);
+  // A commit is mid-flight: the marks freeze, because a mark made now would be
+  // silently raced by the commit's stance clear. The store's edit action
+  // refuses too; this is the visible half.
+  const settling = useChatStore((s) => s.boardSettling);
   const [busy, setBusy] = useState(false);
 
   const stance = stanceOf(row, tier);
@@ -248,13 +259,12 @@ function BoardRow({
           {row.overriddenAgentReason ? ` — ${row.overriddenAgentReason}` : ""}
         </ScanTag>
       )}
-      {row.scanDissent && <ScanTag>⚠ {row.scanDissent}</ScanTag>}
       <StanceRow>
         {!readOnly && row.markable && (
           <StanceMarks
             stance={stance}
             onMark={(next) => void mark(next)}
-            disabled={busy}
+            disabled={busy || settling}
             label={`Your call on ${row.title}`}
           />
         )}
@@ -306,53 +316,46 @@ export function ShortlistBoardView({ board }: { board: ShortlistBoardData }) {
     for (const row of rows) bucket.push({ tier, row });
   }
 
-  // A round that ruled everything out still gets this screen — the boundary
-  // between the passes isn't visible to the user, so "nothing survived the
-  // filtering" and "the ranker passed on the survivors" must not look different.
-  // What changes is the framing: there is nothing to approve, only a verdict to
-  // overturn, so the note says what committing does instead of leaving "Looks
-  // good to me" to mean "close this company out".
-  // Nothing PICKED, not nothing kept: a board whose only survivors are holds has
-  // nothing to work on either, and routing there means "choose one to apply to"
-  // over roles Hank recommended against. Deferrals still show; the settle just
-  // stops pretending there is a shortlist to approve.
-  const nothingPicked =
-    keep.every(({ tier }) => tier !== "picks") && discard.length > 0;
+  // Only when NOTHING sits above the fold — every row on the board is in the
+  // closing pile. A board that still shows holds or undecided rows explains
+  // itself; the graphic exists for the round where the live area would
+  // otherwise just be blank. Short on purpose: Hank explains what happened in
+  // the chat beside this, and a second copy of that reasoning on the panel is
+  // the same paragraph twice, in the surface with less room for it.
+  const emptyRound = keep.length === 0 && discard.length > 0;
 
   return (
     <Root>
       <Header>
         <H2>{board.companyName} — shortlist</H2>
-        {!board.open ? (
+        {!board.open && (
           <OpenNote>
             This shortlist is locked in — nothing left to decide here. To change
             your mind on a role, just tell Hank in chat.
           </OpenNote>
-        ) : nothingPicked ? (
-          // Short on purpose. Hank explains what happened in the chat beside
-          // this; a second copy of that reasoning on the panel is the same
-          // paragraph twice, in the surface with less room for it.
-          <EmptyRound>
-            <EmptyRoundMark aria-hidden>
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="11" cy="11" r="7" />
-                <path d="M20 20l-4.2-4.2" />
-                <path d="M8.5 11h5" />
-              </svg>
-            </EmptyRoundMark>
-            <EmptyRoundText>Nothing to shortlist this round.</EmptyRoundText>
-          </EmptyRound>
-        ) : null}
+        )}
       </Header>
+      {board.open && emptyRound && (
+        <EmptyRound>
+          <EmptyRoundMark aria-hidden>
+            <svg
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="M20 20l-4.2-4.2" />
+              <path d="M8.5 11h5" />
+            </svg>
+          </EmptyRoundMark>
+          <EmptyRoundText>Nothing to shortlist this round.</EmptyRoundText>
+        </EmptyRound>
+      )}
       <TierSection>
         {keep.map(({ tier, row }) => (
           <BoardRow

@@ -235,10 +235,14 @@ export type WidgetSubmission =
   // Submission-only: no widget renders this, the panel's own pill emits it, and
   // the server re-checks that nothing is outstanding before acting.
   | { kind: "commit_negotiation"; panel: "discovery" }
+  // `confirmed` rides along when the footer's own two-tap confirm already asked
+  // about closing a started application — it lets the deterministic commit pass
+  // the same gate Hank's confirmed:true call does.
   | {
       kind: "commit_negotiation";
       panel: "shortlist-board";
       companyId: string;
+      confirmed?: true;
     }
   // Three branches for the next-company picker:
   //   - pick a company → walkthrough on that company (auto-bumps to ACTIVE

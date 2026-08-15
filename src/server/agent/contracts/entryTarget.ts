@@ -20,7 +20,13 @@ export type EntryTarget =
   // so the rung skips its regen gate and re-ranks; absent = plain resume, which
   // no-ops past a shortlist that's already decided. Same contract as discovery's
   // `direction` below.
-  | { kind: "company"; id: string; direction?: string }
+  // `continuation` marks an entry that CONTINUES work already in motion at the
+  // company — the tail after a commit or a submitted application. A
+  // continuation only surfaces what already exists (the role picker, the
+  // holds, caught-up); it never STARTS work, so the company arm skips its
+  // board-scrape rung — settling a round must not pull fresh postings into
+  // the round it just ended.
+  | { kind: "company"; id: string; direction?: string; continuation?: true }
   | { kind: "job"; id: string }
   | { kind: "opportunity"; id: string }
   // Discovery has no entity to point at yet — that's the point of it. `direction`

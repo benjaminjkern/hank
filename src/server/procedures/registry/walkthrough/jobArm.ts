@@ -49,13 +49,17 @@ export async function* runJobArm(
       "That job is no longer shortlisted — going back to the company.",
     );
     // Focus is ephemeral — nothing to clear; re-dispatch to the company arm
-    // (which surfaces the next-role picker) and show the company page.
+    // (which surfaces the next-role picker) and show the company page. A
+    // continuation — this bounce corrects a stale pick mid-flow, it doesn't
+    // start a fresh visit, so the arm must not re-scrape on the way through.
     if (ji?.job.companyId) {
       yield* yieldUiEvents(
         (await buildShowEvents(args.userId, { companyId: ji.job.companyId }))
           .events,
       );
-      return yield* runCompanyArm(ji.job.companyId, args);
+      return yield* runCompanyArm(ji.job.companyId, args, undefined, {
+        continuation: true,
+      });
     }
     return { wrappedUp: true };
   }

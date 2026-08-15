@@ -5,11 +5,13 @@
 // edits via update_shortlist_proposal, and commit_shortlist ends it. Nothing
 // in here changes a status.
 //
-// Three entries fall out of state, no persisted step pointer:
-//   - a `direction` → fresh seed on those terms (re-ranks committed picks too)
-//   - an open negotiation → re-show the board as it stands (free — no LLM, so
-//     no re-emit guard is needed)
-//   - otherwise → seed the pool
+// The POOL decides whether the ranker runs, no persisted step pointer: any
+// unstanced pool row gets ranked whenever the board comes up — a fresh seed
+// when nothing is stanced yet, a merge into the open board when late arrivals
+// joined a round in progress (a new scan survivor, an application released
+// back to the pool). An open board with an empty pool re-shows as it stands
+// (free — no LLM, so no re-emit guard is needed). A `direction` rides in as
+// the ranker's extraContext for a fresh ranking on those terms.
 
 import { statusEvent, yieldUiEvents } from "@/server/agent/contracts";
 import type { RunContext, TurnEvent } from "@/server/agent/contracts";
@@ -44,8 +46,19 @@ export type ShortlistArgs = RunContext & {
 function describeSeed(
   proposalNote: string | null,
   counts: BoardCounts,
+  // Set when the ranker merged late arrivals into a board already on the
+  // table, so the message says what just changed instead of re-announcing the
+  // whole board as new.
+  mergedCount?: number,
 ): string {
   const parts: string[] = [];
+  if (mergedCount) {
+    parts.push(
+      mergedCount === 1
+        ? "One more role needed a call since the board went up — I've ranked it in with the rest."
+        : `${mergedCount} more roles needed a call since the board went up — I've ranked them in with the rest.`,
+    );
+  }
   if (proposalNote?.trim()) parts.push(proposalNote.trim());
   const pieces = [
     `${counts.picked} I'd apply to`,
@@ -70,19 +83,29 @@ function describeNothingPicked(
   counts: BoardCounts,
   proposalNote: string | null,
 ): string {
+  // Everything not in the closing pile (picked is 0 on this branch) — holds
+  // and anything else that survives the settle.
+  const kept = counts.total - counts.closing;
   const looked =
     counts.total === 1 ? "the one role" : `all ${counts.total} roles`;
   const lead =
     proposalNote?.trim() ||
     `I went through ${looked} at ${board.companyName} and there's nothing here I'd tell you to apply to right now.`;
   const held =
-    counts.borderline > 0
-      ? ` ${counts.borderline === 1 ? "One I've held" : `${counts.borderline} I've held`} rather than closed — worth keeping, just not worth an application today.`
+    kept > 0
+      ? ` ${kept === 1 ? "One I've held" : `${kept} I've held`} rather than closed — worth keeping, just not worth an application today.`
       : "";
+  // What settling DOES is the one thing this message must not leave vague:
+  // with nothing kept, it marks the company caught up; with holds, those stay
+  // and the caught-up call is the user's next.
+  const settle =
+    kept === 0
+      ? `Nothing's closed yet. If I've got one wrong, mark it and I'll pull it back. Otherwise settle it — that closes these out and marks ${board.companyName} caught up, and I'll flag anything new they post.`
+      : `Nothing's closed yet. If I've got one wrong, mark it and I'll pull it back. Settling closes the passes and keeps the held ${kept === 1 ? "one" : "ones"} — then it's your call to work one of those or mark ${board.companyName} caught up.`;
   return [
     lead,
     `They're all on the right with my reasoning on each, strongest first — including the ones I ruled out early, so you can see what I passed over and why.${held}`,
-    `Nothing's closed yet. If I've got one wrong, mark it and I'll pull it back; otherwise settle it and I'll clear them out and keep watching ${board.companyName} for new postings.`,
+    settle,
   ].join("\n\n");
 }
 
@@ -136,32 +159,18 @@ export async function* runShortlist(
   // no-op. Spans go on procedures reachable from a tool handler.
   const { userId, companyId } = args;
 
-  if (!args.direction) {
-    const openCount = await prisma.jobInteraction.count({
-      where: { userId, job: { companyId }, ...onBoardWhere() },
-    });
-    if (openCount > 0) {
-      // Also on the re-show, not just the fresh seed: an open board IS the
-      // status, however the company got here, and a board that outlives the run
-      // that seeded it would otherwise never pick it up.
-      await markCompanyShortlisting(companyId, userId);
-      const { events, board } = await buildShortlistBoardEvents(
-        userId,
-        companyId,
-      );
-      yield* yieldUiEvents(events);
-      if (board) yield { type: "text", text: describeReshow(board) };
-      return;
-    }
-  }
-
+  // The pool read comes FIRST, even over an open board: a row that entered the
+  // pool after the seed (a fresh scan survivor, an application released back)
+  // would otherwise sit on the board with no stance and no reason, invisible to
+  // the ranker until the round ended. Empty pool + open board is the pure
+  // re-show, and the loader answers that in two cheap queries.
   const context = await loadShortlistJobsInput({
     userId,
     companyId,
     extraContext: args.direction,
   });
   if (!context.ok) {
-    // Nothing survived to rank — but the earlier passes have already stanced
+    // Nothing left to rank — but the earlier passes have already stanced
     // everything they ruled out, so the board is on the table either way. From
     // the user's side prescan, scan and shortlist are one step, and where the
     // pool happened to empty must not decide whether they get a screen.
@@ -175,6 +184,8 @@ export async function* runShortlist(
       };
       return;
     }
+    // An open board IS the status, however the company got here — a board that
+    // outlives the run that seeded it would otherwise never pick it up.
     await markCompanyShortlisting(companyId, userId);
     const { events, board } = await buildShortlistBoardEvents(
       userId,
@@ -185,7 +196,10 @@ export async function* runShortlist(
       const counts = countBoard(board);
       yield {
         type: "text",
-        text: describeNothingPicked(board, counts, null),
+        text:
+          counts.picked === 0
+            ? describeNothingPicked(board, counts, null)
+            : describeReshow(board),
       };
     }
     return;
@@ -201,11 +215,15 @@ export async function* runShortlist(
   }
   const picks = result.output;
 
+  const openBoard = context.input.openBoard ?? [];
   await seedBoardStances({
     userId,
     companyId,
     candidates: context.input.candidates,
     picks,
+    // Picks already standing on the open board share the ceiling with this
+    // call's — the ranker was told so, and the cap enforces it.
+    existingPickCount: openBoard.filter((r) => r.stance === "pick").length,
   });
   // The board is now open and waiting on the user — the one stretch of a
   // company's life where the next move is theirs, so it says so.
@@ -227,7 +245,11 @@ export async function* runShortlist(
   const body =
     board && counts.picked === 0
       ? describeNothingPicked(board, counts, picks.proposalNote)
-      : describeSeed(picks.proposalNote, counts);
+      : describeSeed(
+          picks.proposalNote,
+          counts,
+          openBoard.length > 0 ? n : undefined,
+        );
   const unfinished = describeUnfinished(context.input.candidates, picks);
   yield {
     type: "text",
