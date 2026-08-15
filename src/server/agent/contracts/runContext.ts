@@ -46,4 +46,10 @@ export type RunContext = {
   // to interpret a wall-clock time the agent supplies. Undefined (old clients,
   // replay, scripts) falls back to UTC everywhere it's read.
   timeZone?: string;
+  // Epoch ms when the chat route's hard cap will abort this run. Read at the
+  // bottom by long fan-outs (the scan step) to stand down CLEANLY before the
+  // cap rips them mid-flight — a board too big for one run ends with a partial
+  // that resumes on re-entry instead of a dead stream. Undefined (scripts,
+  // audits, tool dispatch outside a run) means no deadline.
+  deadlineAt?: number;
 };
