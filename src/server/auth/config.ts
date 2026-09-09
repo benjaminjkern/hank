@@ -4,7 +4,11 @@ import GitHub from "next-auth/providers/github";
 import Google from "next-auth/providers/google";
 
 import { prisma } from "../db/prisma";
-import { hasServerKeyAccess, oauthProviders } from "../platform/deployment";
+import {
+  authMode,
+  hasServerKeyAccess,
+  oauthProviders,
+} from "../platform/deployment";
 import { notifyAdmin } from "../platform/notifications/pushAdmin";
 
 declare module "next-auth" {
@@ -48,6 +52,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/signin",
     error: "/auth/error",
   },
+  // Auth.js refuses to serve any request without a secret, but with database
+  // sessions the secret only feeds CSRF/cookie machinery — the session token
+  // is a random string looked up in Postgres, not something signed. In local
+  // mode there is no security boundary to protect (anyone can sign in as
+  // anyone), so a static fallback keeps AUTH_SECRET out of the required env
+  // set. OAuth mode still requires a real one.
+  secret:
+    process.env.AUTH_SECRET ??
+    (authMode === "local" ? "hank-local-mode-static-secret" : undefined),
   session: { strategy: "database" },
   // The Prisma adapter type chain hits a known mismatch with the PrismaPg
   // adapter-wrapped client (see @auth/prisma-adapter README); the runtime

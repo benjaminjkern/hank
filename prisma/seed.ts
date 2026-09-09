@@ -9,6 +9,11 @@ const prisma = new PrismaClient({ adapter });
 // DB that already has a row matching SEED_ADMIN_EMAIL, just promotes them.
 // SEED_ADMIN_ID is optional and only honored on `create` — useful when you
 // want to pin a specific User.id (e.g. migrating from a non-cuid seed).
+//
+// The admin also gets canUseServerKey, so a fresh install works the moment
+// they sign in even on an instance with SERVER_KEY_BY_DEFAULT=false — the
+// admin is the person who grants everyone else, so gating them too would
+// deadlock the first account behind an approval only it can give.
 async function main() {
   const email = process.env.SEED_ADMIN_EMAIL;
   if (!email) {
@@ -17,11 +22,12 @@ async function main() {
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    if (!existing.isAdmin) {
+    if (!existing.isAdmin || !existing.canUseServerKey) {
       await prisma.user.update({
         where: { id: existing.id },
         data: {
           isAdmin: true,
+          canUseServerKey: true,
           emailVerified: existing.emailVerified ?? new Date(),
         },
       });
@@ -36,6 +42,7 @@ async function main() {
       email,
       emailVerified: new Date(),
       isAdmin: true,
+      canUseServerKey: true,
     },
   });
   console.log(`✓ seeded admin user ${created.id} (${email})`);

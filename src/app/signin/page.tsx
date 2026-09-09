@@ -2,7 +2,12 @@ import { redirect } from "next/navigation";
 
 import { signIn, auth } from "@/server/auth/config";
 import { signInLocally } from "@/server/auth/localSignIn";
-import { authMode, oauthProviders } from "@/server/platform/deployment";
+import {
+  allowUserApiKeys,
+  authMode,
+  oauthProviders,
+  serverKeyByDefault,
+} from "@/server/platform/deployment";
 
 import { SignInPanel } from "./SignInPanel";
 
@@ -45,6 +50,10 @@ export default async function SignInPage({
       error={params.error}
       mode={authMode}
       providers={oauthProviders}
+      // No server key by default and no bring-your-own means a new account can
+      // do nothing until an admin approves it — say so before they sign in,
+      // not after.
+      inviteOnly={!serverKeyByDefault && !allowUserApiKeys}
       googleAction={googleAction}
       githubAction={githubAction}
       localAction={localAction}

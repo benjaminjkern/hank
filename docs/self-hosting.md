@@ -106,7 +106,8 @@ ALLOW_USER_API_KEYS="false"     # and nobody bypasses that with their own key
 ```
 
 With `SERVER_KEY_BY_DEFAULT=false`, the per-user `canUseServerKey` column
-becomes the invite gate:
+becomes the invite gate (`pnpm db:seed` grants it to the admin account, so
+closing the instance never locks you out of your own deployment):
 
 1. Someone signs in. Their `User` row is created — email, name, avatar.
 2. They can't run the agent, so they generate no transcripts, no profile notes,

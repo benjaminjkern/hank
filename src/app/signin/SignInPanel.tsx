@@ -231,6 +231,7 @@ export function SignInPanel({
   error,
   mode,
   providers,
+  inviteOnly,
   googleAction,
   githubAction,
   localAction,
@@ -238,6 +239,7 @@ export function SignInPanel({
   error?: string;
   mode: "local" | "oauth";
   providers: { google: boolean; github: boolean };
+  inviteOnly: boolean;
   googleAction: () => Promise<void>;
   githubAction: () => Promise<void>;
   localAction: (formData: FormData) => Promise<string | null>;
@@ -342,6 +344,13 @@ export function SignInPanel({
             ) : null}
           </>
         )}
+        {inviteOnly ? (
+          <Notice>
+            Hank is in private beta. Sign in and request access to join the
+            waitlist — you&apos;ll be able to start as soon as you&apos;re let
+            in.
+          </Notice>
+        ) : null}
       </Card>
       <SourceLink
         href="https://github.com/benjaminjkern/hank"

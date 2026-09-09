@@ -10,24 +10,11 @@ Just open a PR.
 
 ## Getting set up
 
-You'll need Node 20+, pnpm, a Postgres database, and a
-[DeepSeek API key](https://platform.deepseek.com/).
-
-```bash
-pnpm install                    # postinstall runs `prisma generate`
-cp .env.example .env            # then fill it in — see the README
-docker compose up -d            # optional: starts a local Postgres
-pnpm db:migrate
-pnpm db:seed
-pnpm dev
-```
-
-Full setup details, including what each environment variable is for, are in the
-[README](README.md#quick-start).
-
-> **Heads up:** there is no separate test database. `pnpm db:*` and every script
-> under `scripts/` connect to whatever `DATABASE_URL` points at. Point it at a
-> database you own before running anything that writes.
+Setup is the README's [Quick start](README.md#quick-start): three env vars,
+`docker compose up -d` for Postgres, migrate, seed, `pnpm dev`. That gives you
+a live instance to develop against, and the bundled Docker Postgres is your
+sandbox — the dev server, `pnpm db:*`, and every script under `scripts/` all
+talk to whatever `DATABASE_URL` points at.
 
 ## Before you open a PR
 
@@ -44,10 +31,21 @@ Formatting and linting don't overlap: Prettier owns whitespace and wrapping,
 ESLint owns correctness. Run `pnpm format` rather than adjusting whitespace by
 hand.
 
-> **Some scripts cost real money.** The harnesses under `scripts/regression/`
-> and `scripts/audits/`, and `pnpm scenarios`, make live LLM API calls billed to
-> whoever runs them. Don't run them casually. If you think your change needs
-> one, say so in the PR.
+## Pull requests
+
+- Branch off `main`.
+- Keep it focused — one change per PR is much easier to review.
+- Describe what changed and how you verified it.
+- If your change affects the agent's behavior, say what you saw it do
+  differently. CI can't check that.
+- Update any docs your change makes wrong.
+
+## LLM harnesses cost real money
+
+The harnesses under `scripts/regression/` and `scripts/audits/`, and
+`pnpm scenarios`, make live LLM API calls billed to whoever runs them. None of
+them run in CI and none are expected for a normal PR — if you think your change
+warrants one, say so in the PR and the maintainer can run it.
 
 ## Database changes
 
@@ -63,22 +61,6 @@ this project does **not** auto-generate SQL from schema edits:
 If your change reshapes existing rows, include the backfill in the same
 migration.
 
-## Adding an ATS scraper
-
-This is probably the most self-contained way to contribute. Each job board
-provider is a single file under `src/server/scrape/ats/providers/` — start from
-`greenhouse.ts` or `lever.ts` for a simple example. See
-[docs/ats-scrapers.md](docs/ats-scrapers.md).
-
-## Pull requests
-
-- Branch off `main`.
-- Keep it focused — one change per PR is much easier to review.
-- Describe what changed and how you verified it.
-- If your change affects the agent's behavior, say what you saw it do
-  differently. CI can't check that.
-- Update any docs your change makes wrong.
-
 ## Project conventions
 
 The codebase has a few house rules — layering, naming, and how database writes
@@ -91,7 +73,10 @@ has to tell you.
 Please don't report security issues in a public issue — see
 [SECURITY.md](SECURITY.md).
 
-## License
+## License and CLA
 
-By contributing, you agree your contributions will be licensed under the
-[GNU AGPL v3.0](LICENSE), the same license as the project.
+Hank is licensed under the [GNU AGPL v3.0](LICENSE). Before your first pull
+request is merged, you'll be asked to sign the project's
+[Contributor License Agreement](CLA.md) — a bot comments on the PR, and signing
+is a single reply. You keep the copyright to your contribution; the CLA licenses
+it to the project.

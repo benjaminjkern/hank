@@ -332,7 +332,7 @@ export function ApiKeyBlockerModal({
       <Card>
         <Title id="api-key-modal-title">
           {canRequestAccess
-            ? "Ask for access to get started"
+            ? "Request access to get started"
             : serverKeyFaulty
               ? "Hank is temporarily unavailable"
               : title}
@@ -343,9 +343,9 @@ export function ApiKeyBlockerModal({
               {ownKeyRejected
                 ? `Your saved ${providerLabel} key was rejected. `
                 : ""}
-              Hank runs on this instance&apos;s own API key, and your account
-              hasn&apos;t been given access to it yet. Send a request and
-              you&apos;ll be able to start once it&apos;s approved.
+              Hank is invite-only right now. Request access to join the
+              waitlist, and you&apos;ll be able to start the moment you&apos;re
+              let in.
             </>
           ) : serverKeyFaulty ? (
             <>
@@ -372,8 +372,8 @@ export function ApiKeyBlockerModal({
           ) : (
             <Hint>
               {requestState === "sent"
-                ? "Request sent. You'll be able to chat once it's approved — no need to ask again."
-                : "Your earlier request is still waiting. You'll be able to chat once it's approved."}
+                ? "You're on the waitlist. You'll be able to chat as soon as you're approved — no need to ask again."
+                : "You're already on the waitlist from an earlier request. You'll be able to chat as soon as you're approved."}
             </Hint>
           )
         ) : null}

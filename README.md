@@ -19,25 +19,33 @@ Most job trackers are spreadsheets you have to feed. Hank does the feeding:
 
 - **Finds companies** worth watching from a description of what you want, and
   keeps notes on each one as you learn things.
-- **Scrapes their job boards directly** — 19 ATS integrations (Greenhouse,
-  Lever, Ashby, Workday, iCIMS, SmartRecruiters, and the hand-rolled boards at
-  Google, Meta, Apple, Amazon, Netflix, Shopify…) as well as an LLM-based try-to-scrape-and-learn-as-you-go functionality, so postings come from the
-  source rather than an aggregator.
+- **Scrapes their job boards directly**, so postings come from the source
+  rather than an aggregator — 19 ATS integrations (Greenhouse, Lever, Ashby,
+  Workday, iCIMS, SmartRecruiters, and the hand-rolled boards at Google, Meta,
+  Apple, Amazon, Netflix, Shopify…), and it teaches itself boards it doesn't
+  recognize: an LLM works out an unknown board's structure once, then the
+  learned recipe scrapes it like any other.
 - **Reads each posting against your background** and tells you which roles are
   worth your time — and, more usefully, why the others aren't.
 - **Drafts the application**, including the free-text questions the form
   actually asks, then runs the draft past a recruiter-lens critic before you
   see it.
-- **Remembers.** Previous drafts to application questions, as well as what you said about what you are interested in, location, why you passed on a
-  company six weeks ago: it's kept as durable notes and re-read on later turns.
-- **Tracks the whole lifecycle** — applied, responded, interviewing, closed — on
-  a dashboard that stays current without you updating it. Complete with analytics so you can track your progress.
+- **Remembers.** What you're looking for, your location and compensation
+  constraints, why you passed on a company six weeks ago, the answers you've
+  already drafted to the questions every form asks — kept as durable notes and
+  re-read on later turns.
+- **Tracks the whole lifecycle** — applied, responded, interviewing, closed —
+  on a dashboard that stays current without you updating it, with analytics on
+  how the search is going.
 
 ## Try it
 
-**Hosted:** [hank.so](https://hank.so)
+**Hosted:** [hank.so](https://hank.so) is in **private beta**. Sign in and hit
+_Request access_ to join the waitlist — you'll be let in as spots open.
 
-**Self-hosted:** see [Quick start](#quick-start). Run your own instance, point it at your own database, and your data stays yours.
+**Self-hosted:** three env vars and you're running — see
+[Quick start](#quick-start). Your own instance, your own database, your data
+stays yours.
 
 Planning to run it for anyone besides yourself? Read
 [docs/self-hosting.md](docs/self-hosting.md) first — Hank accumulates a detailed
@@ -46,55 +54,47 @@ obligations a single-user install doesn't.
 
 ## Quick start
 
-**Prereqs:** Node 20+, pnpm, Postgres, and a
-[DeepSeek API key](https://platform.deepseek.com/). An Anthropic key is optional
-— it's used only for vision (résumé parsing and logo verification).
+**Prereqs:** Node 20+, pnpm, Docker (for the bundled Postgres — or bring your
+own), and a [DeepSeek API key](https://platform.deepseek.com/).
 
 ```bash
 pnpm install
-cp .env.example .env
-docker compose up -d      # optional — starts Postgres locally
-```
-
-Fill in `.env`:
-
-| Variable                                | What it's for                                                                                                                          |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                          | Postgres connection string (the default matches `docker-compose.yml`)                                                                  |
-| `DEEPSEEK_API_KEY`                      | Runs every LLM call — the main agent and all sub-agents                                                                                |
-| `ANTHROPIC_KEY_ENCRYPTION_KEY`          | `openssl rand -base64 32` — encrypts per-user keys at rest                                                                             |
-| `AUTH_SECRET`                           | `openssl rand -base64 32`                                                                                                              |
-| `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | A [GitHub OAuth app](https://github.com/settings/developers) — callback URL `http://localhost:3000/api/auth/callback/github`           |
-| `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | A Google OAuth client (optional if you sign in with GitHub)                                                                            |
-| `SEED_ADMIN_EMAIL`                      | The email that gets admin on seed — use the one you'll sign in with                                                                    |
-| `ANTHROPIC_API_KEY`                     | Optional; vision only                                                                                                                  |
-
-Then:
-
-```bash
+cp .env.example .env      # then fill in the two values below
+docker compose up -d      # local Postgres — matches .env.example as-is
 pnpm db:migrate
 pnpm db:seed
 pnpm dev
 ```
 
-Open http://localhost:3000, sign in, attach your résumé with the 📎 button, and
-tell Hank what you're looking for.
+Three variables in `.env` and you're running:
 
-> **First-run gotcha.** `DEEPSEEK_API_KEY` is available as a _server_ key, but
-> each account must be allowed to spend it — the per-user `canUseServerKey` flag
-> defaults to `false`. So on a fresh install the chat asks you for an API key
-> even though you set one. Either paste your key into that prompt (stored
-> encrypted, per-user) or flip the toggle for your user at `/admin/users`.
+| Variable           | What it's for                                                          |
+| ------------------ | ---------------------------------------------------------------------- |
+| `DEEPSEEK_API_KEY` | Runs every LLM call                                                    |
+| `SEED_ADMIN_EMAIL` | The email you'll sign in with — seeded as the admin account            |
+| `DATABASE_URL`     | Postgres — already filled in to match `docker compose up -d`           |
+
+Open http://localhost:3000, sign in with that email, attach your résumé with
+the 📎 button, and tell Hank what you're looking for.
+
+Everything else in [.env.example](.env.example) is optional and documented
+inline — OAuth sign-in, an Anthropic key for the vision features (résumé-file
+parsing, logo checks), web push notifications.
 
 ## How it works
 
-Two surfaces in one page:
+One page, two surfaces:
 
-- **Left** — the chat panel: streaming replies, tool-use chips, and inline
-  widgets (job pickers, checklists, shortlist boards).
-- **Right** — an addressable panel that mirrors its breadcrumb into the URL
-  (`/dashboard/stripe/stripe-sre/application`), so refresh restores it and Back
-  walks your own navigation. Browsing it never disturbs the conversation.
+- **The chat** is where the work happens. Hank streams its replies, and
+  anything that needs your call arrives inline as a widget — a role picker, a
+  batch of companies to approve, a what's-next menu.
+- **The right panel** shows what you're working on: a dashboard of your
+  watchlist bucketed by who-acts-next, a page per company and per role — the
+  posting, its history, your notes — the shortlist board where a scrape's
+  results get ranked and settled, the application page with drafted answers
+  ready to edit, and Documents / Analytics pages for your reusable materials
+  and the state of the search. Every view has a URL, so refresh and Back work
+  the way you'd expect.
 
 ## Stack
 
