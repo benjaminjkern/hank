@@ -1,16 +1,15 @@
 # Hank
 
-**A job search that runs itself, steered from a chat window.**
+**Let's get you hired.**
 
 Tell Hank what you're after. It builds a watchlist of companies, scrapes their
 job boards, reads every posting against your résumé, drafts your applications,
 and keeps the board current — walking you through one company at a time while
 you steer from the conversation.
 
-[![CI](https://github.com/benjaminjkern/hank/actions/workflows/ci.yml/badge.svg)](https://github.com/benjaminjkern/hank/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-<!-- SCREENSHOT -->
+<!-- TODO: SCREENSHOT -->
 
 ---
 
@@ -22,24 +21,23 @@ Most job trackers are spreadsheets you have to feed. Hank does the feeding:
   keeps notes on each one as you learn things.
 - **Scrapes their job boards directly** — 19 ATS integrations (Greenhouse,
   Lever, Ashby, Workday, iCIMS, SmartRecruiters, and the hand-rolled boards at
-  Google, Meta, Apple, Amazon, Netflix, Shopify…), so postings come from the
+  Google, Meta, Apple, Amazon, Netflix, Shopify…) as well as an LLM-based try-to-scrape-and-learn-as-you-go functionality, so postings come from the
   source rather than an aggregator.
 - **Reads each posting against your background** and tells you which roles are
   worth your time — and, more usefully, why the others aren't.
 - **Drafts the application**, including the free-text questions the form
   actually asks, then runs the draft past a recruiter-lens critic before you
   see it.
-- **Tracks the whole lifecycle** — applied, responded, interviewing, closed — on
-  a dashboard that stays current without you updating it.
-- **Remembers.** What you said about compensation, location, why you passed on a
+- **Remembers.** Previous drafts to application questions, as well as what you said about what you are interested in, location, why you passed on a
   company six weeks ago: it's kept as durable notes and re-read on later turns.
+- **Tracks the whole lifecycle** — applied, responded, interviewing, closed — on
+  a dashboard that stays current without you updating it. Complete with analytics so you can track your progress.
 
 ## Try it
 
 **Hosted:** [hank.so](https://hank.so)
 
-**Self-hosted:** see [Quick start](#quick-start). Hank is AGPL — run your own
-instance, point it at your own database, and your data stays yours.
+**Self-hosted:** see [Quick start](#quick-start). Run your own instance, point it at your own database, and your data stays yours.
 
 Planning to run it for anyone besides yourself? Read
 [docs/self-hosting.md](docs/self-hosting.md) first — Hank accumulates a detailed
@@ -109,23 +107,6 @@ Two surfaces in one page:
 - **zod** at boundaries, **zustand** for client UI state
 - **Playwright** for the headless-scrape path
 
-## Scripts
-
-| Command            | What it does                                    |
-| ------------------ | ----------------------------------------------- |
-| `pnpm dev`         | Next dev server                                 |
-| `pnpm build`       | Production build (type-checks)                  |
-| `pnpm lint`        | ESLint — zero errors is the merge bar           |
-| `pnpm format`      | Prettier — owns all formatting                  |
-| `pnpm db:migrate`  | `prisma migrate deploy` against `DATABASE_URL`  |
-| `pnpm db:seed`     | Upsert the admin user (`SEED_ADMIN_EMAIL`)      |
-| `pnpm db:generate` | Regenerate the Prisma client                    |
-| `pnpm db:studio`   | Open Prisma Studio                              |
-| `pnpm usage`       | Token-usage summary by operation                |
-
-Several harnesses under `scripts/` make live LLM calls and cost real money — see
-[CONTRIBUTING.md](CONTRIBUTING.md#before-you-open-a-pr) before running one.
-
 ## Documentation
 
 [AGENTS.md](AGENTS.md) covers the project's conventions and setup gotchas.
@@ -152,8 +133,7 @@ data export, or retention policy — read [SECURITY.md](SECURITY.md) and
 
 ## Contributing
 
-Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Adding an ATS
-scraper is the most self-contained way in.
+Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
