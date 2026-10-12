@@ -41,7 +41,7 @@ you steer from the conversation.
 **Hosted:** [hank.so](https://hank.so) is in **private beta**. Sign in and hit
 _Request access_ to join the waitlist — you'll be let in as spots open.
 
-**Self-hosted:** three env vars and you're running — see
+**Self-hosted:** two env vars and you're running — see
 [Quick start](#quick-start). Your own instance, your own database, your data
 stays yours.
 
@@ -64,12 +64,15 @@ pnpm db:seed
 pnpm dev
 ```
 
-Two variables in `.env` and you're running:
+Fill in two variables in `.env`:
 
-| Variable           | What it's for                                                          |
-| ------------------ | ---------------------------------------------------------------------- |
-| `DEEPSEEK_API_KEY` | Runs every LLM call                                                    |
-| `SEED_ADMIN_EMAIL` | The email you'll sign in with — seeded as the admin account            |
+| Variable           | What it's for                                               |
+| ------------------ | ----------------------------------------------------------- |
+| `DEEPSEEK_API_KEY` | Runs every LLM call                                         |
+| `SEED_ADMIN_EMAIL` | The email you'll sign in with — seeded as the admin account |
+
+`DATABASE_URL` is already set to match `docker compose up -d`; change it only if
+you're bringing your own Postgres.
 
 Open http://localhost:3000, sign in with that email, attach your résumé with
 the 📎 button, and tell Hank what you're looking for.

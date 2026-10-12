@@ -347,8 +347,7 @@ export function SignInPanel({
         {inviteOnly ? (
           <Notice>
             Hank is in private beta. Sign in and request access to join the
-            waitlist — you&apos;ll be able to start as soon as you&apos;re let
-            in.
+            waitlist.
           </Notice>
         ) : null}
       </Card>

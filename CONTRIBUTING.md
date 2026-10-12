@@ -10,7 +10,7 @@ Just open a PR.
 
 ## Getting set up
 
-Setup is the README's [Quick start](README.md#quick-start): three env vars,
+Setup is the README's [Quick start](README.md#quick-start): two env vars,
 `docker compose up -d` for Postgres, migrate, seed, `pnpm dev`. That gives you
 a live instance to develop against, and the bundled Docker Postgres is your
 sandbox — the dev server, `pnpm db:*`, and every script under `scripts/` all
@@ -46,20 +46,6 @@ The harnesses under `scripts/regression/` and `scripts/audits/`, and
 `pnpm scenarios`, make live LLM API calls billed to whoever runs them. None of
 them run in CI and none are expected for a normal PR — if you think your change
 warrants one, say so in the PR and the maintainer can run it.
-
-## Database changes
-
-Schema changes take four steps, and skipping the third is the usual mistake —
-this project does **not** auto-generate SQL from schema edits:
-
-1. Edit `prisma/schema.prisma`
-2. `pnpm db:generate` so the typechecker sees the new columns
-3. Hand-write the migration SQL in
-   `prisma/migrations/<timestamp>_<name>/migration.sql`
-4. `pnpm db:migrate` to apply it
-
-If your change reshapes existing rows, include the backfill in the same
-migration.
 
 ## Project conventions
 
