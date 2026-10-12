@@ -9,13 +9,11 @@ you steer from the conversation.
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-<!-- TODO: SCREENSHOT -->
+<!-- TODO: ADD SCREENSHOT -->
 
 ---
 
 ## What it does
-
-Most job trackers are spreadsheets you have to feed. Hank does the feeding:
 
 - **Finds companies** worth watching from a description of what you want, and
   keeps notes on each one as you learn things.
@@ -66,13 +64,12 @@ pnpm db:seed
 pnpm dev
 ```
 
-Three variables in `.env` and you're running:
+Two variables in `.env` and you're running:
 
 | Variable           | What it's for                                                          |
 | ------------------ | ---------------------------------------------------------------------- |
 | `DEEPSEEK_API_KEY` | Runs every LLM call                                                    |
 | `SEED_ADMIN_EMAIL` | The email you'll sign in with — seeded as the admin account            |
-| `DATABASE_URL`     | Postgres — already filled in to match `docker compose up -d`           |
 
 Open http://localhost:3000, sign in with that email, attach your résumé with
 the 📎 button, and tell Hank what you're looking for.
@@ -85,10 +82,10 @@ parsing, logo checks), web push notifications.
 
 One page, two surfaces:
 
-- **The chat** is where the work happens. Hank streams its replies, and
+- **The chat (left panel)** is where the work happens. Hank streams its replies, and
   anything that needs your call arrives inline as a widget — a role picker, a
   batch of companies to approve, a what's-next menu.
-- **The right panel** shows what you're working on: a dashboard of your
+- **The dashboard (right panel)** shows what you're working on: a dashboard of your
   watchlist bucketed by who-acts-next, a page per company and per role — the
   posting, its history, your notes — the shortlist board where a scrape's
   results get ranked and settled, the application page with drafted answers
@@ -125,7 +122,7 @@ detail in [docs/self-hosting.md](docs/self-hosting.md).
 
 ## Status
 
-Hank is an actively developed prototype, built for its author's own job search
+Hank is an actively developed prototype, built for my own job search
 and shared in case it's useful to others. It works end to end, but it isn't
 hardened for hostile multi-tenant use, and it currently has no account deletion,
 data export, or retention policy — read [SECURITY.md](SECURITY.md) and
