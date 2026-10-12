@@ -10,8 +10,8 @@ Just open a PR.
 
 ## Getting set up
 
-Setup is the README's [Quick start](README.md#quick-start): two env vars,
-`docker compose up -d` for Postgres, migrate, seed, `pnpm dev`. That gives you
+Setup is the README's [Quick start](README.md#quick-start): one API key,
+`docker compose up -d` for Postgres, migrate, `pnpm dev`. That gives you
 a live instance to develop against, and the bundled Docker Postgres is your
 sandbox — the dev server, `pnpm db:*`, and every script under `scripts/` all
 talk to whatever `DATABASE_URL` points at.

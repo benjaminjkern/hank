@@ -41,7 +41,7 @@ you steer from the conversation.
 **Hosted:** [hank.so](https://hank.so) is in **private beta**. Sign in and hit
 _Request access_ to join the waitlist — you'll be let in as spots open.
 
-**Self-hosted:** two env vars and you're running — see
+**Self-hosted:** one API key and you're running — see
 [Quick start](#quick-start). Your own instance, your own database, your data
 stays yours.
 
@@ -57,29 +57,22 @@ own), and a [DeepSeek API key](https://platform.deepseek.com/).
 
 ```bash
 pnpm install
-cp .env.example .env      # then fill in the two values below
-docker compose up -d      # local Postgres — matches .env.example as-is
+cp .env.example .env      # then set DEEPSEEK_API_KEY in .env
+docker compose up -d      # local Postgres, already wired to .env
 pnpm db:migrate
-pnpm db:seed
 pnpm dev
 ```
 
-Fill in two variables in `.env`:
+`DATABASE_URL` in `.env` already points at the Docker Postgres; change it only if
+you're bringing your own.
 
-| Variable           | What it's for                                               |
-| ------------------ | ----------------------------------------------------------- |
-| `DEEPSEEK_API_KEY` | Runs every LLM call                                         |
-| `SEED_ADMIN_EMAIL` | The email you'll sign in with — seeded as the admin account |
-
-`DATABASE_URL` is already set to match `docker compose up -d`; change it only if
-you're bringing your own Postgres.
-
-Open http://localhost:3000, sign in with that email, attach your résumé with
+Open http://localhost:3000, sign in with any email, attach your résumé with
 the 📎 button, and tell Hank what you're looking for.
 
 Everything else in [.env.example](.env.example) is optional and documented
 inline — OAuth sign-in, an Anthropic key for the vision features (résumé-file
-parsing, logo checks), web push notifications.
+parsing, logo checks), an admin account for the `/admin` pages
+(`SEED_ADMIN_EMAIL` + `pnpm db:seed`), web push notifications.
 
 ## How it works
 
