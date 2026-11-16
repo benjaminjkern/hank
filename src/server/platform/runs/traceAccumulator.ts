@@ -14,32 +14,8 @@
 // leaves the column permanently empty.
 
 import type { TraceEvent } from "@/server/platform/runs/trace";
-
-type TraceStep =
-  | { kind: "text"; text: string }
-  | {
-      kind: "tool";
-      id: string;
-      name: string;
-      input: unknown;
-      result?: string;
-      error?: boolean;
-      children?: { steps: TraceStep[] };
-    }
-  // A procedure bracket. Same nesting mechanics as a tool step, deliberately a
-  // DIFFERENT kind: the chat renderer flattens spans (the user never sees a
-  // procedure masquerading as a tool call) while the run-tree inspector keeps
-  // the level.
-  | {
-      kind: "span";
-      id: string;
-      name: string;
-      summary?: string;
-      error?: boolean;
-      children?: { steps: TraceStep[] };
-    };
-
-export type TraceMap = Record<string, { steps: TraceStep[] }>;
+import type { TraceMap, TraceStep } from "@/shared/traceSteps";
+import { nowMs } from "@/shared/utils/now";
 
 type TraceAccumulator = {
   emit: (ev: TraceEvent) => void;
@@ -99,12 +75,14 @@ export function createTraceAccumulator(): TraceAccumulator {
           kind: "span",
           id: ev.spanId,
           name: ev.name,
+          startedAt: nowMs(),
         };
         containerFor(ev.parentToolUseId).steps.push(step);
         stepById.set(ev.spanId, step);
       } else if (ev.type === "trace_span_complete") {
         const step = stepById.get(ev.spanId);
         if (step && step.kind === "span") {
+          step.endedAt = nowMs();
           if (ev.summary) step.summary = ev.summary;
           if (ev.error) step.error = true;
         }

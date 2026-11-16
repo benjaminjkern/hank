@@ -958,6 +958,18 @@ model TokenUsage {
 // Captures WHAT each sub-agent returned (TokenUsage only records that it ran).
 // Read by the runtime audit (scripts/subagent-runtime-audit/). Written by
 // recordSubAgentRun (src/server/agent/subAgentRun.ts); full untruncated payloads.
+// The procedure half of one chat run's trace (/admin/runs): every span the run
+// opened outside a tool call, nested under the run root. A tool call keeps its
+// own tree on ChatMessage.traces; sub-agent runs hang on either tree by
+// SubAgentRun.traceParentId. Written once, when the run ends.
+model RunTrace {
+  runId     String   @id
+  userId    String
+  sessionId String
+  steps     Json // TraceStep[] — see agent/runTree/traceAccumulator.ts
+  createdAt DateTime @default(now())
+}
+
 model SubAgentRun {
   id            String   @id @default(cuid())
   userId        String
@@ -982,6 +994,10 @@ model SubAgentRun {
   runId           String?
   parentMessageId String?
   parentToolUseId String?
+  // The trace node this run nested under — the innermost procedure span, else
+  // the tool_use, else the run root (whose id IS the runId). The viewer hangs
+  // the row on that node; parentToolUseId only names the tool.
+  traceParentId   String?
   createdAt     DateTime @default(now())
 
   @@index([operation, createdAt]) // per-operation cursor scan (primary access path)

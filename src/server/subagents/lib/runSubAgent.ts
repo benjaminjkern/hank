@@ -119,6 +119,7 @@ export async function runSubAgent<TInput, TOutput, TResult>(
       : undefined,
     error: result.ok ? null : result.error,
     turns: result.turns,
+    traceParentId: ctx.trace?.parentToolUseId,
   });
 
   if (!result.ok) return result;

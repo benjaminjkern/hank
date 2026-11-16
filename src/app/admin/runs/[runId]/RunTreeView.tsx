@@ -16,6 +16,7 @@ import type {
   RunTree,
   SubAgentNode,
   ToolCallNode,
+  TraceStep,
 } from "../types";
 
 // ---- view mode ----------------------------------------------------------
@@ -404,7 +405,9 @@ function Field({ label, value }: { label?: string; value: unknown }) {
 
 // ---- collapsible node ---------------------------------------------------
 
-const NodeBox = styled.div<{ $tone?: "turn" | "tool" | "sub" | "plain" }>`
+type NodeTone = "turn" | "tool" | "sub" | "span" | "plain";
+
+const NodeBox = styled.div<{ $tone?: NodeTone }>`
   border: 1px solid ${({ theme }) => theme.colors.border};
   border-left: 3px solid
     ${({ theme, $tone }) =>
@@ -414,7 +417,9 @@ const NodeBox = styled.div<{ $tone?: "turn" | "tool" | "sub" | "plain" }>`
           ? theme.colors.success
           : $tone === "sub"
             ? theme.colors.accentHover
-            : theme.colors.border};
+            : $tone === "span"
+              ? theme.colors.borderStrong
+              : theme.colors.border};
   border-radius: ${({ theme }) => theme.radius.md};
   background: ${({ theme }) => theme.colors.bgPanel};
   margin: ${({ theme }) => theme.space.sm} 0;
@@ -471,7 +476,7 @@ function Node({
 }: {
   title: React.ReactNode;
   sub?: React.ReactNode;
-  tone?: "turn" | "tool" | "sub" | "plain";
+  tone?: NodeTone;
   defaultOpen?: boolean;
   right?: React.ReactNode;
   children: React.ReactNode;
@@ -608,12 +613,70 @@ function SubAgentNodeView({ s }: { s: SubAgentNode }) {
   );
 }
 
+// ---- trace trees (procedure spans, read tools, sub-agents) ---------------
+
+// Sub-agent runs keyed by the trace node they ran under — see RunTree.
+const SubAgentsCtx = createContext<Record<string, SubAgentNode[]>>({});
+
+function SubAgentsAt({ nodeId }: { nodeId: string }) {
+  const subs = useContext(SubAgentsCtx)[nodeId] ?? [];
+  return subs.map((s) => <SubAgentNodeView key={s.id} s={s} />);
+}
+
+function formatDuration(ms: number): string {
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+function TraceStepView({ step }: { step: TraceStep }) {
+  if (step.kind === "text") {
+    return (
+      <div>
+        <NodeSub>{step.text}</NodeSub>
+      </div>
+    );
+  }
+  if (step.kind === "tool") {
+    return (
+      <Node
+        tone="tool"
+        title={<Mono>{step.name}</Mono>}
+        sub="read tool"
+        right={step.error && <Badge $err>error</Badge>}
+      >
+        <Field label="input" value={step.input} />
+        <Field label="result" value={step.result ?? "(no result)"} />
+        {step.children && <TraceStepsView steps={step.children.steps} />}
+        <SubAgentsAt nodeId={step.id} />
+      </Node>
+    );
+  }
+  const duration =
+    step.endedAt != null
+      ? formatDuration(step.endedAt - step.startedAt)
+      : "never closed";
+  return (
+    <Node
+      tone="span"
+      title={`procedure · ${step.name}`}
+      sub={step.summary ? `${duration} · ${step.summary}` : duration}
+      right={step.error && <Badge $err>error</Badge>}
+    >
+      {step.children && <TraceStepsView steps={step.children.steps} />}
+      <SubAgentsAt nodeId={step.id} />
+    </Node>
+  );
+}
+
+function TraceStepsView({ steps }: { steps: TraceStep[] }) {
+  return steps.map((step, i) => (
+    <TraceStepView
+      key={step.kind === "text" ? `text-${i}` : step.id}
+      step={step}
+    />
+  ));
+}
+
 function ToolCallNodeView({ t }: { t: ToolCallNode }) {
-  const traceObj = t.trace && typeof t.trace === "object" ? t.trace : null;
-  const hasTrace =
-    !!traceObj &&
-    Array.isArray((traceObj as { steps?: unknown }).steps) &&
-    (traceObj as { steps: unknown[] }).steps.length > 0;
   return (
     <Node
       tone="tool"
@@ -621,10 +684,10 @@ function ToolCallNodeView({ t }: { t: ToolCallNode }) {
       sub={t.toolUseId ? `#${t.toolUseId.slice(0, 8)}` : ""}
       right={
         <>
-          {t.subAgents.length > 0 && (
+          {t.subAgentCount > 0 && (
             <Badge>
-              {t.subAgents.length} sub-agent
-              {t.subAgents.length === 1 ? "" : "s"}
+              {t.subAgentCount} sub-agent
+              {t.subAgentCount === 1 ? "" : "s"}
             </Badge>
           )}
           {t.isError && <Badge $err>error</Badge>}
@@ -633,10 +696,8 @@ function ToolCallNodeView({ t }: { t: ToolCallNode }) {
     >
       <Field label="input" value={t.input} />
       <Field label="output" value={t.result ?? "(no result — interrupted?)"} />
-      {hasTrace && <Field label="sub-agent interior (trace)" value={t.trace} />}
-      {t.subAgents.map((s) => (
-        <SubAgentNodeView key={s.id} s={s} />
-      ))}
+      <TraceStepsView steps={t.steps} />
+      <SubAgentsAt nodeId={t.toolUseId} />
     </Node>
   );
 }
@@ -742,96 +803,109 @@ export function RunTreeView({ tree }: { tree: RunTree }) {
   let turnCounter = 0;
   return (
     <ModeCtx.Provider value={mode}>
-      <Page>
-        <Container>
-          <Header>
-            <H1>Run tree</H1>
-            <HeaderRight>
-              <Toggle>
-                <ToggleBtn
-                  $active={mode === "cleaned"}
-                  onClick={() => setMode("cleaned")}
-                >
-                  Cleaned
-                </ToggleBtn>
-                <ToggleBtn
-                  $active={mode === "raw"}
-                  onClick={() => setMode("raw")}
-                >
-                  Raw
-                </ToggleBtn>
-              </Toggle>
-              <BackLink href="/admin/runs">← Runs</BackLink>
-            </HeaderRight>
-          </Header>
-          <Meta>
-            <span>
-              run <Mono>{tree.runId.slice(0, 16)}…</Mono>
-            </span>
-            <span>
-              <Link href={`/admin/session/${tree.sessionId}`}>
-                session <Mono>{tree.sessionId.slice(0, 8)}…</Mono>
-              </Link>
-            </span>
-            <span>{tree.userEmail ?? tree.userId ?? "—"}</span>
-            <span>{new Date(tree.createdAt).toLocaleString()}</span>
-            <span>{tree.turnCount} turns</span>
-            <span>{money(tree.cost)}</span>
-          </Meta>
+      <SubAgentsCtx.Provider value={tree.subAgentsByTraceParent}>
+        <Page>
+          <Container>
+            <Header>
+              <H1>Run tree</H1>
+              <HeaderRight>
+                <Toggle>
+                  <ToggleBtn
+                    $active={mode === "cleaned"}
+                    onClick={() => setMode("cleaned")}
+                  >
+                    Cleaned
+                  </ToggleBtn>
+                  <ToggleBtn
+                    $active={mode === "raw"}
+                    onClick={() => setMode("raw")}
+                  >
+                    Raw
+                  </ToggleBtn>
+                </Toggle>
+                <BackLink href="/admin/runs">← Runs</BackLink>
+              </HeaderRight>
+            </Header>
+            <Meta>
+              <span>
+                run <Mono>{tree.runId.slice(0, 16)}…</Mono>
+              </span>
+              <span>
+                <Link href={`/admin/session/${tree.sessionId}`}>
+                  session <Mono>{tree.sessionId.slice(0, 8)}…</Mono>
+                </Link>
+              </span>
+              <span>{tree.userEmail ?? tree.userId ?? "—"}</span>
+              <span>{new Date(tree.createdAt).toLocaleString()}</span>
+              <span>{tree.turnCount} turns</span>
+              <span>{money(tree.cost)}</span>
+            </Meta>
 
-          {tree.legacy && (
-            <LegacyBanner>
-              Pre-capture run — reconstructed from ChatMessage rows without
-              run-tree instrumentation. Model params, system prompt, and
-              per-tool sub-agent linkage were not captured; sub-agent runs below
-              are correlated by session + time and may be approximate.
-            </LegacyBanner>
-          )}
+            {tree.legacy && (
+              <LegacyBanner>
+                Pre-capture run — reconstructed from ChatMessage rows without
+                run-tree instrumentation. Model params, system prompt, and
+                per-tool sub-agent linkage were not captured; sub-agent runs
+                below are correlated by session + time and may be approximate.
+              </LegacyBanner>
+            )}
 
-          {tree.items.map((item) => {
-            if (item.kind === "user")
-              return <UserItem key={item.id} item={item} />;
-            if (item.kind === "status")
-              return <StatusLine key={item.id}>{item.text}</StatusLine>;
-            if (item.kind === "error") {
-              return (
-                <Node
-                  key={item.id}
-                  title="run failed"
-                  sub="threw — nothing after this ran"
-                >
-                  <Field label="error" value={item.detail} />
-                </Node>
-              );
-            }
-            if (item.kind === "widget") {
-              return (
-                <Node
-                  key={item.id}
-                  title={`widget · ${item.widgetKind}`}
-                  sub="deterministic UI"
-                >
-                  <Field label="payload" value={item.payload} />
-                </Node>
-              );
-            }
-            const idx = turnCounter++;
-            return <TurnNode key={item.id} item={item} index={idx} />;
-          })}
+            {(tree.rootSteps.length > 0 ||
+              (tree.subAgentsByTraceParent[tree.runId]?.length ?? 0) > 0) && (
+              <>
+                <SectionLabel>
+                  What the run drove itself (outside tool calls)
+                </SectionLabel>
+                <TraceStepsView steps={tree.rootSteps} />
+                <SubAgentsAt nodeId={tree.runId} />
+              </>
+            )}
 
-          {tree.orphanSubAgents.length > 0 && (
-            <>
-              <SectionLabel>
-                Sub-agents not linked to a tool call
-                {tree.legacy ? "" : " (deterministic flow paths)"}
-              </SectionLabel>
-              {tree.orphanSubAgents.map((s) => (
-                <SubAgentNodeView key={s.id} s={s} />
-              ))}
-            </>
-          )}
-        </Container>
-      </Page>
+            {tree.items.map((item) => {
+              if (item.kind === "user")
+                return <UserItem key={item.id} item={item} />;
+              if (item.kind === "status")
+                return <StatusLine key={item.id}>{item.text}</StatusLine>;
+              if (item.kind === "error") {
+                return (
+                  <Node
+                    key={item.id}
+                    title="run failed"
+                    sub="threw — nothing after this ran"
+                  >
+                    <Field label="error" value={item.detail} />
+                  </Node>
+                );
+              }
+              if (item.kind === "widget") {
+                return (
+                  <Node
+                    key={item.id}
+                    title={`widget · ${item.widgetKind}`}
+                    sub="deterministic UI"
+                  >
+                    <Field label="payload" value={item.payload} />
+                  </Node>
+                );
+              }
+              const idx = turnCounter++;
+              return <TurnNode key={item.id} item={item} index={idx} />;
+            })}
+
+            {tree.unplacedSubAgents.length > 0 && (
+              <>
+                <SectionLabel>
+                  Sub-agents not linked to any trace node
+                  {tree.legacy ? " (correlated by session + time)" : ""}
+                </SectionLabel>
+                {tree.unplacedSubAgents.map((s) => (
+                  <SubAgentNodeView key={s.id} s={s} />
+                ))}
+              </>
+            )}
+          </Container>
+        </Page>
+      </SubAgentsCtx.Provider>
     </ModeCtx.Provider>
   );
 }

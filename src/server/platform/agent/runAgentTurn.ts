@@ -41,10 +41,8 @@ import type { RunContext } from "@/server/platform/runContext";
 import { withCaptureContext } from "@/server/platform/runs/captureContext";
 import { newRunTreeId } from "@/server/platform/runs/ids";
 import type { TraceEvent } from "@/server/platform/runs/trace";
-import {
-  createTraceAccumulator,
-  type TraceMap,
-} from "@/server/platform/runs/traceAccumulator";
+import { createTraceAccumulator } from "@/server/platform/runs/traceAccumulator";
+import type { TraceMap } from "@/shared/traceSteps";
 import type { StreamEventOf } from "@/shared/chatStream";
 import { isUserAbortError } from "@/shared/utils/abort";
 

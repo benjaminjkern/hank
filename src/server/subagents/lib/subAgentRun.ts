@@ -64,6 +64,9 @@ type RecordSubAgentRunArgs = {
   // True only when written by the backfill script (reconstructed from existing
   // rows), false for live captures.
   seeded?: boolean;
+  // The trace node this ran under, from the caller's RunContext (see
+  // SubAgentRun.traceParentId).
+  traceParentId?: string;
 };
 
 // Normalize an arbitrary value to something Prisma's Json column accepts. Drops
@@ -92,10 +95,10 @@ export async function recordSubAgentRun(
 ): Promise<void> {
   if (captureDisabled()) return;
   const hasOutput = args.output !== undefined && args.output !== null;
-  // Run-tree linkage (admin /admin/runs): the parent tool dispatch set an ALS
-  // capture context around this whole handler, so the sub-agent nests under the
-  // exact main-agent tool_use without threading ids through every call site.
-  // Empty outside a chat turn (backfill / scripts) — those rows link by session.
+  // Run-tree linkage (admin /admin/runs): runId / parentMessageId /
+  // parentToolUseId come from the ALS capture context (runUserMessage sets the
+  // runId around the whole run; a tool dispatch layers its ids on top). The trace
+  // node is per span, so it comes from the caller's RunContext instead.
   const cc = currentCaptureContext();
   try {
     await prisma.subAgentRun.create({
@@ -115,6 +118,7 @@ export async function recordSubAgentRun(
         runId: cc.runId ?? null,
         parentMessageId: cc.messageId ?? null,
         parentToolUseId: cc.parentToolUseId ?? null,
+        traceParentId: args.traceParentId ?? null,
       },
     });
   } catch (err) {
