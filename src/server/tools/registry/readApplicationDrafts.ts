@@ -6,8 +6,8 @@ import {
 } from "@/server/views/application";
 import { isStockItem } from "@/shared/applicationItem";
 
+import { toolError } from "../../platform/agentLoop/toolError";
 import { resolveJobArg } from "../lib/resolveEntityArg";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

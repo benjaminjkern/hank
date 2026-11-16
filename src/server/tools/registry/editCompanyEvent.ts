@@ -6,7 +6,7 @@ import {
 } from "@/server/entities/companies/companyEventEdits";
 import { parseEventDateTime, formatEventStamp } from "@/shared/utils/localTime";
 
-import { toolError } from "../lib/toolError";
+import { toolError } from "../../platform/agentLoop/toolError";
 
 import type { ToolDef } from "../lib/types";
 

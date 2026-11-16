@@ -8,7 +8,7 @@
 
 import { z } from "zod";
 
-import type { AnyToolDef } from "./types";
+import type { AnyToolDef } from "./tool";
 import type Anthropic from "@anthropic-ai/sdk";
 
 const cache = new WeakMap<AnyToolDef, Anthropic.Tool["input_schema"]>();

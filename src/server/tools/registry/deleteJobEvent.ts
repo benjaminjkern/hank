@@ -7,7 +7,7 @@ import {
 import { statusBackedByEvent } from "@/server/entities/jobs/jobEventStatus";
 import { formatEventStamp } from "@/shared/utils/localTime";
 
-import { toolError } from "../lib/toolError";
+import { toolError } from "../../platform/agentLoop/toolError";
 
 import type { ToolDef } from "../lib/types";
 

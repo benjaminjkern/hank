@@ -2,8 +2,8 @@ import { z } from "zod";
 
 import { untrackJob } from "@/server/entities/jobs/untrackJob";
 
+import { toolError } from "../../platform/agentLoop/toolError";
 import { resolveJobArg } from "../lib/resolveEntityArg";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

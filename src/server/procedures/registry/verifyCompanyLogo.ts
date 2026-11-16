@@ -10,7 +10,7 @@
 
 import type { RunContext } from "@/server/contracts";
 import { assertPublicUrl } from "@/server/platform/net/assertPublicUrl";
-import { traceText } from "@/server/platform/trace/traceText";
+import { traceText } from "@/server/platform/runs/traceText";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {

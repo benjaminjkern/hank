@@ -20,7 +20,7 @@ import { resolveBoardFromCareersPage } from "@/server/platform/scrape/resolveBoa
 import { withScrapeSignal } from "@/server/platform/scrape/scrapeSignal";
 import { normalizeUrlInput } from "@/shared/utils/url";
 
-import { toolError } from "../lib/toolError";
+import { toolError } from "../../platform/agentLoop/toolError";
 
 import type { ToolDef } from "../lib/types";
 

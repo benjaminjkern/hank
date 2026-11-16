@@ -1818,7 +1818,7 @@ function applyEvent(
       // Schedule a debounced mid-turn refresh of the dashboard + currently-
       // viewed entity payloads when the server flags the tool as having
       // changed user-visible state. The flag is set by runAgentTurn
-      // (src/server/agent/runtime/runAgentTurn.ts) from each tool's
+      // (src/server/platform/agentLoop/runAgentTurn.ts) from each tool's
       // `affectsViewedState` metadata; sub-agent tools also propagate it
       // through the trace bridge, so we don't gate on parentToolUseId.
       if (ev.affectsViewedState) {

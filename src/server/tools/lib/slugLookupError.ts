@@ -11,7 +11,7 @@
 
 import type { SlugLookupFail } from "@/server/entities/resolveBySlug";
 
-import { toolError } from "./toolError";
+import { toolError } from "../../platform/agentLoop/toolError";
 
 import type { ToolResult } from "./types";
 

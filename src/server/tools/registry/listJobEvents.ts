@@ -6,6 +6,7 @@ import {
 } from "@/server/entities/jobs/listJobEvents";
 import { formatEventStamp } from "@/shared/utils/localTime";
 
+import { toolError } from "../../platform/agentLoop/toolError";
 import {
   paginate,
   isPastLastPage,
@@ -13,7 +14,6 @@ import {
   pageFooter,
 } from "../lib/paginate";
 import { resolveJobArg } from "../lib/resolveEntityArg";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

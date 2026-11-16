@@ -15,7 +15,7 @@ import { runBoardRecipe } from "@/server/platform/scrape/recipe/runRecipe";
 import type { BoardRecipe } from "@/server/platform/scrape/recipe/types";
 import { withScrapeSignal } from "@/server/platform/scrape/scrapeSignal";
 
-import { toolError } from "../lib/toolError";
+import { toolError } from "../../platform/agentLoop/toolError";
 
 import type { ToolDef } from "../lib/types";
 

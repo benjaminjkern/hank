@@ -10,8 +10,9 @@ import {
   resolveCompanyBySlug,
 } from "@/server/entities/resolveBySlug";
 
+import { toolError } from "../../platform/agentLoop/toolError";
+
 import { slugLookupError } from "./slugLookupError";
-import { toolError } from "./toolError";
 
 import type { ToolResult } from "./types";
 

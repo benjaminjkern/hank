@@ -21,19 +21,20 @@ import {
   type HankSystemPrompt,
 } from "@/server/agent/hank";
 import {
-  runAgentTurn,
-  type DispatchedTool,
-} from "@/server/agent/runtime/runAgentTurn";
-import { applyHistoryCacheMarker } from "@/server/agent/runtime/streamingCore";
-import { captureTurn } from "@/server/agent/runTree/captureTurn";
-import {
   appendAssistantMessage,
   appendToolResultMessage,
   loadSessionMessages,
 } from "@/server/agent/session";
 import type { RunContext, Say } from "@/server/contracts";
+import {
+  runAgentTurn,
+  type DispatchedTool,
+} from "@/server/platform/agentLoop/runAgentTurn";
+import { applyHistoryCacheMarker } from "@/server/platform/agentLoop/streamingCore";
 import { resolveLlmClient } from "@/server/platform/llm/resolveClient";
-import { recordUsage } from "@/server/platform/usage/track";
+import { captureTurn } from "@/server/platform/runs/captureTurn";
+import { recordUsage } from "@/server/platform/runs/usage";
+import type { ToolResult } from "@/server/tools/lib/types";
 
 import type Anthropic from "@anthropic-ai/sdk";
 
@@ -78,7 +79,7 @@ export type HankTurnResult = {
   stopped: boolean;
   // Every tool this turn ran, in order, with its raw result. The caller reads
   // whatever domain signals it cares about off these.
-  dispatched: DispatchedTool[];
+  dispatched: DispatchedTool<ToolResult>[];
 };
 
 export async function runHankTurn(args: HankTurnArgs): Promise<HankTurnResult> {
@@ -139,28 +140,9 @@ export async function runHankTurn(args: HankTurnArgs): Promise<HankTurnResult> {
       turnIndex: args.turnIndex,
     });
   }
-  // These two rows carry the ids runAgentTurn already announced on the stream —
-  // pass them through, or the client's live bubbles and these rows are different
-  // messages and the turn re-shuffles on screen when the reconcile lands.
-  if (turn.emittedWidgets.length > 0) {
-    await appendAssistantMessage(
-      args.sessionId,
-      turn.emittedWidgets.map(
-        (w) =>
-          ({
-            type: "pipeline_widget",
-            toolUseId: w.toolUseId,
-            kind: w.kind,
-            payload: w.payload,
-          }) as unknown as Anthropic.ContentBlock,
-      ),
-      {
-        id: turn.widgetsMessageId,
-        runId: args.runId,
-        turnIndex: args.turnIndex,
-      },
-    );
-  }
+  // This row carries the id runAgentTurn already announced on the stream — pass
+  // it through, or the client's live bubble and this row are different messages
+  // and the turn re-shuffles on screen when the reconcile lands.
   if (turn.emittedStatusLines.length > 0) {
     await appendAssistantMessage(
       args.sessionId,

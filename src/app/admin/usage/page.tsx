@@ -1,6 +1,6 @@
 import { prisma } from "@/server/db/prisma";
 import { requireAdmin } from "@/server/platform/auth/requireAdmin";
-import { costOf, priceFor } from "@/server/platform/usage/pricing";
+import { costOf, priceFor } from "@/server/platform/runs/pricing";
 import { nowMs } from "@/shared/utils/now";
 
 import { AdminUsageView, type UsageSummary } from "./AdminUsageView";

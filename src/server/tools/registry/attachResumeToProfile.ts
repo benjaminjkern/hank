@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { runAttachResumeToProfile } from "@/server/procedures/registry/attachResumeToProfile";
 
-import { toolError } from "../lib/toolError";
+import { toolError } from "../../platform/agentLoop/toolError";
 
 import type { ToolDef } from "../lib/types";
 

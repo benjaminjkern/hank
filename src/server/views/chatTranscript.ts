@@ -89,7 +89,7 @@ const MAX_LIMIT = 200;
 
 // Tool names whose tool_use/tool_result blocks are filtered out before
 // reaching the UI. They remain in the DB and in the model's replay history.
-// Kept in sync with HIDDEN_TOOLS in src/server/agent/runtime/streamingCore.ts
+// Kept in sync with HIDDEN_TOOLS in src/server/platform/agentLoop/streamingCore.ts
 // (a view may not import agent runtime code).
 //
 // Currently empty — every tool surface is visible, with sub-agent-bearing

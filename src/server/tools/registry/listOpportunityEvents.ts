@@ -7,6 +7,7 @@ import {
 import { resolveOpportunityBySlug } from "@/server/entities/resolveBySlug";
 import { formatEventStamp } from "@/shared/utils/localTime";
 
+import { toolError } from "../../platform/agentLoop/toolError";
 import {
   paginate,
   isPastLastPage,
@@ -14,7 +15,6 @@ import {
   pageFooter,
 } from "../lib/paginate";
 import { slugLookupError } from "../lib/slugLookupError";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

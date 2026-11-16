@@ -12,8 +12,8 @@ import {
 } from "@/server/entities/resolveBySlug";
 import type { OpportunityStatus } from "@/server/generated/prisma/client";
 
+import { toolError } from "../../platform/agentLoop/toolError";
 import { slugLookupError } from "../lib/slugLookupError";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

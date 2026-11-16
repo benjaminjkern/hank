@@ -28,7 +28,7 @@
 import type { RunContext, RunTrace } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { passOnJobs } from "@/server/entities/jobs/passOnJobs";
-import { traceText } from "@/server/platform/trace/traceText";
+import { traceText } from "@/server/platform/runs/traceText";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {

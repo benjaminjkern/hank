@@ -21,10 +21,10 @@
 // and `runAgentTurn` dispatching a tool (which adds the parent chip to nest
 // under) — and threaded verbatim from there down.
 
-import type { RunTrace } from "@/server/platform/trace/types";
+import type { RunTrace } from "@/server/platform/runs/trace";
 
 // Re-exported so a caller needing both gets them from one place; the shape
-// itself lives with the rest of the trace vocabulary in platform/trace/.
+// itself lives with the rest of the trace vocabulary in ./trace.ts.
 export type { RunTrace };
 
 export type RunContext = {

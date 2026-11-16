@@ -2,8 +2,8 @@ import { z } from "zod";
 
 import { addUserQuestion } from "@/server/entities/jobs/applicationQuestions";
 
+import { toolError } from "../../platform/agentLoop/toolError";
 import { resolveJobArg } from "../lib/resolveEntityArg";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

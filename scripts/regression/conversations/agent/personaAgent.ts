@@ -6,7 +6,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 import { resolveAnthropicApiKey } from "@/server/platform/llm/resolveAnthropicKey";
-import { recordUsage } from "@/server/platform/usage/track";
+import { recordUsage } from "@/server/platform/runs/usage";
 
 import { getGraderClient, graderBackend } from "../../../lib/graderLlm";
 import { driveTurn, type VisibleTurn } from "../driver/turnDriver";

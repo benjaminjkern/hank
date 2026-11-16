@@ -25,8 +25,8 @@ import {
   type ScrapeOutcome,
 } from "@/server/procedures/registry/scrapeJobsForCompany";
 
+import { toolError } from "../../platform/agentLoop/toolError";
 import { slugLookupError } from "../lib/slugLookupError";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef, ToolResult } from "../lib/types";
 

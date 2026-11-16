@@ -4,8 +4,8 @@ import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
 import { renderShortlistBoardText } from "@/server/views/shortlistBoard";
 import { buildShortlistBoardEvents } from "@/server/views/showEvents";
 
+import { toolError } from "../../platform/agentLoop/toolError";
 import { slugLookupError } from "../lib/slugLookupError";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

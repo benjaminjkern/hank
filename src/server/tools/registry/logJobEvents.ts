@@ -6,7 +6,7 @@ import { resolveJobsBySlug } from "@/server/entities/resolveBySlug";
 import { EventSource } from "@/server/generated/prisma/client";
 import { parseEventDateTime } from "@/shared/utils/localTime";
 
-import { toolError } from "../lib/toolError";
+import { toolError } from "../../platform/agentLoop/toolError";
 
 import type { ToolDef } from "../lib/types";
 

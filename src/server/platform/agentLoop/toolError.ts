@@ -20,7 +20,7 @@
 
 import { toolErrorMarker, type ToolErrorCode } from "@/shared/toolErrorMarker";
 
-import type { ToolResult } from "./types";
+import type { ToolResult } from "./tool";
 
 export type ToolError = {
   code: ToolErrorCode;
@@ -52,7 +52,7 @@ export function toolError(
   code: ToolErrorCode,
   message: string,
   dedupHint: string,
-): ToolResult {
+): ToolResult<never> {
   return {
     content: toolErrorContent(code, message, dedupHint),
     error: { code, message, ...(dedupHint ? { dedupHint } : {}) },

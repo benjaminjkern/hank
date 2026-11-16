@@ -9,8 +9,8 @@
 // ALREADY_STREAMING), which say no `done` at all. Its finally clears the active
 // run either way, so the next turn never trips the ALREADY_STREAMING guard.
 
-import { sayTo } from "@/server/contracts";
 import { runUserMessage } from "@/server/agent/runtime/runUserMessage";
+import { sayTo } from "@/server/contracts";
 import type { UiEvent } from "@/server/contracts";
 import type { WidgetKind } from "@/shared/widgetKinds";
 

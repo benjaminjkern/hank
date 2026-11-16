@@ -4,8 +4,8 @@ import { resolveJobBySlug } from "@/server/entities/resolveBySlug";
 import { ProposedVerdict } from "@/server/generated/prisma/client";
 import { runReconsiderJob } from "@/server/procedures/registry/reconsiderJob";
 
+import { toolError } from "../../platform/agentLoop/toolError";
 import { slugLookupError } from "../lib/slugLookupError";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

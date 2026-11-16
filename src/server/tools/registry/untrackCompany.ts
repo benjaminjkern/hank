@@ -2,8 +2,8 @@ import { z } from "zod";
 
 import { untrackCompany } from "@/server/entities/companies/untrackCompany";
 
+import { toolError } from "../../platform/agentLoop/toolError";
 import { resolveCompanyArg } from "../lib/resolveEntityArg";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

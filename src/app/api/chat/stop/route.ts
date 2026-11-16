@@ -6,10 +6,10 @@
 // SSE fetch-abort deliberately: a client disconnect must not kill the run, only
 // an explicit Stop.
 
-import { getActiveRun } from "@/server/agent/runtime/stopRegistry";
 import { getOrCreateActiveSession } from "@/server/agent/session";
 import { rejectImpersonatedWrite } from "@/server/platform/admin/viewerScope";
 import { getCurrentUser } from "@/server/platform/auth/currentUser";
+import { getActiveRun } from "@/server/platform/runs/stopRegistry";
 
 export const dynamic = "force-dynamic";
 

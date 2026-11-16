@@ -477,7 +477,7 @@ function arrayOfStrings(v: unknown): string[] {
 }
 
 // Judge pricing — mirrors the canonical `opus` tier in
-// src/server/platform/usage/pricing.ts ($15/M input, $75/M output; cache_create =
+// src/server/platform/runs/pricing.ts ($15/M input, $75/M output; cache_create =
 // input × 1.25, cache_read = input × 0.1). Keep in sync if JUDGE_MODEL changes
 // tier.
 const JUDGE_PRICE = {

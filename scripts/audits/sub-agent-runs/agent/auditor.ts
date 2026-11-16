@@ -16,8 +16,8 @@ import {
   type AdminNoteCategory,
   type AdminNoteSeverity,
 } from "@/server/platform/admin/adminNotes";
-import { costOf } from "@/server/platform/usage/pricing";
-import { recordUsage } from "@/server/platform/usage/track";
+import { costOf } from "@/server/platform/runs/pricing";
+import { recordUsage } from "@/server/platform/runs/usage";
 
 import { graderBackend, type GraderClient } from "../../../lib/graderLlm";
 import { describeFixture } from "../fixtureRegistry";

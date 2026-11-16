@@ -17,7 +17,7 @@ import Anthropic from "@anthropic-ai/sdk";
 //     one — Hank's replay drops them in agent/session/loadTranscript.ts.
 //   - cache_control: silently ignored (DeepSeek auto-caches by prefix). Our
 //     sub-agent cache markers therefore no-op — harmless, but see the
-//     usage-tracking note in src/server/platform/usage/pricing.ts.
+//     usage-tracking note in src/server/platform/runs/pricing.ts.
 
 export const DEEPSEEK_ANTHROPIC_BASE_URL = "https://api.deepseek.com/anthropic";
 

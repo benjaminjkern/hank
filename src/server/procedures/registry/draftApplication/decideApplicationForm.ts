@@ -9,7 +9,7 @@
 
 import type { RunContext } from "@/server/contracts";
 import { loadMergedQuestions } from "@/server/entities/jobs/applicationQuestions";
-import { withTraceSpan } from "@/server/platform/trace/span";
+import { withTraceSpan } from "@/server/platform/runs/span";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {
   applicationDeciderSubAgent,

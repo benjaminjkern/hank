@@ -35,8 +35,8 @@ import { runShortlist } from "@/server/procedures/registry/shortlist";
 import { isScrapeStale, runBoardScrape } from "./boardScrape";
 import { runCompanyEnrichStep } from "./companyEnrichStep";
 import { narrateCompanyCaughtUp, narrateCompanySettled } from "./narration";
-import { summarizeCloseRationales } from "./summarizeCloseRationales";
 import { sayStateChange } from "./sayStateChange";
+import { summarizeCloseRationales } from "./summarizeCloseRationales";
 
 import type { WalkthroughArgs, WalkthroughResult } from "./types";
 

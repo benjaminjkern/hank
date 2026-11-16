@@ -2,7 +2,7 @@
 // procedures/registry/ is built by `procedure`, and the span for an entry is
 // opened here and nowhere else — so every procedure is traced the same
 // way, and none can forget to be. (A STEP inside one procedure may still bracket
-// itself with platform/trace/span.ts — the drafting loop does.)
+// itself with platform/runs/span.ts — the drafting loop does.)
 //
 // The shape is fixed: ONE argument, an object that extends RunContext (the
 // procedure's own inputs plus the ambient userId / sessionId / trace / signal),
@@ -14,10 +14,10 @@
 // The span nests under `args.trace` and the procedure body receives the span's
 // trace, so anything it calls (sub-agents, other procedures) nests under it in
 // /admin/runs. With no trace parent (a run the chat loop drives itself, scripts)
-// the span is a no-op — see platform/trace/span.ts.
+// the span is a no-op — see platform/runs/span.ts.
 
 import type { RunContext } from "@/server/contracts";
-import { openTraceSpan } from "@/server/platform/trace/span";
+import { openTraceSpan } from "@/server/platform/runs/span";
 
 type ProcedureOptions<R> = {
   // One line for the span's close event in the inspector.

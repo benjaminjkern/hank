@@ -4,8 +4,8 @@ import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
 import { runCommitShortlist } from "@/server/procedures/registry/commitShortlist";
 import { buildShowEvents } from "@/server/views/showEvents";
 
+import { toolError } from "../../platform/agentLoop/toolError";
 import { slugLookupError } from "../lib/slugLookupError";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

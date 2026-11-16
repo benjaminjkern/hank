@@ -4,8 +4,8 @@ import { updateCompanyFields } from "@/server/entities/companies/updateCompany";
 import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
 import { normalizeUrlInput } from "@/shared/utils/url";
 
+import { toolError } from "../../platform/agentLoop/toolError";
 import { slugLookupError } from "../lib/slugLookupError";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

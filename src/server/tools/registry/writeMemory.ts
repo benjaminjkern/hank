@@ -7,7 +7,7 @@ import {
   mergeMemorySection,
 } from "@/server/entities/memory/store";
 
-import { toolError } from "../lib/toolError";
+import { toolError } from "../../platform/agentLoop/toolError";
 
 import type { ToolDef } from "../lib/types";
 

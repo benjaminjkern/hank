@@ -14,4 +14,4 @@ export type {
   WidgetKind,
 } from "./events";
 export { statusEvent, widgetEvent, sayUiEvents, sayTo } from "./events";
-export type { RunContext, RunTrace } from "./runContext";
+export type { RunContext, RunTrace } from "../platform/runs/runContext";

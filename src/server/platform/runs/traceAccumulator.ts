@@ -13,7 +13,7 @@
 // production chat path has no client-side trace listener, so gating on one
 // leaves the column permanently empty.
 
-import type { TraceEvent } from "@/server/platform/trace/types";
+import type { TraceEvent } from "@/server/platform/runs/trace";
 
 type TraceStep =
   | { kind: "text"; text: string }

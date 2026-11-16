@@ -67,7 +67,7 @@ export type EmitTrace = (event: TraceEvent) => void;
 // Where in-flight activity is reported: the sink, plus which parent chip/span it
 // nests under. Both optional — outside a chat dispatch there's nothing
 // listening, so every emitter no-ops rather than branching. Carried by
-// `RunContext` (contracts/runContext.ts); it lives here because it's pure
+// `RunContext` (./runContext.ts); it lives here because it's pure
 // observability plumbing, like `EmitTrace` itself.
 export type RunTrace = {
   onTrace?: EmitTrace;
