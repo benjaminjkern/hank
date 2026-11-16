@@ -24,16 +24,14 @@ import { useState } from "react";
 import styled from "styled-components";
 
 import { useChatStore } from "@/client/chatStore";
-import type {
-  ShortlistBoardView as ShortlistBoardData,
-  ShortlistBoardRow,
-} from "@/server/views/shortlistBoard";
 import {
   BOARD_GROUP_OF_TIER,
   type ShortlistBoardTier,
 } from "@/shared/shortlistBoardTiers";
-// Types only — the loader beside them opens a database connection, so a VALUE
-// from that module would follow Prisma into the browser bundle.
+import type {
+  ShortlistBoardView as ShortlistBoardData,
+  ShortlistBoardRow,
+} from "@/shared/views/shortlistBoard";
 
 import { Caret } from "./shared/Caret";
 import { PanelRowCard } from "./shared/negotiation";

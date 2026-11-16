@@ -1,15 +1,14 @@
+import type {
+  ApplicationQuestion,
+  ApplicationQuestionsEnvelope,
+} from "@/shared/applicationQuestions";
 import { decodeEntities, htmlToText } from "@/shared/utils/html";
 import { titleCaseSlug } from "@/shared/utils/text";
 
 import { scrapeFetchSignal } from "../../scrapeSignal";
 import { rawAttrs, type AtsProviderModule } from "../shared";
 
-import type {
-  ApplicationQuestion,
-  ApplicationQuestionsEnvelope,
-  ScrapedCompany,
-  ScrapedJob,
-} from "../../types";
+import type { ScrapedCompany, ScrapedJob } from "../../types";
 
 const LEVER_RE = /^https?:\/\/jobs\.lever\.co\/([^/?#]+)/i;
 const LEVER_API_RE = /^https?:\/\/api\.lever\.co\/v0\/postings\/([^/?#]+)/i;

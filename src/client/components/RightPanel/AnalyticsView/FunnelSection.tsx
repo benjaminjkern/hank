@@ -4,8 +4,8 @@ import { useMemo, useState } from "react";
 import styled, { type DefaultTheme } from "styled-components";
 
 import { useChatStore } from "@/client/chatStore";
-import type { Application, FunnelBucket } from "@/server/views/analytics";
 import { nowMs } from "@/shared/utils/now";
+import type { Application, FunnelBucket } from "@/shared/views/analytics";
 
 import { AppList } from "./AppList";
 import {

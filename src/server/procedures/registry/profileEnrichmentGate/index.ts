@@ -12,8 +12,8 @@
 //      thesis: one more profile question is cheap, bad downstream output isn't.
 //      The enrich agent can elicit even without a specific `missing` list.
 
-import type { RunContext } from "@/server/contracts";
 import { isProfileEnrichedByLength } from "@/server/entities/profile/profileInventory";
+import type { RunContext } from "@/server/platform/runContext";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {

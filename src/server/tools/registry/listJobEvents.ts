@@ -4,6 +4,7 @@ import {
   loadJobEventHeader,
   jobEventsQuery,
 } from "@/server/entities/jobs/listJobEvents";
+import { toolError } from "@/server/platform/agent/toolError";
 import { formatEventStamp } from "@/shared/utils/localTime";
 
 import {
@@ -13,7 +14,6 @@ import {
   pageFooter,
 } from "../lib/paginate";
 import { resolveJobArg } from "../lib/resolveEntityArg";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

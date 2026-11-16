@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import styled from "styled-components";
 
 import { useChatStore } from "@/client/chatStore";
-import type { AnalyticsData } from "@/server/views/analytics";
 import { withImpersonate } from "@/shared/impersonation";
+import type { AnalyticsData } from "@/shared/views/analytics";
 
 import { ActivitySection } from "./ActivitySection";
 import { FunnelSection } from "./FunnelSection";

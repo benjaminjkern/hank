@@ -10,7 +10,7 @@
 import type {
   ClientEventSource,
   ClientEventSeverity,
-} from "@/server/platform/clientEvents/types";
+} from "@/shared/clientEvents";
 
 type ReportClientEventArgs = {
   source: ClientEventSource;

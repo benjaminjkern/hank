@@ -20,12 +20,12 @@ import { readResumeBackground } from "@/server/entities/resume/store";
 import {
   isStockFieldType,
   isCoverLetterQuestion,
-  type ApplicationQuestion,
 } from "@/server/platform/scrape/types";
 import type {
   ApplicationDeciderInput,
   QuestionDecision,
 } from "@/server/subagents/registry/applicationDecider";
+import type { ApplicationQuestion } from "@/shared/applicationQuestions";
 
 export type FormPartition = {
   // The questions the sub-agent decides, in order.

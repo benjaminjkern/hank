@@ -1,14 +1,13 @@
+import type {
+  ApplicationQuestion,
+  ApplicationQuestionsEnvelope,
+} from "@/shared/applicationQuestions";
 import { decodeEntities, htmlToText } from "@/shared/utils/html";
 import { titleCaseSlug } from "@/shared/utils/text";
 
 import { fetchText, rawAttrs, type AtsProviderModule } from "../shared";
 
-import type {
-  ApplicationQuestion,
-  ApplicationQuestionsEnvelope,
-  ScrapeResult,
-  ScrapedJob,
-} from "../../types";
+import type { ScrapeResult, ScrapedJob } from "../../types";
 
 const JAZZHR_RE = /^https?:\/\/(?!www\.)([a-z0-9-]+)\.applytojob\.com/i;
 // A JazzHR job/apply URL → capture the {code}. Handles both the public

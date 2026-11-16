@@ -1,11 +1,11 @@
 import { z } from "zod";
 
 import { resolveJobBySlug } from "@/server/entities/resolveBySlug";
+import { toolError } from "@/server/platform/agent/toolError";
 import { buildShowEvents } from "@/server/views/showEvents";
 import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import { slugLookupError } from "../lib/slugLookupError";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

@@ -19,22 +19,21 @@
 // housekeeping, not something to reconsider) — see `listUnrelayedApplicationEdits`.
 
 import { appendPipelineActivity } from "@/server/agent/session";
-import type { RunContext } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import {
   applicationEditsFor,
   DRAFTED_ROW_SELECT,
   draftsSnapshot,
   readShortAnswers,
-  type ApplicationEdit,
 } from "@/server/entities/jobs/applicationDrafts";
 import {
   markJobApplied,
   type MarkJobAppliedResult,
 } from "@/server/entities/jobs/markJobApplied";
-import type { ShortAnswer } from "@/server/entities/jobs/types";
+import type { RunContext } from "@/server/platform/runContext";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
+import type { ApplicationEdit, ShortAnswer } from "@/shared/applicationDrafts";
 import { renderWordDiff } from "@/shared/utils/diff";
 
 function submitNote(

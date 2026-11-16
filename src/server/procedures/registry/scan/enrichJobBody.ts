@@ -4,12 +4,12 @@
 // discuss), but the human contesting the pipeline's judgment IS the judgment,
 // so re-running the match to argue back would be noise.
 
-import type { RunContext } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import {
   toRoleAttrs,
   ROLE_ATTR_SELECT,
 } from "@/server/entities/jobs/roleAttrs";
+import type { RunContext } from "@/server/platform/runContext";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import { enrichJobSubAgent } from "@/server/subagents/registry/enrichJob";

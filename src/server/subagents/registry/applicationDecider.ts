@@ -50,23 +50,20 @@ import {
   type RoleAttrs,
 } from "@/server/entities/jobs/roleAttrs";
 import type { LlmModel } from "@/server/platform/llm/models";
-import {
-  isProseQuestion,
-  type ApplicationQuestion,
-} from "@/server/platform/scrape/types";
+import { isProseQuestion } from "@/server/platform/scrape/types";
 import type {
   SubAgentDef,
   SubAgentOutputSchema,
 } from "@/server/subagents/lib/types";
 import { USER_FACING_VOICE } from "@/server/subagents/lib/voice";
+import type { DraftVerdict } from "@/shared/applicationDrafts";
+import type { ApplicationQuestion } from "@/shared/applicationQuestions";
 
 // flash 5/0/0 on re-run (the batch's one warn was variance). The decision is
 // grounded in the form's own questions + the catalog of past applications, so
 // there's little room to invent.
 const MODEL: LlmModel = "deepseek-v4-flash";
 const MAX_TOKENS = 8192;
-
-export type DraftVerdict = "draft" | "skip" | "ask_user";
 
 export type QuestionDecision = {
   question: string;

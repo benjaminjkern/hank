@@ -11,7 +11,7 @@
 
 import { sayTo } from "@/server/contracts";
 import { runUserMessage } from "@/server/agent/runtime/runUserMessage";
-import type { UiEvent } from "@/server/contracts";
+import type { UiEvent } from "@/shared/chatStream";
 import type { WidgetKind } from "@/shared/widgetKinds";
 
 import { resolvePanelHint } from "./panelHint";

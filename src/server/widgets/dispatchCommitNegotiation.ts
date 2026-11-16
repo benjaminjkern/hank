@@ -20,11 +20,12 @@
 // that hasn't happened yet. They share the chrome and the gate, not the meaning
 // — see widgets/parse.ts (confirm_application_submit).
 
-import type { EntryTarget, RunContext } from "@/server/contracts";
+import type { EntryTarget } from "@/server/contracts";
+import type { RunContext } from "@/server/platform/runContext";
 import { runCommitShortlist } from "@/server/procedures/registry/commitShortlist";
 import { loadDiscoveryList } from "@/server/views/discoveryList";
-import type { NegotiationState } from "@/server/views/negotiationPanel";
 import { loadShortlistBoard } from "@/server/views/shortlistBoard";
+import type { NegotiationState } from "@/shared/views/negotiationPanel";
 
 import type { CommitNegotiationSubmission } from "./parse";
 

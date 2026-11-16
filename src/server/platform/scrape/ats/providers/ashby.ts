@@ -1,3 +1,7 @@
+import type {
+  ApplicationQuestion,
+  ApplicationQuestionsEnvelope,
+} from "@/shared/applicationQuestions";
 import { isRecord } from "@/shared/utils/guards";
 import { decodeEntities, htmlToText } from "@/shared/utils/html";
 import { titleCaseSlug } from "@/shared/utils/text";
@@ -5,12 +9,7 @@ import { titleCaseSlug } from "@/shared/utils/text";
 import { scrapeFetchSignal } from "../../scrapeSignal";
 import { rawAttrs, type AtsProviderModule } from "../shared";
 
-import type {
-  ApplicationQuestion,
-  ApplicationQuestionsEnvelope,
-  ScrapedCompany,
-  ScrapedJob,
-} from "../../types";
+import type { ScrapedCompany, ScrapedJob } from "../../types";
 
 const ASHBY_RE = /^https?:\/\/jobs\.ashbyhq\.com\/([^/?#]+)/i;
 const ASHBY_API_RE =

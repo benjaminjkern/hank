@@ -2,14 +2,18 @@
 // `panel_mode` events that move the right panel to it — the one dispatcher every
 // show_* tool and deterministic mutator goes through.
 
-import type { EntryTarget, UiEvent } from "@/server/contracts";
+import type { EntryTarget } from "@/server/contracts";
 import { getFocusedCompanyView } from "@/server/views/getFocusedCompany";
 import { getFocusedJobView } from "@/server/views/getFocusedJob";
 import { getFocusedOpportunityView } from "@/server/views/getFocusedOpportunity";
+import type { UiEvent } from "@/shared/chatStream";
+import type { ApplicationView } from "@/shared/views/application";
+import type { DiscoveryListView } from "@/shared/views/discoveryList";
+import type { ShortlistBoardView } from "@/shared/views/shortlistBoard";
 
-import { loadApplicationView, type ApplicationView } from "./application";
-import { loadDiscoveryList, type DiscoveryListView } from "./discoveryList";
-import { loadShortlistBoard, type ShortlistBoardView } from "./shortlistBoard";
+import { loadApplicationView } from "./application";
+import { loadDiscoveryList } from "./discoveryList";
+import { loadShortlistBoard } from "./shortlistBoard";
 
 // Which entity to put on screen. An empty target ({}) is the dashboard.
 export type ShowTarget = {

@@ -1,5 +1,6 @@
 import { sayUiEvents } from "@/server/contracts";
-import type { Say, UiEvent } from "@/server/contracts";
+import type { UiEvent } from "@/shared/chatStream";
+import type { Say } from "@/server/contracts";
 
 // Say a deterministic state change's narration as a `pipeline_status` (so the
 // chat history records the action verbatim) BEFORE any panel events fire.

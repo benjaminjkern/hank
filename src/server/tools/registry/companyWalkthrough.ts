@@ -4,10 +4,10 @@ import { prisma } from "@/server/db/prisma";
 import { switchToCompany } from "@/server/entities/companies/resumeCompany";
 import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
 import { CompanyStatus } from "@/server/generated/prisma/client";
+import { toolError } from "@/server/platform/agent/toolError";
 import { buildShowEvents } from "@/server/views/showEvents";
 
 import { slugLookupError } from "../lib/slugLookupError";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

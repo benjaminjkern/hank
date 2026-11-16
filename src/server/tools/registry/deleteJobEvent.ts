@@ -5,9 +5,8 @@ import {
   deleteJobEvent,
 } from "@/server/entities/jobs/jobEventEdits";
 import { statusBackedByEvent } from "@/server/entities/jobs/jobEventStatus";
+import { toolError } from "@/server/platform/agent/toolError";
 import { formatEventStamp } from "@/shared/utils/localTime";
-
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

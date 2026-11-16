@@ -34,14 +34,15 @@ import {
   clearActiveRun,
   claimSessionForNewRun,
   registerActiveRun,
-} from "@/server/agent/runtime/stopRegistry";
-import { newRunTreeId } from "@/server/agent/runTree/ids";
+} from "@/server/platform/agent/stopRegistry";
+import { newRunTreeId } from "@/server/platform/agent/ids";
 import {
   appendRunError,
   getOrCreateActiveSession,
   recordTranscript,
 } from "@/server/agent/session";
-import type { LoopEvent, Say } from "@/server/contracts";
+import type { LoopEvent } from "@/shared/chatStream";
+import type { Say } from "@/server/contracts";
 import { classifyLlmError } from "@/server/platform/llm/classifyLlmError";
 import { withCaptureContext } from "@/server/platform/usage/captureContext";
 import {

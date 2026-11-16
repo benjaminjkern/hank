@@ -1,7 +1,7 @@
 // The application-status funnel's data: the category table each bucket rolls
 // up into, its colors, the applied-within cutoffs, and the app/company counts.
 
-import type { Application, FunnelBucket } from "@/server/views/analytics";
+import type { Application, FunnelBucket } from "@/shared/views/analytics";
 
 import type { DefaultTheme } from "styled-components";
 

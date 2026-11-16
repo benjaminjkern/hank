@@ -10,8 +10,7 @@
 // the boundary.
 
 import type { SlugLookupFail } from "@/server/entities/resolveBySlug";
-
-import { toolError } from "./toolError";
+import { toolError } from "@/server/platform/agent/toolError";
 
 import type { ToolResult } from "./types";
 

@@ -15,12 +15,11 @@
 
 import { z } from "zod";
 
+import { toolError } from "@/server/platform/agent/toolError";
 import { testScrape } from "@/server/platform/scrape";
 import { resolveBoardFromCareersPage } from "@/server/platform/scrape/resolveBoardFromCareersPage";
 import { withScrapeSignal } from "@/server/platform/scrape/scrapeSignal";
 import { normalizeUrlInput } from "@/shared/utils/url";
-
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

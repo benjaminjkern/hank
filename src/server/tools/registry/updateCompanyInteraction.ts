@@ -15,9 +15,9 @@ import {
   type CompanyCloseReason,
   type CompanyPauseReason,
 } from "@/server/generated/prisma/client";
+import { toolError } from "@/server/platform/agent/toolError";
 
 import { slugLookupError } from "../lib/slugLookupError";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

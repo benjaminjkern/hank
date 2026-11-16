@@ -2,8 +2,8 @@
 
 import styled from "styled-components";
 
-import type { Advancement } from "@/server/views/analytics";
 import { fullDate, relativeTime } from "@/shared/utils/date";
+import type { Advancement } from "@/shared/views/analytics";
 
 import { ShowMoreToggle } from "../shared/ShowMoreToggle";
 import { useExpandable } from "../shared/useExpandable";

@@ -14,7 +14,7 @@
 // decided anything at all, which is what gates the session wrap on "Done".
 
 import { widgetEvent } from "@/server/contracts";
-import type { StreamEvent } from "@/server/contracts";
+import type { StreamEvent } from "@/shared/chatStream";
 
 export function addMoreCompaniesWidget(
   added: string[],

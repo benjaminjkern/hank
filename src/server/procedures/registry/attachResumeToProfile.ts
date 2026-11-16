@@ -9,9 +9,9 @@
 // merge lives here once so the two paths can't drift into different answers for
 // "what happens to the background on a second upload."
 
-import type { RunContext } from "@/server/contracts";
 import { readMemory } from "@/server/entities/memory/store";
 import { RESUME_PATH, saveResume } from "@/server/entities/resume/store";
+import type { RunContext } from "@/server/platform/runContext";
 import { getAttachment } from "@/server/platform/storage/attachments";
 import { DOCX_MIME } from "@/server/platform/storage/docx";
 import { procedure } from "@/server/procedures/lib/procedure";

@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 import { persistApplicationAnswer } from "@/server/entities/jobs/applicationQuestions";
+import { toolError } from "@/server/platform/agent/toolError";
 
 import { resolveJobArg } from "../lib/resolveEntityArg";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

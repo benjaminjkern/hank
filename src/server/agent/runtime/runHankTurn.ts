@@ -23,15 +23,19 @@ import {
 import {
   runAgentTurn,
   type DispatchedTool,
-} from "@/server/agent/runtime/runAgentTurn";
-import { applyHistoryCacheMarker } from "@/server/agent/runtime/streamingCore";
-import { captureTurn } from "@/server/agent/runTree/captureTurn";
+} from "@/server/platform/agent/runAgentTurn";
+import { applyHistoryCacheMarker } from "@/server/platform/agent/streamingCore";
+import { captureTurn } from "@/server/agent/runtime/captureTurn";
 import {
   appendAssistantMessage,
   appendToolResultMessage,
   loadSessionMessages,
 } from "@/server/agent/session";
-import type { RunContext, Say } from "@/server/contracts";
+import type { RunContext } from "@/server/platform/runContext";
+import type { Say } from "@/server/contracts";
+import type { ToolResult } from "@/server/tools/lib/types";
+import type { UiEvent } from "@/shared/chatStream";
+import type { WidgetKind } from "@/shared/widgetKinds";
 import { resolveLlmClient } from "@/server/platform/llm/resolveClient";
 import { recordUsage } from "@/server/platform/usage/track";
 
@@ -78,7 +82,7 @@ export type HankTurnResult = {
   stopped: boolean;
   // Every tool this turn ran, in order, with its raw result. The caller reads
   // whatever domain signals it cares about off these.
-  dispatched: DispatchedTool[];
+  dispatched: DispatchedTool<ToolResult>[];
 };
 
 export async function runHankTurn(args: HankTurnArgs): Promise<HankTurnResult> {
@@ -115,7 +119,7 @@ export async function runHankTurn(args: HankTurnArgs): Promise<HankTurnResult> {
     hasPriorAssistantTurn: history.some((m) => m.role === "assistant"),
   });
 
-  const turn = await runAgentTurn({
+  const turn = await runAgentTurn<UiEvent, WidgetKind, ToolResult>({
     ...args,
     client,
     model,

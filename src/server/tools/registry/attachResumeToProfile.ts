@@ -4,9 +4,8 @@
 
 import { z } from "zod";
 
+import { toolError } from "@/server/platform/agent/toolError";
 import { runAttachResumeToProfile } from "@/server/procedures/registry/attachResumeToProfile";
-
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

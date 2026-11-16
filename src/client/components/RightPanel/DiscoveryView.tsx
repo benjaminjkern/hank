@@ -18,7 +18,7 @@ import { SuggestionCheckbox } from "@/client/components/Chat/widgets/sharedStyle
 import type {
   DiscoveryListView,
   DiscoveryRow,
-} from "@/server/views/discoveryList";
+} from "@/shared/views/discoveryList";
 
 import { PanelRowCard } from "./shared/negotiation";
 

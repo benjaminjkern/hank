@@ -6,11 +6,10 @@
 
 import { z } from "zod";
 
+import { toolError } from "@/server/platform/agent/toolError";
 import { fetchCleanedUrl } from "@/server/platform/scrape/fetchCleanedUrl";
 import { withScrapeSignal } from "@/server/platform/scrape/scrapeSignal";
 import { normalizeUrlInput } from "@/shared/utils/url";
-
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

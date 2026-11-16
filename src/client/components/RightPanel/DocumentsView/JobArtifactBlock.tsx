@@ -2,9 +2,9 @@
 
 import styled from "styled-components";
 
-import type { DocumentArtifact } from "@/server/views/documents";
-import type { FocusedJobView } from "@/server/views/getFocusedJob";
 import { statusColor, statusLabel } from "@/shared/statusColors";
+import type { DocumentArtifact } from "@/shared/views/documents";
+import type { FocusedJobView } from "@/shared/views/getFocusedJob";
 
 import {
   ReuseSwitch,

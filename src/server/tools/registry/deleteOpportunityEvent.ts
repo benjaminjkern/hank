@@ -5,9 +5,8 @@ import {
   getOpportunityEventById,
   deleteOpportunityEvent,
 } from "@/server/entities/opportunities/opportunityEventEdits";
+import { toolError } from "@/server/platform/agent/toolError";
 import { formatEventStamp } from "@/shared/utils/localTime";
-
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

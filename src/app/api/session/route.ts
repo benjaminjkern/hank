@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 
-import { getActiveRun } from "@/server/agent/runtime/stopRegistry";
 import { getOrCreateActiveSession } from "@/server/agent/session";
 import { prisma } from "@/server/db/prisma";
 import { resolveViewedUser } from "@/server/platform/admin/viewerScope";
+import { getActiveRun } from "@/server/platform/agent/stopRegistry";
 import { loadChatTranscriptPage } from "@/server/views/chatTranscript";
 
 export const dynamic = "force-dynamic";

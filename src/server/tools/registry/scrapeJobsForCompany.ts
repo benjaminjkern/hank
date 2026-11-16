@@ -18,6 +18,7 @@
 import { z } from "zod";
 
 import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
+import { toolError } from "@/server/platform/agent/toolError";
 import type { ReconBoardResult } from "@/server/procedures/registry/reconBoard";
 import {
   runScrapeJobsForCompany,
@@ -26,7 +27,6 @@ import {
 } from "@/server/procedures/registry/scrapeJobsForCompany";
 
 import { slugLookupError } from "../lib/slugLookupError";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef, ToolResult } from "../lib/types";
 

@@ -1,6 +1,7 @@
-// The discovery list view — the companies the LAST search proposed, and nothing
-// else. Feeds the panel's discovery screen (GET /api/discovery), Hank's
-// discovery context block, and the find_companies arm's show event.
+// The discovery list view's loader — the companies the LAST search proposed,
+// and nothing else. Feeds the panel's discovery screen (GET /api/discovery),
+// Hank's discovery context block, and the find_companies arm's show event. The
+// payload types are shared/views/discoveryList.ts.
 //
 // **One run, not the whole pool.** Older unsettled candidates stay in the table
 // as input to the next search (companySuggestions.ts) — they are how walking
@@ -23,28 +24,9 @@ import {
   MARK_WORDS,
 } from "@/server/entities/companies/suggestionMark";
 import type {
-  NegotiationRow,
-  NegotiationState,
-} from "@/server/views/negotiationPanel";
-
-export type DiscoveryRow = NegotiationRow & {
-  id: string;
-  name: string;
-  reason: string;
-  // What the search established about the company. Null on a row Hank added
-  // himself and on rows written before the search returned one.
-  summary: string | null;
-  url: string | null;
-  // False means the mark in force is "pass" — the user unchecked it, or Hank
-  // did on their say-so.
-  checked: boolean;
-};
-
-// `openThreadCount` is always 0: a candidate is a name and a reason, so there is
-// nothing here Hank can ask about that unchecking doesn't already answer.
-export type DiscoveryListView = NegotiationState & {
-  rows: DiscoveryRow[];
-};
+  DiscoveryListView,
+  DiscoveryRow,
+} from "@/shared/views/discoveryList";
 
 export async function loadDiscoveryList(
   userId: string,

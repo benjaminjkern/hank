@@ -4,8 +4,8 @@ import { useState } from "react";
 import styled from "styled-components";
 
 import { useChatStore } from "@/client/chatStore";
-import type { ShortAnswer } from "@/server/entities/jobs/types";
-import type { FocusedJobView } from "@/server/views/getFocusedJob";
+import type { ShortAnswer } from "@/shared/applicationDrafts";
+import type { FocusedJobView } from "@/shared/views/getFocusedJob";
 
 import { Switch } from "./Switch";
 

@@ -13,7 +13,8 @@
 // while every branch below is a decision about companies, roles, and profiles.
 
 import { statusEvent, sayUiEvents } from "@/server/contracts";
-import type { EntryTarget, RunContext, Say } from "@/server/contracts";
+import type { RunContext } from "@/server/platform/runContext";
+import type { EntryTarget, Say } from "@/server/contracts";
 import { flipDueInterviewsToDebrief } from "@/server/entities/jobs/flipDueInterviews";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runWrapSegment } from "@/server/procedures/registry/wrapSegment";

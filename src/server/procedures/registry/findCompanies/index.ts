@@ -9,8 +9,8 @@
 // come back as `candidates: []` with a `reason`, so the caller has one shape to
 // render and never has to re-derive why.
 
-import type { RunContext } from "@/server/contracts";
 import { recordSuggestions } from "@/server/entities/companies/companySuggestions";
+import type { RunContext } from "@/server/platform/runContext";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {

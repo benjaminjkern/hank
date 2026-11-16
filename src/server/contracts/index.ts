@@ -1,17 +1,7 @@
-// Cross-layer contracts: the vocabularies Hank's tools, the chat runner, and the
-// deterministic layer all speak. Kept out of tools/lib/ (which is abstract
-// TOOL infrastructure) because non-tool producers emit these too.
+// Cross-layer contracts: the server-side vocabularies Hank's tools, the chat
+// runner, and the deterministic layer all speak. The wire events the client also
+// reads live in src/shared/chatStream.ts; RunContext in platform/runContext.ts.
 
-export type { UiEvent } from "./uiEvent";
 export type { EntryTarget } from "./entryTarget";
-export type {
-  StreamEventOf,
-  StreamEvent,
-  LoopEvent,
-  Say,
-  ChatTurnOutcome,
-  ChatTurnRunner,
-  WidgetKind,
-} from "./events";
+export type { Say, ChatTurnOutcome, ChatTurnRunner } from "./events";
 export { statusEvent, widgetEvent, sayUiEvents, sayTo } from "./events";
-export type { RunContext, RunTrace } from "./runContext";

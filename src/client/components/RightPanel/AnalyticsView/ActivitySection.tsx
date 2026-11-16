@@ -4,9 +4,9 @@ import { useMemo, useState } from "react";
 import styled from "styled-components";
 
 import { useChatStore } from "@/client/chatStore";
-import type { Advancement } from "@/server/views/analytics";
 import { dayKey } from "@/shared/utils/date";
 import { nowMs } from "@/shared/utils/now";
+import type { Advancement } from "@/shared/views/analytics";
 
 import { Switch } from "../shared/Switch";
 

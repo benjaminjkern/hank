@@ -17,9 +17,9 @@
 //     a final sweep bumps it to SCANNED so the shortlist (which falls back to
 //     rawContent) still sees it — no job gets stranded in NEW limbo.
 
-import type { RunContext } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { JobInteractionStatus } from "@/server/generated/prisma/client";
+import type { RunContext } from "@/server/platform/runContext";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { isUserAbortError } from "@/shared/utils/abort";
 import { nowMs } from "@/shared/utils/now";

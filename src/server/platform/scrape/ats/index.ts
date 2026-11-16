@@ -1,4 +1,5 @@
 import { assertPublicUrl } from "@/server/platform/net/assertPublicUrl";
+import type { ApplicationQuestionsEnvelope } from "@/shared/applicationQuestions";
 
 import { scrapeFetchSignal } from "../scrapeSignal";
 
@@ -23,7 +24,7 @@ import { workable } from "./providers/workable";
 import { workday } from "./providers/workday";
 
 import type { AtsHandler, AtsProviderModule, QuestionsHints } from "./shared";
-import type { ApplicationQuestionsEnvelope, ScrapeResult } from "../types";
+import type { ScrapeResult } from "../types";
 
 // Public re-exports: the scrape helpers used outside this module keep their
 // existing "@/server/platform/scrape/ats" import path (this file resolves that specifier).

@@ -5,14 +5,13 @@
 
 import { writeMemory } from "@/server/entities/memory/store";
 import { RESUME_PATH } from "@/server/entities/resume/store";
+import type { EditableDocKind } from "@/shared/narrativeDocs";
 
 export const NARRATIVE_DOC_PATHS = {
   profile: "profile.md",
   frequent_questions: "frequent_questions.md",
   resume: RESUME_PATH,
-} as const;
-
-export type EditableDocKind = keyof typeof NARRATIVE_DOC_PATHS;
+} as const satisfies Record<EditableDocKind, string>;
 
 export function isEditableDocKind(v: unknown): v is EditableDocKind {
   return typeof v === "string" && v in NARRATIVE_DOC_PATHS;

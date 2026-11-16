@@ -16,7 +16,6 @@ import {
   serializeTranscript,
   type StoredMessage,
 } from "@/server/agent/session";
-import type { RunContext } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import {
   readMemory,
@@ -26,6 +25,7 @@ import {
   mergeMemorySection,
   listMemories,
 } from "@/server/entities/memory/store";
+import type { RunContext } from "@/server/platform/runContext";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {

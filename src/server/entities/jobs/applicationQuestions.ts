@@ -18,11 +18,12 @@
 
 import { prisma } from "@/server/db/prisma";
 import type { Prisma } from "@/server/generated/prisma/client";
-import {
-  isCoverLetterQuestion,
-  type ApplicationQuestion,
-  type ApplicationQuestionsEnvelope,
-} from "@/server/platform/scrape/types";
+import { isCoverLetterQuestion } from "@/server/platform/scrape/types";
+import type { DraftAuthor } from "@/shared/applicationDrafts";
+import type {
+  ApplicationQuestion,
+  ApplicationQuestionsEnvelope,
+} from "@/shared/applicationQuestions";
 import { nowDate } from "@/shared/utils/now";
 import { normalizeForCompare } from "@/shared/utils/text";
 
@@ -32,7 +33,6 @@ import {
   readReuseFlags,
   readShortAnswers,
   type ApplicationItemRef,
-  type DraftAuthor,
 } from "./applicationDrafts";
 import { COVER_LETTER_ID, questionId } from "./applicationItemId";
 import { readApplicationReview } from "./applicationReview";

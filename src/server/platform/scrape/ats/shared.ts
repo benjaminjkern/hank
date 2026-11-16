@@ -1,13 +1,9 @@
 import { assertPublicUrl } from "@/server/platform/net/assertPublicUrl";
+import type { ApplicationQuestionsEnvelope } from "@/shared/applicationQuestions";
 
 import { scrapeFetchSignal } from "../scrapeSignal";
 
-import type {
-  ApplicationQuestionsEnvelope,
-  AtsProvider,
-  ScrapeResult,
-  ScrapedCompany,
-} from "../types";
+import type { AtsProvider, ScrapeResult, ScrapedCompany } from "../types";
 
 // Deterministic per-ATS scraping, decomposed one file per provider under
 // providers/. Zero LLM cost — we hit the well-known endpoints (JSON, GraphQL,

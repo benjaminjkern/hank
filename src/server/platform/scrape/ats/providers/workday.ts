@@ -1,14 +1,13 @@
+import type {
+  ApplicationQuestion,
+  ApplicationQuestionsEnvelope,
+} from "@/shared/applicationQuestions";
 import { htmlToText } from "@/shared/utils/html";
 import { titleCaseSlug } from "@/shared/utils/text";
 
 import { fetchText, rawAttrs, type AtsProviderModule } from "../shared";
 
-import type {
-  ApplicationQuestion,
-  ApplicationQuestionsEnvelope,
-  ScrapeResult,
-  ScrapedJob,
-} from "../../types";
+import type { ScrapeResult, ScrapedJob } from "../../types";
 
 const WORKDAY_RE =
   /^https?:\/\/([a-z0-9-]+)\.wd\d+\.myworkdayjobs\.com\/(?:[a-z]{2}-[A-Z]{2}\/)?([^/?#]+)/i;

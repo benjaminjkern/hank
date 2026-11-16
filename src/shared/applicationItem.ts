@@ -1,15 +1,9 @@
 // Predicates over an application item that BOTH the panel and the server read.
 //
-// They live here rather than beside the payload type in `server/views/application`
-// because the panel is a client component: importing a value out of that module
-// drags Prisma and `pg` into the browser bundle, and the build fails on `dns`
-// /`fs`/`net`/`tls`. A type-only import erases; a function does not.
-//
-// The parameter is structural so this file needs nothing from the view but the
-// two fields it reads.
+// The parameter is structural so this file needs nothing from the view
+// (shared/views/application.ts) but the two fields it reads.
 
-import type { ApplicationEdit } from "@/server/entities/jobs/applicationDrafts";
-import type { DraftVerdict } from "@/server/subagents/registry/applicationDecider";
+import type { ApplicationEdit, DraftVerdict } from "@/shared/applicationDrafts";
 
 // A form field nobody needs to draft and nobody has written in — a dropdown,
 // a LinkedIn URL. Blank on purpose, so every surface that lists items has to

@@ -1,25 +1,15 @@
-// Shared shape for browser-reported client events. Imported by both
-// the POST /api/client-events route (server) and the reportClientEvent helper
-// (client) — it's pure types + small pure functions, no server-only deps, so
-// it bundles fine into the client (same precedent as importing tool types into
-// components).
+// The POST /api/client-events route's input schema and the dedupKey it derives.
+// The event vocabulary (sources, severities) is shared with the browser
+// reporter and lives in shared/clientEvents.ts.
 
 import { z } from "zod";
 
+import {
+  CLIENT_EVENT_SEVERITIES,
+  CLIENT_EVENT_SOURCES,
+  type ClientEventSource,
+} from "@/shared/clientEvents";
 import { stringField } from "@/shared/utils/guards";
-
-const CLIENT_EVENT_SOURCES = [
-  "sse_disconnect", // SSE chat stream dropped mid-turn (no terminal event seen)
-  "chat_error", // chat route returned an error event / the POST failed (non-modal)
-  "modal", // ApiKeyBlocker modal shown (context.reason = missing|invalid|no_credit|missing_deepseek)
-  "render_error", // a React error boundary caught a render crash
-  "stop", // user clicked Stop (context.reason = soft|hard)
-  "widget_failure", // a chat widget failed to validate / render
-] as const;
-export type ClientEventSource = (typeof CLIENT_EVENT_SOURCES)[number];
-
-const CLIENT_EVENT_SEVERITIES = ["info", "warn", "error"] as const;
-export type ClientEventSeverity = (typeof CLIENT_EVENT_SEVERITIES)[number];
 
 // Wire shape the browser POSTs to /api/client-events. Note there's no
 // sessionId / messageId: the route resolves the caller's active session

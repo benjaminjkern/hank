@@ -3,7 +3,7 @@
 import { useState } from "react";
 import styled from "styled-components";
 
-import type { EditableDocKind } from "@/server/entities/narrativeDocs";
+import type { EditableDocKind } from "@/shared/narrativeDocs";
 
 import { CardHint, EmptyHint, Prose } from "./styles";
 

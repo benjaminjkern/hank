@@ -4,9 +4,8 @@ import { LOG_JOB_EVENT_TYPES } from "@/server/entities/jobs/jobInteractionInputs
 import { logJobEvents } from "@/server/entities/jobs/logJobEvents";
 import { resolveJobsBySlug } from "@/server/entities/resolveBySlug";
 import { EventSource } from "@/server/generated/prisma/client";
+import { toolError } from "@/server/platform/agent/toolError";
 import { parseEventDateTime } from "@/shared/utils/localTime";
-
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 
