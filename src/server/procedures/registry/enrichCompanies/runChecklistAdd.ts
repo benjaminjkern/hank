@@ -13,10 +13,10 @@
 // another widget under an unanswered one.
 
 import { statusEvent, widgetEvent } from "@/server/contracts";
-import type { TurnEvent } from "@/server/contracts";
+import type { Say } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { createCompanyStubs } from "@/server/entities/companies/createCompanyStubs";
-import { streamingProcedure } from "@/server/procedures/lib/procedure";
+import { procedure } from "@/server/procedures/lib/procedure";
 import type {
   PickedCompany,
   DisambiguationResolution,
@@ -76,11 +76,11 @@ function landed(result: CompanyEnrichResult): boolean {
   );
 }
 
-export const runChecklistAdd = streamingProcedure(
+export const runChecklistAdd = procedure(
   "checklist_add",
-  async function* (
-    input: WatchlistAddArgs & { picks: PickedCompany[] },
-  ): AsyncGenerator<TurnEvent, ChecklistAddResult> {
+  async (
+    input: WatchlistAddArgs & { say: Say; picks: PickedCompany[] },
+  ): Promise<ChecklistAddResult> => {
     const { picks, ...args } = input;
     // Create stubs first (dedupe-aware), then enrich the fresh ones. Each pick's
     // disambiguation context (suggestion reasoning) + captured board URL ride
@@ -106,34 +106,36 @@ export const runChecklistAdd = streamingProcedure(
       }));
 
     if (toEnrich.length === 0) {
-      yield {
+      await args.say({
         type: "text",
         text:
           picks.length === 1
             ? `That one's already on your list.`
             : `Those are already on your list.`,
-      };
+      });
       return { awaitingDisambiguation: false, added: [] };
     }
 
     const willRun = toEnrich.length;
-    yield statusEvent(
-      `Looking up ${willRun} ${willRun === 1 ? "company" : "companies"} — I check each careers page, so give me a moment…`,
+    await args.say(
+      statusEvent(
+        `Looking up ${willRun} ${willRun === 1 ? "company" : "companies"} — I check each careers page, so give me a moment…`,
+      ),
     );
-
-    const it = runEnrichCompanies({ ...args, companies: toEnrich });
 
     // Companies the hunter couldn't disambiguate — collected here and surfaced as
     // ONE picker at the end of the batch rather than pausing mid-loop (the pool
-    // can't yield a widget and wait per company).
+    // can't put up a widget and wait per company).
     const ambiguous: AmbiguousCompanyForPicker[] = [];
     const added: string[] = [];
-    let step = await it.next();
-    while (!step.done) {
-      const ev = step.value;
-      if (ev.type === "company_started") {
-        yield statusEvent(`Looking up ${ev.name}…`);
-      } else {
+    await runEnrichCompanies({
+      ...args,
+      companies: toEnrich,
+      onProgress: async (ev) => {
+        if (ev.type === "company_started") {
+          await args.say(statusEvent(`Looking up ${ev.name}…`));
+          return;
+        }
         const { result } = ev;
         if (landed(result)) added.push(result.name);
         if (result.outcome.kind === "ambiguous") {
@@ -146,31 +148,31 @@ export const runChecklistAdd = streamingProcedure(
               shortDescription: c.shortDescription,
             })),
           });
-        } else {
-          const line = lineFor(result);
-          if (line) yield { type: "text", text: line };
-          // This company is now persisted — show it on the dashboard immediately
-          // rather than waiting for the whole batch to finish.
-          yield { type: "refresh_viewed_state" };
+          return;
         }
-      }
-      // eslint-disable-next-line no-await-in-loop -- draining a generator — each step is produced by the previous one
-      step = await it.next();
-    }
+        const line = lineFor(result);
+        if (line) await args.say({ type: "text", text: line });
+        // This company is now persisted — show it on the dashboard immediately
+        // rather than waiting for the whole batch to finish.
+        await args.say({ type: "refresh_viewed_state" });
+      },
+    });
 
     // Name collisions: surface the disambiguation picker (a genuine wait-for-user
     // question). Resolving it chains into runDisambiguationResolution.
     if (ambiguous.length > 0) {
-      yield {
+      await args.say({
         type: "text",
         text:
           ambiguous.length === 1
             ? `One name matched more than one company — which did you mean?`
             : `A few names matched more than one company — pick which you meant.`,
-      };
-      yield widgetEvent("company_disambiguation", {
-        companies: ambiguous,
       });
+      await args.say(
+        widgetEvent("company_disambiguation", {
+          companies: ambiguous,
+        }),
+      );
       return { awaitingDisambiguation: true, added };
     }
     return { awaitingDisambiguation: false, added };
@@ -180,11 +182,14 @@ export const runChecklistAdd = streamingProcedure(
 // Resolve the user's disambiguation picks: commit the chosen board URL through
 // the same chain (which skips the hunt because the URL is already decided) and
 // narrate one line each.
-export const runDisambiguationResolution = streamingProcedure(
+export const runDisambiguationResolution = procedure(
   "disambiguation_resolution",
-  async function* (
-    input: WatchlistAddArgs & { resolved: DisambiguationResolution[] },
-  ): AsyncGenerator<TurnEvent, string[]> {
+  async (
+    input: WatchlistAddArgs & {
+      say: Say;
+      resolved: DisambiguationResolution[];
+    },
+  ): Promise<string[]> => {
     const { resolved, ...args } = input;
     const companies = await prisma.company.findMany({
       where: { id: { in: resolved.map((r) => r.companyId) } },
@@ -207,23 +212,21 @@ export const runDisambiguationResolution = streamingProcedure(
       }));
     if (toEnrich.length === 0) return [];
 
-    const it = runEnrichCompanies({ ...args, companies: toEnrich });
-
     const added: string[] = [];
-    let step = await it.next();
-    while (!step.done) {
-      const ev = step.value;
-      if (ev.type === "company_started") {
-        yield statusEvent(`Setting up ${ev.name}…`);
-      } else {
+    await runEnrichCompanies({
+      ...args,
+      companies: toEnrich,
+      onProgress: async (ev) => {
+        if (ev.type === "company_started") {
+          await args.say(statusEvent(`Setting up ${ev.name}…`));
+          return;
+        }
         if (landed(ev.result)) added.push(ev.result.name);
         const line = lineFor(ev.result);
-        if (line) yield { type: "text", text: line };
-        yield { type: "refresh_viewed_state" };
-      }
-      // eslint-disable-next-line no-await-in-loop -- draining a generator — each step is produced by the previous one
-      step = await it.next();
-    }
+        if (line) await args.say({ type: "text", text: line });
+        await args.say({ type: "refresh_viewed_state" });
+      },
+    });
     return added;
   },
 );

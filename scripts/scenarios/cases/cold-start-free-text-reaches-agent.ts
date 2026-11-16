@@ -1,3 +1,4 @@
+import { sayTo } from "@/server/contracts";
 import { runUserMessage } from "@/server/agent/runtime/runUserMessage";
 import { prisma } from "@/server/db/prisma";
 
@@ -14,18 +15,19 @@ const scenario: Scenario = {
     const notes: string[] = [];
     try {
       const events: { type: string; kind?: string; text?: string }[] = [];
-      for await (const ev of runUserMessage({
+      await runUserMessage({
         userId: USER_ID,
         userMessage: "hey what's up",
         attachmentIds: [],
         sessionIdOverride: TEST_SESSION_ID,
-      })) {
-        if (ev.type === "pipeline_widget")
-          events.push({ type: "widget", kind: ev.kind });
-        else if (ev.type === "text")
-          events.push({ type: "text", text: ev.text });
-        else events.push({ type: ev.type });
-      }
+        say: sayTo((ev) => {
+          if (ev.type === "pipeline_widget")
+            events.push({ type: "widget", kind: ev.kind });
+          else if (ev.type === "text")
+            events.push({ type: "text", text: ev.text });
+          else events.push({ type: ev.type });
+        }),
+      });
       // Hank should have emitted at least one text token — proves the message
       // reached the agent rather than only the deterministic layer.
       const sawAgentText = events.some(

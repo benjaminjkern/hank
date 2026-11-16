@@ -9,16 +9,15 @@
 // its caller.
 
 import { statusEvent } from "@/server/contracts";
-import type { TurnEvent } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { blockCompany } from "@/server/entities/companies/setCompanyAside";
 import { CompanyBlockReason } from "@/server/generated/prisma/client";
-import { streamingProcedure } from "@/server/procedures/lib/procedure";
-import { runEnrichCompaniesCollect } from "@/server/procedures/registry/enrichCompanies";
+import { procedure } from "@/server/procedures/lib/procedure";
+import { runEnrichCompanies } from "@/server/procedures/registry/enrichCompanies";
 import { urlHost } from "@/shared/utils/url";
 
 import { narrateCompanyBlock } from "./narration";
-import { yieldStateChange } from "./yieldStateChange";
+import { sayStateChange } from "./sayStateChange";
 
 import type { WalkthroughArgs } from "./types";
 
@@ -29,11 +28,11 @@ type EnrichStepResult =
   // re-pointed at it and the stub deleted. The arm must carry on with this id.
   | { wrapped: false; companyId: string };
 
-export const runCompanyEnrichStep = streamingProcedure(
+export const runCompanyEnrichStep = procedure(
   "company_enrich_step",
-  async function* (
+  async (
     input: WalkthroughArgs & { companyId: string },
-  ): AsyncGenerator<TurnEvent, EnrichStepResult> {
+  ): Promise<EnrichStepResult> => {
     const { companyId, ...args } = input;
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -41,8 +40,8 @@ export const runCompanyEnrichStep = streamingProcedure(
     });
     if (!company) {
       // Shouldn't happen — the picker only surfaces companies that exist.
-      yield statusEvent(
-        "Couldn't find that company on the watchlist — moving on.",
+      await args.say(
+        statusEvent("Couldn't find that company on the watchlist — moving on."),
       );
       return { wrapped: true };
     }
@@ -50,22 +49,23 @@ export const runCompanyEnrichStep = streamingProcedure(
 
     // Only the hunt is slow enough to narrate; a logo-only backfill is silent.
     if (!company.basicInfoHuntedAt) {
-      yield statusEvent(`Looking for ${displayName}'s careers page…`);
+      await args.say(statusEvent(`Looking for ${displayName}'s careers page…`));
     }
 
-    const { results } = await runEnrichCompaniesCollect({
+    const { results } = await runEnrichCompanies({
       ...args,
       companies: [{ companyId, slug: company.slug, name: displayName }],
     });
     const result = results[0];
     if (!result) return { wrapped: false, companyId };
 
-    const setAside = async function* (
+    const setAside = async (
       reason: CompanyBlockReason,
       note: string,
-    ): AsyncGenerator<TurnEvent, EnrichStepResult> {
+    ): Promise<EnrichStepResult> => {
       await blockCompany({ userId: args.userId, companyId, reason, note });
-      yield* yieldStateChange(
+      await sayStateChange(
+        args.say,
         narrateCompanyBlock({
           companyId,
           companyName: displayName,
@@ -78,8 +78,10 @@ export const runCompanyEnrichStep = streamingProcedure(
 
     switch (result.outcome.kind) {
       case "not_found":
-        yield statusEvent(
-          "Couldn't find that company on the watchlist — moving on.",
+        await args.say(
+          statusEvent(
+            "Couldn't find that company on the watchlist — moving on.",
+          ),
         );
         return { wrapped: true };
 
@@ -87,18 +89,23 @@ export const runCompanyEnrichStep = streamingProcedure(
         // User-facing: keep it plain. The raw hunter error (ATS slugs, fetch_url,
         // 404s) is developer-speak. BLOCKED rather than closed — a revive
         // re-hunts, so "try again later" actually works.
-        yield statusEvent(
-          `I hit a snag looking up ${displayName}'s job page — I'll set it aside for now and you can try again later.`,
+        await args.say(
+          statusEvent(
+            `I hit a snag looking up ${displayName}'s job page — I'll set it aside for now and you can try again later.`,
+          ),
         );
-        return yield* setAside(CompanyBlockReason.OTHER, result.outcome.error);
+        return await setAside(CompanyBlockReason.OTHER, result.outcome.error);
 
       case "cannot_scrape":
         // The chain already wrote BLOCKED/CANNOT_SCRAPE — narrate and wrap.
         // Truthful + friendly; never surface the raw reason.
-        yield statusEvent(
-          `Looks like I can't quite read ${displayName}'s job page — I'll set it aside for now.`,
+        await args.say(
+          statusEvent(
+            `Looks like I can't quite read ${displayName}'s job page — I'll set it aside for now.`,
+          ),
         );
-        yield* yieldStateChange(
+        await sayStateChange(
+          args.say,
           narrateCompanyBlock({
             companyId,
             companyName: displayName,
@@ -115,10 +122,12 @@ export const runCompanyEnrichStep = streamingProcedure(
         // with a hint (or supply a URL) later.
         const candidates = result.outcome.candidates;
         const names = candidates.map((c) => c.canonicalName).join(" / ");
-        yield statusEvent(
-          `"${displayName}" matches more than one company (${names}) — I'll set it aside so you can tell me which one you meant.`,
+        await args.say(
+          statusEvent(
+            `"${displayName}" matches more than one company (${names}) — I'll set it aside so you can tell me which one you meant.`,
+          ),
         );
-        return yield* setAside(
+        return await setAside(
           CompanyBlockReason.AMBIGUOUS_NAME,
           `Ambiguous name — candidates: ${candidates
             .map((c) => `${c.canonicalName} (${c.sourceUrl})`)
@@ -128,8 +137,10 @@ export const runCompanyEnrichStep = streamingProcedure(
 
       case "enriched":
         if (result.outcome.hunted && result.outcome.sourceUrl) {
-          yield statusEvent(
-            `Found ${result.name}'s careers page at ${urlHost(result.outcome.sourceUrl) ?? result.outcome.sourceUrl}.`,
+          await args.say(
+            statusEvent(
+              `Found ${result.name}'s careers page at ${urlHost(result.outcome.sourceUrl) ?? result.outcome.sourceUrl}.`,
+            ),
           );
         }
         return { wrapped: false, companyId: result.companyId };

@@ -6,8 +6,8 @@
 // shortlist gates, company_checklist, next_company_picker — live in
 // widgets/dispatchTopLevelSubmission.ts.)
 
-import { statusEvent, yieldUiEvents } from "@/server/contracts";
-import type { TurnEvent } from "@/server/contracts";
+import { statusEvent, sayUiEvents } from "@/server/contracts";
+import type { Say } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { reviveCompany } from "@/server/entities/companies/resumeCompany";
 import { caughtUpCompany } from "@/server/entities/companies/setCompanyAside";
@@ -25,14 +25,14 @@ import {
   narrateCompanyRevive,
   narrateJobApplied,
 } from "./narration";
-import { yieldStateChange } from "./yieldStateChange";
+import { sayStateChange } from "./sayStateChange";
 
 import type { WalkthroughArgs, WalkthroughResult } from "./types";
 
-export async function* handleWidgetSubmission(
+export async function handleWidgetSubmission(
   submission: NonNullable<ReturnType<typeof parseWidgetSubmission>>,
   args: WalkthroughArgs,
-): AsyncGenerator<TurnEvent, WalkthroughResult> {
+): Promise<WalkthroughResult> {
   if (submission.kind === "confirm_revive_company") {
     if (submission.answer === "yes") {
       // Reactivate the company + focus it, then continue the walkthrough. The
@@ -45,10 +45,10 @@ export async function* handleWidgetSubmission(
         companyId: submission.companyId,
       });
       if (!revived.ok) {
-        yield {
+        await args.say({
           type: "text",
           text: "Hmm, I couldn't pull that company back up — let's pick something else to look at.",
-        };
+        });
         return { wrappedUp: true };
       }
       const company = await prisma.company.findUnique({
@@ -58,21 +58,22 @@ export async function* handleWidgetSubmission(
       const { events } = await buildShowEvents(args.userId, {
         companyId: submission.companyId,
       });
-      yield* yieldStateChange(
+      await sayStateChange(
+        args.say,
         narrateCompanyRevive({
           companyId: submission.companyId,
           companyName: company?.name ?? null,
         }),
         events,
       );
-      return yield* runCompanyArm({ ...args, companyId: submission.companyId });
+      return await runCompanyArm({ ...args, companyId: submission.companyId });
     }
     // "no" — leave it set aside; bounce back to the next-company picker.
     return { wrappedUp: true };
   }
 
   if (submission.kind === "next_job_picker") {
-    return yield* handleNextJobPicker(submission, args);
+    return await handleNextJobPicker(submission, args);
   }
 
   if (submission.kind === "confirm_application_submit") {
@@ -85,11 +86,13 @@ export async function* handleWidgetSubmission(
       ...args,
       jobId: submission.jobId,
     });
-    yield statusEvent(
-      narrateJobApplied({
-        jobTitle: result.jobTitle,
-        applyChannel: result.applyChannel,
-      }),
+    await args.say(
+      statusEvent(
+        narrateJobApplied({
+          jobTitle: result.jobTitle,
+          applyChannel: result.applyChannel,
+        }),
+      ),
     );
     const job = await prisma.job.findUnique({
       where: { id: submission.jobId },
@@ -99,11 +102,12 @@ export async function* handleWidgetSubmission(
     // (next-role picker) and show the company page. A continuation: the tail
     // of the application just submitted, never a fresh visit — no re-scrape.
     if (job?.companyId) {
-      yield* yieldUiEvents(
+      await sayUiEvents(
+        args.say,
         (await buildShowEvents(args.userId, { companyId: job.companyId }))
           .events,
       );
-      return yield* runCompanyArm({
+      return await runCompanyArm({
         ...args,
         companyId: job.companyId,
         continuation: true,
@@ -113,7 +117,7 @@ export async function* handleWidgetSubmission(
   }
 
   // Unknown widget kind for this machine — defer to dispatcher.
-  return yield* dispatchByEntryTarget(args);
+  return await dispatchByEntryTarget(args);
 }
 
 // Handle a next_job_picker submission. Two branches:
@@ -125,12 +129,12 @@ export async function* handleWidgetSubmission(
 //     the role is back in play.
 //   - "caught_up": call caughtUpCompany and wrap, just like the auto-wrap when
 //     no SHORTLISTED jobs remain.
-async function* handleNextJobPicker(
+async function handleNextJobPicker(
   submission: { companyId: string } & (
     { choice: "pick"; jobId: string } | { choice: "caught_up" }
   ),
   args: WalkthroughArgs,
-): AsyncGenerator<TurnEvent, WalkthroughResult> {
+): Promise<WalkthroughResult> {
   if (submission.choice === "caught_up") {
     // Walkthrough wrap: land the right engagement tail (IN_FLIGHT/IN_PROCESS if
     // apps went out this round, else CAUGHT_UP) instead of forcing CAUGHT_UP.
@@ -143,7 +147,8 @@ async function* handleNextJobPicker(
       where: { id: submission.companyId },
       select: { name: true },
     });
-    yield* yieldStateChange(
+    await sayStateChange(
+      args.say,
       narrateCompanyCaughtUp({
         companyId: submission.companyId,
         companyName: company?.name ?? null,
@@ -161,7 +166,7 @@ async function* handleNextJobPicker(
   if (!ji) {
     // Stale widget click — the JobInteraction is gone (admin-deleted, or
     // the widget outlived a status change). Re-derive instead of throwing.
-    return yield* dispatchByEntryTarget(args);
+    return await dispatchByEntryTarget(args);
   }
 
   // Work the role (revives a DEFERRED pick to SHORTLISTED in the same
@@ -170,11 +175,12 @@ async function* handleNextJobPicker(
   // widget pick land in exactly the same state.
   await promoteJobForWork({ userId: args.userId, jobId: submission.jobId });
 
-  yield* yieldUiEvents(
+  await sayUiEvents(
+    args.say,
     (await buildShowEvents(args.userId, { jobId: submission.jobId })).events,
   );
-  yield* narrateJobFocus(submission.jobId);
-  return yield* runJobArm({
+  await narrateJobFocus(args.say, submission.jobId);
+  return await runJobArm({
     ...args,
     jobId: submission.jobId,
     freshEntry: true,
@@ -182,10 +188,9 @@ async function* handleNextJobPicker(
 }
 
 // Narrate the transition into a job arm so the user sees "Working on
-// <title>" instead of the machine silently jumping into draft mode. The caller
-// buffers + persists this as a `pipeline_status` block alongside the drafting
-// status lines that follow.
-async function* narrateJobFocus(jobId: string): AsyncGenerator<TurnEvent> {
+// <title>" instead of the machine silently jumping into draft mode. It lands as
+// a `pipeline_status` block alongside the drafting status lines that follow.
+async function narrateJobFocus(say: Say, jobId: string): Promise<void> {
   const j = await prisma.job.findUnique({
     where: { id: jobId },
     select: { title: true },
@@ -193,5 +198,5 @@ async function* narrateJobFocus(jobId: string): AsyncGenerator<TurnEvent> {
   const label = j?.title
     ? formatFocusRefToken("job", jobId, j.title)
     : "the next shortlisted job";
-  yield statusEvent(`Working on ${label}.`);
+  await say(statusEvent(`Working on ${label}.`));
 }

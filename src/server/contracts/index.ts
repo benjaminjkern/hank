@@ -7,11 +7,11 @@ export type { EntryTarget } from "./entryTarget";
 export type {
   StreamEventOf,
   StreamEvent,
-  TurnEvent,
-  TurnDone,
   LoopEvent,
+  Say,
+  ChatTurnOutcome,
   ChatTurnRunner,
   WidgetKind,
 } from "./events";
-export { statusEvent, widgetEvent, yieldUiEvents } from "./events";
+export { statusEvent, widgetEvent, sayUiEvents, sayTo } from "./events";
 export type { RunContext, RunTrace } from "./runContext";

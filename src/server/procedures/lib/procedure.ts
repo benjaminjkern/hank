@@ -1,13 +1,15 @@
 // The one way to declare a procedure entry point. Every `run<Name>` export in
-// procedures/registry/ is built by `procedure` (async) or `streamingProcedure`
-// (an async generator that yields chat events as it goes), and the span for an
-// entry is opened here and nowhere else — so every procedure is traced the same
+// procedures/registry/ is built by `procedure`, and the span for an entry is
+// opened here and nowhere else — so every procedure is traced the same
 // way, and none can forget to be. (A STEP inside one procedure may still bracket
 // itself with platform/trace/span.ts — the drafting loop does.)
 //
 // The shape is fixed: ONE argument, an object that extends RunContext (the
 // procedure's own inputs plus the ambient userId / sessionId / trace / signal),
-// passed straight through by callers (`runScan({ ...args, companyId })`).
+// passed straight through by callers (`runScan({ ...args, companyId })`). A
+// procedure that talks to the user while it runs takes `say` among those args
+// and awaits it (contracts/events.ts → Say); its result is still just what it
+// returns.
 //
 // The span nests under `args.trace` and the procedure body receives the span's
 // trace, so anything it calls (sub-agents, other procedures) nests under it in
@@ -43,28 +45,6 @@ export function procedure<A extends RunContext, R>(
     } catch (err) {
       span.close(errorSummary(err));
       throw err;
-    }
-  };
-}
-
-export function streamingProcedure<A extends RunContext, E, R = void>(
-  name: string,
-  run: (args: A) => AsyncGenerator<E, R>,
-  options: ProcedureOptions<R> = {},
-): (args: A) => AsyncGenerator<E, R> {
-  return async function* (args) {
-    const span = openTraceSpan(name, args.trace);
-    try {
-      const result = yield* run({ ...args, trace: span.trace });
-      span.close({ summary: options.summarize?.(result) });
-      return result;
-    } catch (err) {
-      span.close(errorSummary(err));
-      throw err;
-    } finally {
-      // A consumer that stops iterating early (`return()` on the generator)
-      // skips both branches above; close() is idempotent.
-      span.close();
     }
   };
 }

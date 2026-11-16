@@ -1,6 +1,6 @@
 // The event vocabularies every layer speaks, in one place.
 //
-// Four names, one union underneath:
+// Three names, one union underneath:
 //
 //   StreamEventOf<TUi, TKind>  the DOMAIN-FREE core. Parametric over the only two
 //                              payloads a stream carries without ever reading
@@ -12,11 +12,13 @@
 //                              can't be handed the bare parametric form: what it
 //                              yields has to be assignable to what the domain
 //                              consumes, and `unknown` is not a `UiEvent`.)
-//   TurnEvent                  StreamEvent plus `done`. What every procedure and
-//                              widget dispatcher yields.
-//   LoopEvent                  StreamEvent plus a BARE `done`, SSE-facing: by the
-//                              time the stream reaches the client, the turn's
-//                              outcome has already been acted on.
+//   LoopEvent                  StreamEvent plus a BARE `done`, SSE-facing — the
+//                              one place a stream ends. Below the route nothing
+//                              sends `done`: a procedure's outcome is its return
+//                              value.
+//
+// Nothing yields these. Every layer hands them to a `Say` callback (below), so a
+// procedure is a plain async function whose result is what it returns.
 //
 // The split is the whole point. `runtime/` executes turns and must not know what
 // a company is; `procedures/` and `widgets/` produce the actual product events.
@@ -127,29 +129,48 @@ export type StreamEventOf<TUi, TWidgetKind extends string> =
 // The product instantiations
 // ---------------------------------------------------------------------------
 
-// What a turn reports when it finishes. Both fields are domain outcomes and must
-// NOT be merged: `endedCompanyId` means *a company ended* (run the segment wrap,
-// once per message no matter how many closed); `wrappedUp` means *bring up
-// what's next*, which half a dozen paths set with no company having ended.
-export type TurnDone = {
-  type: "done";
-  wrappedUp: boolean;
-  endedCompanyId?: string;
-};
-
 // The core resolved to this product. Everything below builds on it, and it's the
-// only one of these four names agent/runtime/ uses.
+// only one of these names agent/runtime/ uses.
 export type StreamEvent = StreamEventOf<UiEvent, WidgetKind>;
 
-// What every procedure, widget dispatcher, and the chat procedure yield.
-export type TurnEvent = StreamEvent | TurnDone;
+// How anything below the chat route talks to the user: hand an event to `say`
+// and await it. The await is the contract — it resolves once the event is
+// persisted (recordTranscript) and sent, so a procedure that writes rows of its
+// own after narrating can't land them ahead of what it said. Procedures that
+// narrate take `say` on their args and pass it straight through to whatever
+// they call, the same way they pass RunContext.
+//
+// The chat route's own `say` receives LoopEvent instead — the bare terminal
+// `done` exists only at that boundary.
+export type Say<E = StreamEvent> = (event: E) => Promise<void>;
+
+// A `say` for a consumer with nothing to wait on — an SSE writer, a collector:
+// it runs `handle` and resolves.
+export function sayTo<E = StreamEvent>(handle: (event: E) => void): Say<E> {
+  return (event) => {
+    handle(event);
+    return Promise.resolve();
+  };
+}
+
+// What one chat turn reports when it finishes. Both company fields are domain
+// outcomes and must NOT be merged: `endedCompanyId` means *a company ended*
+// (run the segment wrap, once per message no matter how many closed);
+// `wrappedUp` means *bring up what's next*, which half a dozen paths set with
+// no company having ended. `stopped` means the user hit Stop mid-turn — stop
+// driving turns.
+export type ChatTurnOutcome = {
+  wrappedUp: boolean;
+  endedCompanyId?: string;
+  stopped?: boolean;
+};
 
 // The SSE stream the chat route serializes to the client. Same events; `done`
 // is bare because the turn's outcome was already acted on server-side.
 export type LoopEvent = StreamEvent | { type: "done" };
 
 // The chat-turn contract. `procedures/registry/chat/runChatTurn.ts` implements
-// it; `runChat` drives it.
+// it; `runChat` drives it. It narrates through `say` and returns its outcome.
 //
 // "Silent entry" passes "" as userMessage — the turn is a deterministic
 // continuation (a picker pick, a wrap) rather than something the user typed, and
@@ -157,6 +178,7 @@ export type LoopEvent = StreamEvent | { type: "done" };
 export type ChatTurnRunner = (
   args: RunContext & {
     sessionId: string;
+    say: Say;
     // First user message of this turn. "" on silent entry. The row for it is
     // already written (runChat's openUserTurn) — this is the text to ROUTE on,
     // and the attachments that rode with it are not this layer's business.
@@ -185,7 +207,7 @@ export type ChatTurnRunner = (
     // rather than words to echo, and never persisted.
     openingNudge?: string;
   },
-) => AsyncGenerator<TurnEvent>;
+) => Promise<ChatTurnOutcome>;
 
 // ---------------------------------------------------------------------------
 // Constructors for the two events the deterministic layer emits by hand
@@ -196,29 +218,28 @@ export type ChatTurnRunner = (
 // annotated "mirror the walkthrough state machine's", which is the drift warning
 // in comment form. They live with the type they construct.
 //
-// A caller yields these and is done: recordTranscript persists what goes out.
+// A caller says these and is done: recordTranscript persists what goes out.
 
 // Deterministic machine narration ("Pulling in roles for 3 companies…"), as
 // opposed to a plain `text` event. The difference is what the MODEL reads back:
 // a status line replays as a system record of what the user was shown, while
 // text replays as Hank's own prose (see session/uiProvenance.ts). So narrate
 // with this whenever the words are the machine's rather than his.
-export function statusEvent(text: string): TurnEvent {
+export function statusEvent(text: string): StreamEvent {
   return { type: "pipeline_status", text };
 }
 
-// Stream a batch of panel-sync events into a TurnEvent stream. Pure vocabulary
-// adapter — it knows nothing about what's being shown, which is why it lives
-// here and not with the domain read that produced the events.
-export async function* yieldUiEvents(
-  events: UiEvent[],
-): AsyncGenerator<TurnEvent> {
+// Say a batch of panel-sync events, in order. Pure vocabulary adapter — it
+// knows nothing about what's being shown, which is why it lives here and not
+// with the domain read that produced the events.
+export async function sayUiEvents(say: Say, events: UiEvent[]): Promise<void> {
   for (const event of events) {
-    yield { type: "ui", event };
+    // eslint-disable-next-line no-await-in-loop -- each event is said in order; the await is the persistence ordering, not a query
+    await say({ type: "ui", event });
   }
 }
 
-export function widgetEvent(kind: WidgetKind, payload: unknown): TurnEvent {
+export function widgetEvent(kind: WidgetKind, payload: unknown): StreamEvent {
   const toolUseId = `pipeline-${kind}-${crypto.randomUUID()}`;
   return { type: "pipeline_widget", toolUseId, kind, payload };
 }

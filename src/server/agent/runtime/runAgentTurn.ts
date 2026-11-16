@@ -33,7 +33,7 @@ import {
   createTraceAccumulator,
   type TraceMap,
 } from "@/server/agent/runTree/traceAccumulator";
-import type { RunContext, StreamEvent } from "@/server/contracts";
+import type { RunContext, Say, StreamEvent } from "@/server/contracts";
 import type { Reasoning } from "@/server/platform/llm/reasoning";
 import type { TraceEvent } from "@/server/platform/trace/types";
 import { withCaptureContext } from "@/server/platform/usage/captureContext";
@@ -133,6 +133,9 @@ export type AgentTurnResult = {
 
 type AgentTurnArgs = RunContext & {
   sessionId: string;
+  // Where the turn's stream goes — text deltas, tool chips, panel events. Each
+  // call resolves once the event is persisted and sent.
+  say: Say<StreamEvent>;
   client: Anthropic;
   model: string;
   maxTokens: number;
@@ -147,9 +150,9 @@ type AgentTurnArgs = RunContext & {
   history: Anthropic.MessageParam[];
 };
 
-export async function* runAgentTurn(
+export async function runAgentTurn(
   args: AgentTurnArgs,
-): AsyncGenerator<StreamEvent, AgentTurnResult> {
+): Promise<AgentTurnResult> {
   const toolDefs = args.tools.map((t) => ({
     name: t.name,
     description: t.description,
@@ -169,10 +172,10 @@ export async function* runAgentTurn(
   // row it's writing into as it moves between them. Deduped: re-announcing the
   // row already open is a no-op, so call it freely before any group of events.
   let openRowId: string | null = null;
-  function* inRow(messageId: string): Generator<StreamEvent> {
+  async function enterRow(messageId: string): Promise<void> {
     if (openRowId === messageId) return;
     openRowId = messageId;
-    yield { type: "message_start", messageId };
+    await args.say({ type: "message_start", messageId });
   }
   const traceAcc = createTraceAccumulator();
   const emitTrace = (ev: TraceEvent) => {
@@ -211,7 +214,7 @@ export async function* runAgentTurn(
 
   // Everything the model itself produces — text deltas and tool chips — lands on
   // the assistant row, so open it before the first byte arrives.
-  yield* inRow(assistantMessageId);
+  await enterRow(assistantMessageId);
 
   const emittedStarts = new Set<string>();
   let final: Anthropic.Message;
@@ -225,19 +228,19 @@ export async function* runAgentTurn(
         event.type === "content_block_delta" &&
         event.delta.type === "text_delta"
       ) {
-        yield { type: "text", text: event.delta.text };
+        await args.say({ type: "text", text: event.delta.text });
       } else if (event.type === "content_block_start") {
         const block = event.content_block;
         if (block.type === "tool_use" && !HIDDEN_TOOLS.has(block.name)) {
           // Emit the chip immediately on stream — input gets upserted after
           // finalMessage resolves (the streaming partial_json deltas are
           // accumulated by the SDK).
-          yield {
+          await args.say({
             type: "tool_use_start",
             name: block.name,
             toolUseId: block.id,
             input: {},
-          };
+          });
           emittedStarts.add(block.id);
         }
       }
@@ -265,12 +268,13 @@ export async function* runAgentTurn(
     // whether to also re-throw based on `errored`.
     for (const block of final.content) {
       if (block.type === "tool_use" && !HIDDEN_TOOLS.has(block.name)) {
-        yield {
+        // eslint-disable-next-line no-await-in-loop -- one chip per cut-off tool, said in the order the model wrote them
+        await args.say({
           type: "tool_use_complete",
           toolUseId: block.id,
           result: "interrupted",
           error: true,
-        };
+        });
       }
     }
     return {
@@ -300,12 +304,13 @@ export async function* runAgentTurn(
   // segment dispatcher upserts the input so the expand UI shows it.
   for (const tu of toolUses) {
     if (HIDDEN_TOOLS.has(tu.name)) continue;
-    yield {
+    // eslint-disable-next-line no-await-in-loop -- chips are said in the order the model wrote them
+    await args.say({
       type: "tool_use_start",
       name: tu.name,
       toolUseId: tu.id,
       input: tu.input,
-    };
+    });
     if (!emittedStarts.has(tu.id)) emittedStarts.add(tu.id);
   }
 
@@ -317,6 +322,11 @@ export async function* runAgentTurn(
   const emittedWidgets: AgentTurnResult["emittedWidgets"] = [];
   const emittedStatusLines: string[] = [];
   const dispatched: DispatchedTool[] = [];
+  // Every await in this loop is ordered on purpose: tools dispatch one at a time
+  // (a later call may depend on an earlier one's write, and Stop has to be able
+  // to land between two of them), and each tool's chip, panel events, widgets,
+  // and status lines are said in order after it finishes.
+  /* eslint-disable no-await-in-loop */
   for (const tu of toolUses) {
     const hidden = HIDDEN_TOOLS.has(tu.name);
     let content = "";
@@ -342,7 +352,7 @@ export async function* runAgentTurn(
     };
     // Back to the assistant row: the previous iteration may have left the stream
     // writing into the widget or status row.
-    yield* inRow(assistantMessageId);
+    await enterRow(assistantMessageId);
     const tool = toolByName.get(tu.name);
     dispatched.push({ name: tu.name });
     if (!tool) {
@@ -367,9 +377,7 @@ export async function* runAgentTurn(
         try {
           // Run-tree capture: set the ALS context so any sub-agent this handler
           // spawns records its runId / parentMessageId / parentToolUseId without
-          // per-call-site threading. ALS reliably covers a plain async call like
-          // this (not a generator body).
-          // eslint-disable-next-line no-await-in-loop -- tools dispatch in order: a later call may depend on an earlier one's write, and Stop has to be able to land between two of them
+          // per-call-site threading.
           const r = await withCaptureContext(
             {
               runId: args.runId,
@@ -387,12 +395,12 @@ export async function* runAgentTurn(
         } catch (err) {
           if (isUserAbortError(err)) {
             if (!hidden) {
-              yield {
+              await args.say({
                 type: "tool_use_complete",
                 toolUseId: tu.id,
                 result: "stopped by user",
                 error: true,
-              };
+              });
             }
             return {
               stopReason: final.stop_reason,
@@ -431,36 +439,37 @@ export async function* runAgentTurn(
       const affectsViewedState =
         !isError &&
         (tool?.affectsViewedState ?? toolAffectsViewedState(tu.name));
-      yield {
+      await args.say({
         type: "tool_use_complete",
         toolUseId: tu.id,
         result: content,
         ...(isError ? { error: true } : {}),
         ...(affectsViewedState ? { affectsViewedState: true } : {}),
-      };
+      });
       for (const ui of uiEvents) {
-        yield { type: "ui", event: ui };
+        await args.say({ type: "ui", event: ui });
       }
       // Widgets and status lines are persisted as their own follow-up rows (see
       // runHankTurn), so the stream moves into them here and back to the
       // assistant row at the top of the next iteration.
-      if (widgets.length > 0) yield* inRow(widgetsMessageId);
+      if (widgets.length > 0) await enterRow(widgetsMessageId);
       for (const w of widgets) {
         emittedWidgets.push(w);
-        yield {
+        await args.say({
           type: "pipeline_widget",
           toolUseId: w.toolUseId,
           kind: w.kind as never,
           payload: w.payload,
-        };
+        });
       }
-      if (statusLines.length > 0) yield* inRow(statusLinesMessageId);
+      if (statusLines.length > 0) await enterRow(statusLinesMessageId);
       for (const line of statusLines) {
         emittedStatusLines.push(line);
-        yield { type: "pipeline_status", text: line };
+        await args.say({ type: "pipeline_status", text: line });
       }
     }
   }
+  /* eslint-enable no-await-in-loop */
 
   return {
     stopReason: final.stop_reason,

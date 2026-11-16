@@ -3,12 +3,12 @@
 //
 // One writer and not several, because the client reconciles from the DB on
 // every terminal `done` — so the two ways of getting this wrong are symmetrical
-// and both are fatal. Content yielded without a row erases itself a beat after
+// and both are fatal. Content said without a row erases itself a beat after
 // it renders; content persisted twice repeats the whole run at the bottom of
 // the chat the moment it finishes. Spread across per-emitter writes, one
 // procedure reachable from two callers is enough to produce both.
 //
-// So content on the stream is this function's to persist, unless its emitter
+// So content said to the user is this function's to persist, unless its emitter
 // claimed the row with `message_start` … `message_end`. Exactly one emitter
 // does: a Hank turn, whose row also carries `thinking` / `tool_use` blocks that
 // never reach the stream at all and therefore cannot be written from here.
@@ -19,7 +19,7 @@
 // batch finishes is a batch nobody can watch.
 
 import { newRunTreeId } from "@/server/agent/runTree/ids";
-import type { TurnEvent } from "@/server/contracts";
+import type { Say, StreamEvent } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { Role } from "@/server/generated/prisma/client";
 import type { Prisma } from "@/server/generated/prisma/client";
@@ -29,10 +29,15 @@ import type { Prisma } from "@/server/generated/prisma/client";
 // block types, stored verbatim in ChatMessage.content and read by the client.
 type ContentBlock = Record<string, unknown>;
 
-export async function* recordTranscript(
-  events: AsyncGenerator<TurnEvent>,
+// Wrap `downstream` (what reaches the client) in the transcript writer: the
+// returned `say` persists each content event, then passes it on. Calls run one
+// at a time in the order they were made — two callers saying concurrently (the
+// enrichment pool's workers) would otherwise race their upserts on one row and
+// a later write could land the older block list.
+export function recordTranscript(
   args: { sessionId: string; runId?: string },
-): AsyncGenerator<TurnEvent> {
+  downstream: Say,
+): Say {
   // The row this function is currently filling, and its blocks so far. Both
   // null between groups: a group opens on the first unclaimed content event and
   // closes when someone else claims a row.
@@ -41,35 +46,44 @@ export async function* recordTranscript(
   // An emitter announced a row it writes itself; keep out until it releases.
   let claimed = false;
 
-  for await (const ev of events) {
+  const record = async (ev: StreamEvent): Promise<void> => {
     if (ev.type === "message_start") {
       rowId = null;
       blocks = [];
       claimed = true;
-      yield ev;
-      continue;
+      await downstream(ev);
+      return;
     }
     if (ev.type === "message_end") {
-      claimed = false;
       // Stream control for this function alone — the client has no use for it.
-      continue;
+      claimed = false;
+      return;
     }
     const block = claimed ? null : contentBlockFor(ev);
     if (block === null) {
-      yield ev;
-      continue;
+      await downstream(ev);
+      return;
     }
     if (rowId === null) {
       rowId = newRunTreeId();
       // Name the row BEFORE the first event that lands in it, so the bubble the
       // client paints live is the row the reconcile loads back and the chat
       // doesn't re-cut itself when the run ends.
-      yield { type: "message_start", messageId: rowId };
+      await downstream({ type: "message_start", messageId: rowId });
     }
     appendBlock(blocks, block);
     await writeRow(args, rowId, blocks);
-    yield ev;
-  }
+    await downstream(ev);
+  };
+
+  let tail: Promise<void> = Promise.resolve();
+  return (ev) => {
+    const next = tail.then(() => record(ev));
+    // A failed write rejects for the caller that said it; the next event still
+    // gets its turn.
+    tail = next.catch(() => {});
+    return next;
+  };
 }
 
 // The block a content event persists as, or null if the event isn't content.
@@ -80,7 +94,7 @@ export async function* recordTranscript(
 // Sub-agent trace emissions (`parentToolUseId` set) are content, but they
 // render INSIDE a tool chip rather than as their own segment, and the chip's
 // interior is persisted on the claimed row's `traces` column. Never ours.
-function contentBlockFor(ev: TurnEvent): ContentBlock | null {
+function contentBlockFor(ev: StreamEvent): ContentBlock | null {
   if (ev.type === "text") {
     return ev.parentToolUseId ? null : { type: "text", text: ev.text };
   }
@@ -99,7 +113,7 @@ function contentBlockFor(ev: TurnEvent): ContentBlock | null {
 }
 
 // Coalesce consecutive text into one block — Anthropic-friendly, and it reads
-// naturally when a sentence is yielded in pieces. The client's mergeTextDelta
+// naturally when a sentence is said in pieces. The client's mergeTextDelta
 // applies the same rule to the same events, so the live bubble and the
 // persisted row agree block for block.
 function appendBlock(blocks: ContentBlock[], block: ContentBlock): void {

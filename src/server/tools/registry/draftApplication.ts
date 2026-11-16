@@ -1,6 +1,7 @@
+import { sayTo } from "@/server/contracts";
 import { z } from "zod";
 
-import { runDraftApplicationCollect } from "@/server/procedures/registry/draftApplication";
+import { runDraftApplication } from "@/server/procedures/registry/draftApplication";
 import { buildApplicationEvents } from "@/server/views/showEvents";
 
 import { resolveJobArg } from "../lib/resolveEntityArg";
@@ -42,13 +43,20 @@ export const draftApplicationTool: ToolDef<{
     if (!jobResolved.ok) return jobResolved.result;
     const jobId = jobResolved.id;
 
-    const { result, notes } = await runDraftApplicationCollect({
+    // A tool returns one result, so nothing here reaches the chat: the failure
+    // lines the procedure says as `text` come back to Hank in the result, and
+    // its progress narration is dropped.
+    const notes: string[] = [];
+    const result = await runDraftApplication({
       ...ctx,
       jobId,
       extraContext: input.extraContext,
       // extraContext already forces a re-decide inside the engine; also force it
       // so an explicit "draft this again" re-runs from scratch.
       forceRedecide: true,
+      say: sayTo((ev) => {
+        if (ev.type === "text") notes.push(ev.text);
+      }),
     });
 
     // The form couldn't be read and the user hasn't described it by hand — point

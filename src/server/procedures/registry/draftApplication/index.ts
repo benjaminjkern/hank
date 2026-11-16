@@ -1,15 +1,14 @@
 // The draft-application procedure — the reusable chain the walkthrough job arm
 // runs once a job is being applied to, AND the on-demand engine the
-// draft_application tool drives (via runDraftApplicationCollect). Steps (extracted
-// from the former runJobArm Steps 4–5.25):
+// draft_application tool drives. Steps:
 //
 //   1. fetch the application form   → ensureApplicationForm (./ensureApplicationForm)
 //   2. decide draft/skip/ask_user   → applicationDeciderSubAgent (cached on draftDecision)
 //   3. draft the auto-draftable items → runApplicationDrafting
 //   4. critique + revise            → critiqueAndReviseForm (./critiqueAndRevise)
 //
-// It yields ordinary TurnEvents (pipeline_status / text / refresh_viewed_state)
-// and RETURNS the outcome the shell (runJobArm) needs to decide the
+// It narrates through `say` (pipeline_status / text / refresh_viewed_state) and
+// RETURNS the outcome the shell (runJobArm) needs to decide the
 // co-write hand-off (Step 5.5) and the terminal narration (Step 6). The co-write
 // gates + enterCoWrite stay in the shell; co-write re-derives its pending items
 // on job re-entry (no persisted marker — focus is ephemeral).
@@ -22,7 +21,7 @@
 // Hank draft isn't reuse-eligible until the user opts it in) and re-baselines
 // proposedDrafts so a later panel edit diverges from what he actually wrote.
 
-import type { RunContext, TurnEvent } from "@/server/contracts";
+import type { RunContext, Say, StreamEvent } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import {
   persistApplicationAnswer,
@@ -36,7 +35,7 @@ import {
   isProseQuestion,
   type ApplicationQuestion,
 } from "@/server/platform/scrape/types";
-import { streamingProcedure } from "@/server/procedures/lib/procedure";
+import { procedure } from "@/server/procedures/lib/procedure";
 import type {
   ApplicationDecision,
   DraftVerdict,
@@ -53,6 +52,7 @@ import { persistApplicationReview } from "./persistApplicationReview";
 
 type DraftApplicationArgs = RunContext & {
   sessionId: string;
+  say: Say;
   jobId: string;
   // Free-text guidance the user gave in chat about the whole application —
   // threaded to every drafting call this pass. Also forces a fresh decide (the
@@ -94,7 +94,7 @@ type DraftApplicationOutcome = {
   review: ApplicationReview | null;
 };
 
-function status(text: string): TurnEvent {
+function status(text: string): StreamEvent {
   return { type: "pipeline_status", text };
 }
 
@@ -120,11 +120,9 @@ function fallbackDecision(
   };
 }
 
-export const runDraftApplication = streamingProcedure(
+export const runDraftApplication = procedure(
   "draft_application",
-  async function* (
-    args: DraftApplicationArgs,
-  ): AsyncGenerator<TurnEvent, DraftApplicationOutcome> {
+  async (args: DraftApplicationArgs): Promise<DraftApplicationOutcome> => {
     const { jobId } = args;
     let didWork = false;
     let review: ApplicationReview | null = null;
@@ -150,10 +148,10 @@ export const runDraftApplication = streamingProcedure(
     const beforeMerged = await loadMergedQuestions(jobId);
     if (needsQuestionsRefresh(beforeMerged.envelope)) {
       didWork = true;
-      yield status("Fetching application form…");
+      await args.say(status("Fetching application form…"));
       const formRes = await ensureApplicationForm({ jobId });
       if (formRes.status === "not_found") {
-        yield { type: "text", text: `no job found for "${jobId}".` };
+        await args.say({ type: "text", text: `no job found for "${jobId}".` });
       }
     }
 
@@ -204,8 +202,10 @@ export const runDraftApplication = streamingProcedure(
       cached && decisionCoversForm(cached, merged.merged) ? cached : null;
     if (!decision && (hasQuestions || formWantsCoverLetter)) {
       didWork = true;
-      yield status(
-        "Working out which answers I can draft and which need your input…",
+      await args.say(
+        status(
+          "Working out which answers I can draft and which need your input…",
+        ),
       );
       const dec = await decideApplicationForm({ ...args, jobId });
       if (dec.ok) {
@@ -218,7 +218,7 @@ export const runDraftApplication = streamingProcedure(
         decision = fallbackDecision(merged.merged, formWantsCoverLetter);
       }
       if (decision?.notice) {
-        yield { type: "text", text: decision.notice };
+        await args.say({ type: "text", text: decision.notice });
       }
     }
 
@@ -240,7 +240,7 @@ export const runDraftApplication = streamingProcedure(
     if (decision?.coverLetter && !hasCoverLetter) {
       if (decision.coverLetter.verdict === "draft") {
         didWork = true;
-        yield status("Drafting cover letter…");
+        await args.say(status("Drafting cover letter…"));
         const drafted = await draftSingleApplicationItem({
           ...args,
           jobId,
@@ -253,26 +253,30 @@ export const runDraftApplication = streamingProcedure(
           });
           hasCoverLetter = true;
           draftedSomething = true;
-          yield { type: "refresh_viewed_state" };
+          await args.say({ type: "refresh_viewed_state" });
         } else {
-          yield {
+          await args.say({
             type: "text",
             text: `Cover-letter drafting failed: ${drafted.error}`,
-          };
+          });
         }
       } else if (decision.coverLetter.verdict === "ask_user") {
         askUserItems.push("your cover letter");
       }
     }
 
+    // One question at a time: each is drafted against the form the previous
+    // ones filled in, persisted before the next starts, and narrated in order.
+    /* eslint-disable no-await-in-loop */
     for (const qd of decision?.questions ?? []) {
       if (answeredSet.has(qd.question)) continue;
       if (qd.verdict === "draft") {
         didWork = true;
-        yield status(
-          `Drafting answer to: ${qd.question.slice(0, 80)}${qd.question.length > 80 ? "…" : ""}`,
+        await args.say(
+          status(
+            `Drafting answer to: ${qd.question.slice(0, 80)}${qd.question.length > 80 ? "…" : ""}`,
+          ),
         );
-        // eslint-disable-next-line no-await-in-loop -- each item is drafted against the form the previous items filled in
         const drafted = await draftSingleApplicationItem({
           ...args,
           jobId,
@@ -285,43 +289,41 @@ export const runDraftApplication = streamingProcedure(
           ];
           answeredSet.add(qd.question);
           draftedSomething = true;
-          // eslint-disable-next-line no-await-in-loop -- persists what the draft above produced
           await persistApplicationAnswer(args.userId, jobId, {
             question: qd.question,
             answer: drafted.content,
             author: "hank",
           });
-          yield { type: "refresh_viewed_state" };
+          await args.say({ type: "refresh_viewed_state" });
         } else {
-          yield {
+          await args.say({
             type: "text",
             text: `Drafting failed for "${qd.question.slice(0, 60)}": ${drafted.error}`,
-          };
+          });
         }
       } else if (qd.verdict === "ask_user") {
         askUserItems.push(qd.question);
       }
       // skip → nothing
     }
+    /* eslint-enable no-await-in-loop */
 
     // Step 5.25: recruiter-lens critique + up-to-2 revision rounds when anything
     // was drafted this pass. Best-effort; the loop swallows its own errors.
     if (draftedSomething) {
-      // Pumped by hand rather than `for await`, which discards a generator's
-      // return value — and the return value IS the verdict. Losing it is what let
-      // a draft with a known contradiction ship looking identical to a clean one.
-      const critique = critiqueAndReviseForm({ ...args, jobId });
-      let step = await critique.next();
-      while (!step.done) {
-        yield step.value.type === "progress"
-          ? status(step.value.label)
-          : { type: "refresh_viewed_state" };
-        // eslint-disable-next-line no-await-in-loop -- draining a generator: each step is produced by the previous one
-        step = await critique.next();
-      }
-      review = await persistApplicationReview(args.userId, jobId, step.value);
-      note = step.value.note.trim() || null;
-      reviewStop = step.value.stop;
+      const critique = await critiqueAndReviseForm({
+        ...args,
+        jobId,
+        onEvent: (ev) =>
+          args.say(
+            ev.type === "progress"
+              ? status(ev.label)
+              : { type: "refresh_viewed_state" },
+          ),
+      });
+      review = await persistApplicationReview(args.userId, jobId, critique);
+      note = critique.note.trim() || null;
+      reviewStop = critique.stop;
 
       const refreshed = await prisma.jobInteraction.findUnique({
         where: { userId_jobId: { userId: args.userId, jobId } },
@@ -351,24 +353,3 @@ export const runDraftApplication = streamingProcedure(
     };
   },
 );
-
-// Drive runDraftApplication to completion from a NON-generator caller (the
-// draft_application tool): forward status lines via a callback and collect any
-// failure text. Returns the structured outcome + notes. refresh_viewed_state
-// pings are dropped (tools set affectsViewedState for the end-of-turn refresh).
-export async function runDraftApplicationCollect(
-  input: DraftApplicationArgs & { onStatus?: (label: string) => void },
-): Promise<{ result: DraftApplicationOutcome; notes: string[] }> {
-  const { onStatus, ...args } = input;
-  const gen = runDraftApplication(args);
-  const notes: string[] = [];
-  let next = await gen.next();
-  while (!next.done) {
-    const ev = next.value;
-    if (ev.type === "pipeline_status") onStatus?.(ev.text);
-    else if (ev.type === "text") notes.push(ev.text);
-    // eslint-disable-next-line no-await-in-loop -- draining a generator — each step is produced by the previous one
-    next = await gen.next();
-  }
-  return { result: next.value, notes };
-}

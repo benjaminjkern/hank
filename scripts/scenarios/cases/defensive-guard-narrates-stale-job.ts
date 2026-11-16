@@ -2,7 +2,9 @@ import { prisma } from "@/server/db/prisma";
 import { JobInteractionStatus } from "@/server/generated/prisma/client";
 import { runWalkthrough } from "@/server/procedures/registry/walkthrough";
 
-import { SESSION_ID, USER_ID, withFocus } from "../lib";
+import { isUserAbortError } from "@/shared/utils/abort";
+
+import { SESSION_ID, USER_ID, recordInto, withFocus } from "../lib";
 
 import type { EventRecord, Scenario } from "../lib";
 
@@ -32,36 +34,34 @@ const scenario: Scenario = {
       },
       async () => {
         const events: EventRecord[] = [];
-        const gen = runWalkthrough({
+        // Stop the run once the guard narration lands (or after 8 events): the
+        // state machine may re-dispatch into runCompanyArm next, and that
+        // recovery is not what this scenario is about.
+        const stop = new AbortController();
+        const record = recordInto(events);
+        await runWalkthrough({
           userId: USER_ID,
           sessionId: SESSION_ID,
           userMessage: "",
           // Focus is ephemeral — dispatch runs off the threaded entry target,
           // not the slot. (withFocus still sets the slot but it's now ignored.)
           entryTarget: { kind: "job", id: target.jobId },
+          signal: stop.signal,
+          say: async (ev) => {
+            // Halt the run at its next narration, the way returning from the
+            // old generator did.
+            if (stop.signal.aborted) {
+              throw new DOMException("scenario stopped", "AbortError");
+            }
+            await record(ev);
+            const guardSaid =
+              ev.type === "pipeline_status" &&
+              /no longer shortlisted/i.test(ev.text);
+            if (guardSaid || events.length >= 8) stop.abort();
+          },
+        }).catch((err: unknown) => {
+          if (!isUserAbortError(err)) throw err;
         });
-        let count = 0;
-        while (count < 8) {
-          const next = await gen.next();
-          if (next.done) break;
-          const ev = next.value;
-          if (ev.type === "text") events.push({ type: "text", text: ev.text });
-          else if (ev.type === "pipeline_status")
-            events.push({ type: "pipeline_status", text: ev.text });
-          else events.push({ type: ev.type });
-          count++;
-          // Break early once we see the guard narration. State machine may
-          // re-dispatch into runCompanyArm next and we don't want it to
-          // recover anything else.
-          const last = events[events.length - 1];
-          if (
-            last?.type === "pipeline_status" &&
-            last.text?.match(/no longer shortlisted/i)
-          ) {
-            break;
-          }
-        }
-        await gen.return({ wrappedUp: false });
         return events;
       },
     );

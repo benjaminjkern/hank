@@ -31,7 +31,7 @@ import {
   appendToolResultMessage,
   loadSessionMessages,
 } from "@/server/agent/session";
-import type { RunContext, StreamEvent } from "@/server/contracts";
+import type { RunContext, Say } from "@/server/contracts";
 import { resolveLlmClient } from "@/server/platform/llm/resolveClient";
 import { recordUsage } from "@/server/platform/usage/track";
 
@@ -48,6 +48,7 @@ export type TranscriptInfo = {
 
 export type HankTurnArgs = RunContext & {
   sessionId: string;
+  say: Say;
   // Called once the transcript is loaded, since what belongs in the prompt can
   // depend on it. Returns the whole HankSystemPrompt (not just `.full`) because
   // captureTurn stores its static hash + volatile sections.
@@ -72,14 +73,15 @@ export type HankTurnResult = {
   // stops here. A `handoff` is a ToolDef flag, not a name list — see
   // agent/hank/toolset.ts.
   calledHandoffTool: boolean;
+  // The user hit Stop (or the stream dropped) mid-turn; the partial is saved and
+  // the `stopped` event already said. Nothing should run after it.
+  stopped: boolean;
   // Every tool this turn ran, in order, with its raw result. The caller reads
   // whatever domain signals it cares about off these.
   dispatched: DispatchedTool[];
 };
 
-export async function* runHankTurn(
-  args: HankTurnArgs,
-): AsyncGenerator<StreamEvent, HankTurnResult> {
+export async function runHankTurn(args: HankTurnArgs): Promise<HankTurnResult> {
   const { client, model, billedToServer } = await resolveLlmClient(
     args.userId,
     {
@@ -97,7 +99,12 @@ export async function* runHankTurn(
   // computes this from the RAW rows, because provenance re-roling can move the
   // terminal off the assistant channel — see endsAwaitingUser.
   if (loaded.endsAwaitingUser && !args.openingNudge) {
-    return { agentCalledTool: false, calledHandoffTool: false, dispatched: [] };
+    return {
+      agentCalledTool: false,
+      calledHandoffTool: false,
+      stopped: false,
+      dispatched: [],
+    };
   }
   const history = applyHistoryCacheMarker(
     args.openingNudge
@@ -108,7 +115,7 @@ export async function* runHankTurn(
     hasPriorAssistantTurn: history.some((m) => m.role === "assistant"),
   });
 
-  const turn = yield* runAgentTurn({
+  const turn = await runAgentTurn({
     ...args,
     client,
     model,
@@ -177,7 +184,7 @@ export async function* runHankTurn(
   // the stream never sees, so recordTranscript can't build it — and the release
   // is what hands the stream back, so whatever runs after this turn (the
   // walkthrough state machine, the what's-next picker) gets persisted again.
-  yield { type: "message_end" };
+  await args.say({ type: "message_end" });
 
   await recordUsage({
     userId: args.userId,
@@ -197,7 +204,7 @@ export async function* runHankTurn(
     ...(await captureTurn("chat", system, turn)),
   });
 
-  if (turn.stopped) yield { type: "stopped" };
+  if (turn.stopped) await args.say({ type: "stopped" });
 
   // Genuine mid-stream fault: the partial is saved above (resumable); re-throw
   // so the error still surfaces (key modal / error bubble) up through the chat
@@ -211,6 +218,7 @@ export async function* runHankTurn(
   return {
     agentCalledTool: turn.content.some((b) => b.type === "tool_use"),
     calledHandoffTool: !turn.stopped && turnCalledHandoffTool(turn.content),
+    stopped: turn.stopped,
     dispatched: turn.dispatched,
   };
 }

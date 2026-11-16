@@ -1,5 +1,4 @@
-import type { TurnEvent } from "@/server/contracts";
-import { streamingProcedure } from "@/server/procedures/lib/procedure";
+import { procedure } from "@/server/procedures/lib/procedure";
 
 import type { WalkthroughArgs, WalkthroughResult } from "./types";
 
@@ -8,14 +7,9 @@ import type { WalkthroughArgs, WalkthroughResult } from "./types";
 // silently rather than duplicating what he says. If it's ever built out, it
 // would take the same shape as the company / job arms: deterministic transitions
 // between PITCHED jobs, AWAITING follow-ups, and CLOSED wraps.
-export const runOpportunityArm = streamingProcedure(
+export const runOpportunityArm = procedure(
   "opportunity_arm",
-  async function* (
-    input: WalkthroughArgs & { opportunityId: string },
-  ): AsyncGenerator<TurnEvent, WalkthroughResult> {
-    const { opportunityId, ...args } = input;
-    void opportunityId;
-    void args;
-    return { wrappedUp: false };
-  },
+  (
+    _input: WalkthroughArgs & { opportunityId: string },
+  ): Promise<WalkthroughResult> => Promise.resolve({ wrappedUp: false }),
 );

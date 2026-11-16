@@ -4,12 +4,13 @@
 // It owns THE RUN and nothing else: everything here is true of any message
 // regardless of what the message says.
 //   1. Concurrency guard via claimSessionForNewRun — if a LIVE prior run is in
-//      flight, yield ALREADY_STREAMING and bail before persisting anything (a
+//      flight, say ALREADY_STREAMING and bail before persisting anything (a
 //      stale/aborted-but-wedged run is reclaimed instead of blocking).
 //   2. An AbortController the Stop endpoint can find, and a runId every row the
 //      run produces is stamped with.
-//   3. Hand the whole message to `runChat` — the chat procedure — through
-//      `recordTranscript`, which persists every content event the run streams.
+//   3. Hand the whole message to `runChat` — the chat procedure — with a `say`
+//      wrapped in `recordTranscript`, which persists every content event the
+//      run says before it reaches the caller's `say`.
 //   4. Classify how the run ENDED: a user Stop is a clean end, a missing key is
 //      the modal's to fix, and anything else is a failure that gets a
 //      transcript row of its own.
@@ -40,8 +41,9 @@ import {
   getOrCreateActiveSession,
   recordTranscript,
 } from "@/server/agent/session";
-import type { LoopEvent } from "@/server/contracts";
+import type { LoopEvent, Say } from "@/server/contracts";
 import { classifyLlmError } from "@/server/platform/llm/classifyLlmError";
+import { withCaptureContext } from "@/server/platform/usage/captureContext";
 import {
   NoAnthropicKeyError,
   NoDeepseekKeyError,
@@ -56,6 +58,9 @@ import { nowMs } from "@/shared/utils/now";
 
 type RunUserMessageArgs = {
   userId: string;
+  // Where the run's events go — the chat route's SSE writer. Resolves once the
+  // event is on its way; the run awaits each one, so events reach it in order.
+  say: Say<LoopEvent>;
   userMessage: string;
   attachmentIds?: string[];
   signal?: AbortSignal;
@@ -78,9 +83,7 @@ type RunUserMessageArgs = {
 // bound for the rare case the cap timer didn't run.
 const RUN_MAX_AGE_MS = 5 * 60_000;
 
-export async function* runUserMessage(
-  args: RunUserMessageArgs,
-): AsyncGenerator<LoopEvent> {
+export async function runUserMessage(args: RunUserMessageArgs): Promise<void> {
   // 1. Get/create the active session. Scenarios can pass `sessionIdOverride` to
   // target the test session instead.
   const sessionId =
@@ -98,12 +101,12 @@ export async function* runUserMessage(
   // live one. Reject before persisting anything; the client maps ALREADY_STREAMING
   // to a transient notice that restores the user's typed text into the composer.
   if (!claimSessionForNewRun(sessionId, RUN_MAX_AGE_MS)) {
-    yield {
+    await args.say({
       type: "error",
       code: "ALREADY_STREAMING",
       message:
         "Hank is still working on the previous message. Wait for it to finish, then resend.",
-    };
+    });
     return;
   }
 
@@ -127,12 +130,18 @@ export async function* runUserMessage(
 
   try {
     // recordTranscript is the ONE writer of streamed chat content — wrapping the
-    // whole procedure here is what makes "anything the user saw has a row" true
-    // of every path rather than of whichever emitters remembered to persist.
-    const stream = recordTranscript(
+    // `say` the whole procedure talks through is what makes "anything the user
+    // saw has a row" true of every path rather than of whichever emitters
+    // remembered to persist.
+    const say = recordTranscript({ sessionId, runId }, args.say);
+    // Run-tree capture: every TokenUsage / SubAgentRun row anything in this run
+    // writes is stamped with the runId (a tool dispatch layers its own message
+    // and tool ids on top).
+    await withCaptureContext({ runId }, () =>
       runChat({
         userId: args.userId,
         sessionId,
+        say,
         userMessage: args.userMessage,
         attachmentIds: args.attachmentIds ?? [],
         timeZone: args.timeZone,
@@ -143,15 +152,8 @@ export async function* runUserMessage(
         // stand down cleanly first.
         deadlineAt: nowMs() + RUN_MAX_AGE_MS,
       }),
-      { sessionId, runId },
     );
-    for await (const ev of stream) {
-      // The procedure's `done` carries the turn's outcome, which it has already
-      // acted on by the time it surfaces here. The client only needs the one
-      // terminal below.
-      if (ev.type !== "done") yield ev;
-    }
-    yield { type: "done" };
+    await args.say({ type: "done" });
   } catch (err) {
     // A user Stop that reaches HERE came from the deterministic layer, which
     // re-throws it rather than degrading it: runSubAgent does, and so does
@@ -161,8 +163,8 @@ export async function* runUserMessage(
     // clean end, and letting it out of the run would surface the abort as a
     // chat error banner instead of the stopped pill.
     if (isUserAbortError(err)) {
-      yield { type: "stopped" };
-      yield { type: "done" };
+      await args.say({ type: "stopped" });
+      await args.say({ type: "done" });
     } else if (
       err instanceof NoAnthropicKeyError ||
       err instanceof NoDeepseekKeyError
@@ -173,8 +175,8 @@ export async function* runUserMessage(
       // row (same reason the classified key/credit faults below don't) — but
       // the user's message is already persisted, so it's waiting for them once
       // they've pasted a key.
-      yield { type: "error", code: err.code, message: err.message };
-      yield { type: "done" };
+      await args.say({ type: "error", code: err.code, message: err.message });
+      await args.say({ type: "done" });
     } else {
       // A genuine failure. Record it in the transcript BEFORE re-throwing: the
       // route turns the throw into an SSE `error` + `done`, and that `done` makes

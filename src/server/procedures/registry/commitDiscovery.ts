@@ -17,11 +17,11 @@
 // the roster.
 
 import { appendPipelineActivity } from "@/server/agent/session/appendMessages";
-import { yieldUiEvents } from "@/server/contracts";
-import type { RunContext, TurnEvent } from "@/server/contracts";
+import { sayUiEvents } from "@/server/contracts";
+import type { RunContext, Say } from "@/server/contracts";
 import { settleSuggestionBatch } from "@/server/entities/companies/suggestionMark";
 import { CompanySuggestionVerdict } from "@/server/generated/prisma/client";
-import { streamingProcedure } from "@/server/procedures/lib/procedure";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
 import {
   addMoreCompaniesWidget,
@@ -50,11 +50,11 @@ function renderPassRelay(passed: string[], added: string[]): string {
   ].join("\n");
 }
 
-export const runCommitDiscovery = streamingProcedure(
+export const runCommitDiscovery = procedure(
   "commit_discovery",
-  async function* (
-    args: RunContext & { sessionId: string },
-  ): AsyncGenerator<TurnEvent, CommitDiscoveryResult> {
+  async (
+    args: RunContext & { sessionId: string; say: Say },
+  ): Promise<CommitDiscoveryResult> => {
     const { rows } = await loadDiscoveryList(args.userId);
     if (rows.length === 0) {
       return { empty: true, added: [], passed: [] };
@@ -86,7 +86,7 @@ export const runCommitDiscovery = streamingProcedure(
     // ran at the end of all that, the user watched a settled list the whole time
     // and kept it forever if anything cut the run short. Same move, same reason,
     // as the "Looks good to me" path (widgets/dispatchTopLevelSubmission.ts).
-    yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
+    await sayUiEvents(args.say, (await buildShowEvents(args.userId)).events);
 
     const passedNames = toPass.map((r) => r.name);
     let added: string[] = [];
@@ -94,7 +94,7 @@ export const runCommitDiscovery = streamingProcedure(
       // Each pick carries the search's own case for it (→ hunter extraContext)
       // and any captured board URL (→ hunter candidateUrl), not just the bare
       // name — that's what stops a name collision resolving to the wrong company.
-      const result = yield* runChecklistAdd({
+      const result = await runChecklistAdd({
         ...args,
         picks: toAdd.map((r) => ({
           name: r.name,
@@ -124,7 +124,7 @@ export const runCommitDiscovery = streamingProcedure(
       await runConsolidateSessionMemory(args);
     }
 
-    yield addMoreCompaniesWidget(added, toPass.length);
+    await args.say(addMoreCompaniesWidget(added, toPass.length));
     return { empty: false, added, passed: passedNames };
   },
 );

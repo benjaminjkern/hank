@@ -25,18 +25,9 @@ import {
   runHankTurn,
   type TranscriptInfo,
 } from "@/server/agent/runtime/runHankTurn";
-import type {
-  ChatTurnRunner,
-  EntryTarget,
-  TurnEvent,
-} from "@/server/contracts";
+import type { ChatTurnRunner, EntryTarget } from "@/server/contracts";
 import { isProfileObviouslyEnriched } from "@/server/entities/profile/profileInventory";
 import { loadRecentClientErrors } from "@/server/platform/clientEvents/recent";
-import { withCaptureContext } from "@/server/platform/usage/captureContext";
-import type {
-  WalkthroughArgs,
-  WalkthroughResult,
-} from "@/server/procedures/registry/walkthrough";
 import { runWalkthrough } from "@/server/procedures/registry/walkthrough";
 import { parseWidgetSubmission } from "@/server/widgets/parse";
 
@@ -50,7 +41,7 @@ const MAX_AGENT_LOOPS = 20;
 // reads it as a system nudge, not literal user words to echo. Never persisted.
 const PROFILE_INTAKE_NUDGE = "(Starting profile setup — greet me and begin.)";
 
-export const runChatTurn: ChatTurnRunner = async function* (args) {
+export const runChatTurn: ChatTurnRunner = async (args) => {
   const isWidgetSubmission = !!parseWidgetSubmission(args.userMessage);
 
   // Did this message open a user turn? An empty composer still does when the
@@ -62,7 +53,7 @@ export const runChatTurn: ChatTurnRunner = async function* (args) {
   // is the user's profile still too thin to match roles against? Drives both the
   // prompt body below and the silent-entry branch — a cold-start user with no
   // message needs Hank to greet and start eliciting, NOT the state machine
-  // (which, with nothing to dispatch on, would yield "what's next" forever).
+  // (which, with nothing to dispatch on, would put up "what's next" forever).
   const profileIntake = !(await isProfileObviouslyEnriched(args.userId));
   const profileIntakeEntry =
     !opensUserTurn && !args.entryTarget && profileIntake;
@@ -80,13 +71,11 @@ export const runChatTurn: ChatTurnRunner = async function* (args) {
   // widget submission carries its ids in the marker (handleWidgetSubmission), so
   // entryTarget is undefined there and unused.
   if ((isWidgetSubmission || !opensUserTurn) && !openingNudge) {
-    const result = yield* runStateMachine(args);
-    yield {
-      type: "done",
+    const result = await runWalkthrough(args);
+    return {
       wrappedUp: result.wrappedUp,
       endedCompanyId: result.endedCompanyId,
     };
-    return;
   }
 
   // Path 2: free-text chat — loop Hank turns until he stops calling tools
@@ -128,12 +117,16 @@ export const runChatTurn: ChatTurnRunner = async function* (args) {
   // after his reply. First one wins; N closes in a turn is still one wrap.
   let endedCompanyId: string | undefined;
   for (let loop = 0; loop < MAX_AGENT_LOOPS; loop++) {
-    const turn = yield* runHankTurn({
+    // eslint-disable-next-line no-await-in-loop -- each agent turn reads the tool results the previous one produced
+    const turn = await runHankTurn({
       ...args,
       buildSystem: (info) => buildTurnSystem(args, profileIntake, info),
       turnIndex: loop,
       ...(openingNudge && loop === 0 ? { openingNudge } : {}),
     });
+    // Stop means stop: nothing this turn handed off to runs, and runChat drives
+    // no further turns.
+    if (turn.stopped) return { wrappedUp: false, stopped: true };
     // Fold this turn's tool outcomes. runAgentTurn hands them back in dispatch
     // order and interprets neither — the two rules are domain policy: the LAST
     // handoff target wins (a turn firing several ends where the final one left
@@ -153,17 +146,15 @@ export const runChatTurn: ChatTurnRunner = async function* (args) {
   // needed against a competing surface: the deterministic layer owns every
   // wait-for-user surface, so no tool emits one of its own.
   if (calledHandoffTool) {
-    const result = yield* runStateMachine({
+    const result = await runWalkthrough({
       ...args,
       userMessage: "",
       entryTarget,
     });
-    yield {
-      type: "done",
+    return {
       wrappedUp: result.wrappedUp,
       endedCompanyId: result.endedCompanyId,
     };
-    return;
   }
   // Profile intake just finished. `commit_profile` is not a handoff tool (its
   // outcome decides whether setup is over, and `handoff` is a static flag), so
@@ -172,8 +163,7 @@ export const runChatTurn: ChatTurnRunner = async function* (args) {
   // Report it as a wrap so runChat brings up the what's-next chooser — the same
   // treatment every other completion gets.
   if (profileIntake && (await isProfileObviouslyEnriched(args.userId))) {
-    yield { type: "done", wrappedUp: true };
-    return;
+    return { wrappedUp: true };
   }
   // No handoff — Hank just chatted, so his reply stands. A company ending is the
   // one thing that still pulls up what's-next from this path: it was closed /
@@ -184,7 +174,7 @@ export const runChatTurn: ChatTurnRunner = async function* (args) {
   // Focus is ephemeral now (no sticky company), so there's nothing to "resume":
   // side-trip detection is gone. If the user wants to continue on a company
   // later, Hank re-engages it explicitly via company_walkthrough.
-  yield { type: "done", wrappedUp: !!endedCompanyId, endedCompanyId };
+  return { wrappedUp: !!endedCompanyId, endedCompanyId };
 };
 
 // Assemble Hank's system prompt for this turn. Rebuilt per agent loop because
@@ -221,30 +211,4 @@ async function buildTurnSystem(
     // ephemeral, so Hank works from the conversation + the clickable chips.)
     continuing: transcript.hasPriorAssistantTurn,
   });
-}
-
-// Run the state machine, with every sub-agent it drives stamped with this run.
-//
-// It persists nothing: the events it yields reach the user through
-// recordTranscript, which writes them as they go. An outer buffer here used to
-// collect and flush them at the end of the pass, which double-wrote everything
-// the machine reached through a narrating procedure and stamped the copy with
-// the time the pass ENDED — so a finished batch repeated itself at the bottom
-// of the chat.
-async function* runStateMachine(
-  args: WalkthroughArgs,
-): AsyncGenerator<TurnEvent, WalkthroughResult> {
-  const sm = runWalkthrough(args);
-  while (true) {
-    // Run-tree capture: wrap each generator STEP (not the generator body — ALS
-    // can't survive a yield) so any sub-agent the state machine drives in this
-    // step records the run's id. There's no messageId/parentToolUseId to set —
-    // the state machine has no main-agent tool_use to nest under.
-    // eslint-disable-next-line no-await-in-loop -- draining a generator — each step is produced by the previous one
-    const next = await withCaptureContext({ runId: args.runId }, () =>
-      sm.next(),
-    );
-    if (next.done) return next.value;
-    yield next.value;
-  }
 }

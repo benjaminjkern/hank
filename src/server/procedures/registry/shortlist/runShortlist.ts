@@ -13,12 +13,12 @@
 // (free — no LLM, so no re-emit guard is needed). A `direction` rides in as
 // the ranker's extraContext for a fresh ranking on those terms.
 
-import { statusEvent, yieldUiEvents } from "@/server/contracts";
-import type { RunContext, TurnEvent } from "@/server/contracts";
+import { statusEvent, sayUiEvents } from "@/server/contracts";
+import type { RunContext, Say } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { markCompanyShortlisting } from "@/server/entities/companies/markCompanyStatus";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
-import { streamingProcedure } from "@/server/procedures/lib/procedure";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {
   shortlistJobsSubAgent,
@@ -37,6 +37,7 @@ import { seedBoardStances } from "./seedBoardStances";
 
 export type ShortlistArgs = RunContext & {
   sessionId: string;
+  say: Say;
   // Free-text steer for this round ("infra roles only", "I really need
   // remote"), forwarded from company_walkthrough's `direction`. Its presence is
   // also the "the user wants a FRESH ranking" signal: the seed re-runs on those
@@ -152,11 +153,9 @@ function describeReshow(board: ShortlistBoardView): string {
   return `We left the shortlist at ${board.companyName} open — ${pieces.join(" and ")} on the board. Take a look and tell me what to change, or say the word and I'll lock it in.`;
 }
 
-export const runShortlist = streamingProcedure(
+export const runShortlist = procedure(
   "shortlist",
-  async function* (
-    args: ShortlistArgs & { companyId: string },
-  ): AsyncGenerator<TurnEvent> {
+  async (args: ShortlistArgs & { companyId: string }): Promise<void> => {
     // No trace span here on purpose: the deterministic layer runs OUTSIDE a tool
     // dispatch, so there is no parent toolUseId to nest under — a span would
     // no-op. Spans go on procedures reachable from a tool handler.
@@ -181,10 +180,10 @@ export const runShortlist = streamingProcedure(
         where: { userId, job: { companyId }, ...onBoardWhere() },
       });
       if (stanced === 0) {
-        yield {
+        await args.say({
           type: "text",
           text: `There's nothing read-and-ready to shortlist here right now.`,
-        };
+        });
         return;
       }
       // An open board IS the status, however the company got here — a board that
@@ -194,22 +193,24 @@ export const runShortlist = streamingProcedure(
         userId,
         companyId,
       );
-      yield* yieldUiEvents(events);
+      await sayUiEvents(args.say, events);
       if (board) {
         const counts = countBoard(board);
-        yield {
+        await args.say({
           type: "text",
           text:
             counts.picked === 0
               ? describeNothingPicked(board, counts, null)
               : describeReshow(board),
-        };
+        });
       }
       return;
     }
     const n = context.input.candidates.length;
-    yield statusEvent(
-      `Weighing ${n} role${n === 1 ? "" : "s"} against your thesis…`,
+    await args.say(
+      statusEvent(
+        `Weighing ${n} role${n === 1 ? "" : "s"} against your thesis…`,
+      ),
     );
     const result = await runSubAgent(
       shortlistJobsSubAgent,
@@ -217,7 +218,10 @@ export const runShortlist = streamingProcedure(
       args,
     );
     if (!result.ok) {
-      yield { type: "text", text: `Shortlist failed: ${result.error}` };
+      await args.say({
+        type: "text",
+        text: `Shortlist failed: ${result.error}`,
+      });
       return;
     }
     const picks = result.output;
@@ -243,7 +247,7 @@ export const runShortlist = streamingProcedure(
       userId,
       companyId,
     );
-    yield* yieldUiEvents(events);
+    await sayUiEvents(args.say, events);
     const counts = board
       ? countBoard(board)
       : { picked: 0, borderline: 0, closing: 0, total: 0 };
@@ -261,9 +265,9 @@ export const runShortlist = streamingProcedure(
             openBoard.length > 0 ? n : undefined,
           );
     const unfinished = describeUnfinished(context.input.candidates, picks);
-    yield {
+    await args.say({
       type: "text",
       text: unfinished ? `${body}\n\n${unfinished}` : body,
-    };
+    });
   },
 );

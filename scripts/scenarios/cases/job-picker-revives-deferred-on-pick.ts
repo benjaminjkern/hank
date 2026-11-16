@@ -56,18 +56,14 @@ const scenario: Scenario = {
           // DB state without depending on the agent loop or pnpm dev being
           // up. runJobArm queries focused JobInteraction status — the pick
           // handler's revive transaction is what makes that path succeed
-          // here, so simply iterating the generator exercises end-to-end.
-          const gen = runWalkthrough({
+          // here, so simply running it exercises end-to-end. Its narration
+          // isn't asserted on, so nothing is recorded.
+          await runWalkthrough({
             userId: USER_ID,
             sessionId: SESSION_ID,
             userMessage,
+            say: async () => {},
           });
-          // Drain to completion (job arm runs to wrap, possibly with
-          // pipeline_status events — we don't need to assert those).
-          while (true) {
-            const next = await gen.next();
-            if (next.done) break;
-          }
           const jiNow = await prisma.jobInteraction.findUnique({
             where: { userId_jobId: { userId: USER_ID, jobId: ji.jobId } },
             select: {

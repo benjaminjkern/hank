@@ -36,34 +36,21 @@ export type ReviewApplicationResult = {
 export const runReviewApplication = procedure(
   "review_application",
   async (
-    input: RunContext & {
-      sessionId: string;
-      jobId: string;
-      onStatus?: (label: string) => void;
-    },
+    args: RunContext & { sessionId: string; jobId: string },
   ): Promise<ReviewApplicationResult> => {
-    const { onStatus, ...args } = input;
-    // Pumped by hand rather than `for await`, which discards a generator's return
-    // value — and the return value IS the verdict.
-    const loop = critiqueAndReviseForm(args);
-    let step = await loop.next();
-    while (!step.done) {
-      if (step.value.type === "progress") onStatus?.(step.value.label);
-      // eslint-disable-next-line no-await-in-loop -- draining a generator: each step is produced by the previous one
-      step = await loop.next();
-    }
+    const result = await critiqueAndReviseForm(args);
     const review = await persistApplicationReview(
       args.userId,
       args.jobId,
-      step.value,
+      result,
     );
     return {
-      ran: step.value.ran,
-      note: step.value.note,
+      ran: result.ran,
+      note: result.note,
       open: review?.open ?? [],
-      revisedTargets: step.value.revisedTargets,
-      stop: step.value.stop,
-      failed: step.value.stop === "error",
+      revisedTargets: result.revisedTargets,
+      stop: result.stop,
+      failed: result.stop === "error",
     };
   },
 );

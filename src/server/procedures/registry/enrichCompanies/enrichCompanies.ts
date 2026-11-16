@@ -2,13 +2,13 @@
 // behind the enrich_companies tool, the company_checklist / disambiguation
 // submissions, and the walkthrough's on-entry backfill.
 //
-// An async generator: it streams one event per company as each starts and
-// finishes, which the submission handlers render. One company's own enrich is
-// not a generator (see enrichOne.ts). No hard wall timeout — the hunter's turn
-// cap and the user's Stop button are the bounds.
+// Reports one progress event per company as each starts and finishes, through
+// the optional `onProgress` — the submission handlers render them; the tool and
+// the walkthrough just take the result. One company's own enrich is
+// enrichOne.ts. No hard wall timeout — the hunter's turn cap and the user's Stop
+// button are the bounds.
 
-import type { RunTrace } from "@/server/contracts";
-import { streamingProcedure } from "@/server/procedures/lib/procedure";
+import { procedure } from "@/server/procedures/lib/procedure";
 
 import { enrichOne } from "./enrichOne";
 
@@ -26,95 +26,56 @@ import type {
 // advisory and lives in Hank's prompt (it's the user's tokens).
 const ENRICH_CONCURRENCY = 5;
 
-export const runEnrichCompanies = streamingProcedure(
+export const runEnrichCompanies = procedure(
   "enrich_companies",
-  enrichBatch,
-);
+  async (
+    args: EnrichCompaniesArgs & {
+      // Awaited by the worker that reports it, so a slow renderer holds that
+      // worker rather than letting events pile up unseen.
+      onProgress?: (event: EnrichProgressEvent) => Promise<void>;
+    },
+  ): Promise<EnrichCompaniesResult> => {
+    const { companies } = args;
+    const concurrency = args.concurrency ?? ENRICH_CONCURRENCY;
+    const results: CompanyEnrichResult[] = [];
 
-async function* enrichBatch(
-  args: EnrichCompaniesArgs & { trace?: RunTrace },
-): AsyncGenerator<EnrichProgressEvent, EnrichCompaniesResult> {
-  const { companies } = args;
-  const concurrency = args.concurrency ?? ENRICH_CONCURRENCY;
-
-  const results: CompanyEnrichResult[] = [];
-  // Workers push events into a shared queue; the generator body drains it.
-  const queue: EnrichProgressEvent[] = [];
-  let wake: (() => void) | null = null;
-  const waitForEvent = () =>
-    new Promise<void>((resolve) => {
-      wake = resolve;
-    });
-  const signalWake = () => {
-    if (wake) {
-      const w = wake;
-      wake = null;
-      w();
-    }
-  };
-
-  // Shared cursor — each worker pulls the next company until the list is
-  // drained (or the user hits Stop).
-  let nextIndex = 0;
-  const workerCount = Math.min(concurrency, companies.length);
-  let remaining = workerCount;
-
-  const worker = async () => {
-    while (true) {
-      if (args.signal?.aborted) break;
-      const i = nextIndex++;
-      if (i >= companies.length) break;
-      const company = companies[i];
-      queue.push({
-        type: "company_started",
-        companyId: company.companyId,
-        name: company.name,
-      });
-      signalWake();
-      // A per-company crash becomes a hunter_failed outcome — one bad company
-      // never aborts the batch.
-      // eslint-disable-next-line no-await-in-loop -- this await IS the concurrency limit: N workers draining a shared queue is how the pool stays bounded
-      const result = await enrichOne(company, args).catch(
-        (err): CompanyEnrichResult => ({
+    // Shared cursor — each worker pulls the next company until the list is
+    // drained (or the user hits Stop).
+    let nextIndex = 0;
+    const worker = async () => {
+      while (true) {
+        if (args.signal?.aborted) break;
+        const i = nextIndex++;
+        if (i >= companies.length) break;
+        const company = companies[i];
+        // eslint-disable-next-line no-await-in-loop -- this worker's own progress line, said before its company starts
+        await args.onProgress?.({
+          type: "company_started",
           companyId: company.companyId,
           name: company.name,
-          outcome: {
-            kind: "hunter_failed",
-            error: err instanceof Error ? err.message : String(err),
-          },
-        }),
-      );
-      results.push(result);
-      queue.push({ type: "company_done", result });
-      signalWake();
-    }
-  };
+        });
+        // A per-company crash becomes a hunter_failed outcome — one bad company
+        // never aborts the batch.
+        // eslint-disable-next-line no-await-in-loop -- this await IS the concurrency limit: N workers draining a shared cursor is how the pool stays bounded
+        const result = await enrichOne(company, args).catch(
+          (err): CompanyEnrichResult => ({
+            companyId: company.companyId,
+            name: company.name,
+            outcome: {
+              kind: "hunter_failed",
+              error: err instanceof Error ? err.message : String(err),
+            },
+          }),
+        );
+        results.push(result);
+        // eslint-disable-next-line no-await-in-loop -- reports the company this worker just finished
+        await args.onProgress?.({ type: "company_done", result });
+      }
+    };
 
-  for (let w = 0; w < workerCount; w++) {
-    void worker().finally(() => {
-      remaining -= 1;
-      signalWake();
-    });
-  }
-
-  while (remaining > 0 || queue.length > 0) {
-    while (queue.length > 0) yield queue.shift()!;
-    // eslint-disable-next-line no-await-in-loop -- parks until a worker reports — waiting is the point
-    if (remaining > 0) await waitForEvent();
-  }
-
-  return { results };
-}
-
-// For callers that aren't on a streaming path (the tool returns one result
-// string; the walkthrough enriches exactly one company): run to completion and
-// return just the aggregate, discarding the live events.
-export async function runEnrichCompaniesCollect(
-  args: EnrichCompaniesArgs,
-): Promise<EnrichCompaniesResult> {
-  const gen = runEnrichCompanies(args);
-  let step = await gen.next();
-  // eslint-disable-next-line no-await-in-loop -- draining a generator — each step is produced by the previous one
-  while (!step.done) step = await gen.next();
-  return step.value;
-}
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, companies.length) }, worker),
+    );
+    return { results };
+  },
+);
