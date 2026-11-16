@@ -31,18 +31,13 @@ const VALUE_TOOLS = new Set([
   "propose_shortlist",
   "enrich_companies",
   "company_walkthrough",
-  "company_checklist",
   // Inbound-opportunity intake path: surfacing the recruiter lead as a tracked
   // opportunity + role IS the value for that persona (no watchlist/shortlist
   // tools fire). Without these, turns_to_value false-fails the recruiter flow.
   "create_opportunities",
   "create_jobs",
 ]);
-const VALUE_WIDGETS = new Set([
-  "company_checklist",
-  "shortlist_proposal",
-  "next_company_picker",
-]);
+const VALUE_WIDGETS = new Set(["next_company_picker"]);
 
 // Status lines should never expose internal mode / pipeline names.
 const INTERNAL_STATUS_RE =

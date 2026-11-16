@@ -8,7 +8,7 @@
 // transitions then.
 //
 // The rung-0 profile gate that runs BEFORE this is a procedure — it costs an
-// LLM call — and lives in procedures/registry/whatsNext.ts.
+// LLM call — and lives in procedures/registry/whatsNext/index.ts.
 
 import { prisma } from "@/server/db/prisma";
 import { OWED_JOB_STATUSES } from "@/server/entities/jobs/attention";
@@ -408,7 +408,7 @@ async function loadBacklog(userId: string): Promise<NextOptionRow[]> {
   // scraped and has zero Job rows on file. The picker calls these out
   // BEFORE the user clicks so picking the row isn't a surprise — and so
   // the user knows the walkthrough is going to run the prep step
-  // automatically (step 0 in runCompanyArm).
+  // automatically (step 0 of the company walkthrough).
   const needsScrape = (
     lastScrapedJobsAt: Date | null,
     jobCount: number,
@@ -539,7 +539,7 @@ function opportunitySubtitle(updatedAt: Date): string {
 }
 
 // The three section loads. No profile gate, no session mutation — the gate is
-// rung 0 of procedures/registry/whatsNext.ts, and `show_whats_next` skips it on
+// rung 0 of procedures/registry/whatsNext/index.ts, and `show_whats_next` skips it on
 // purpose (it's only offered mid-flow, where the profile is already past it).
 export async function computeWhatsNextOptions(
   userId: string,

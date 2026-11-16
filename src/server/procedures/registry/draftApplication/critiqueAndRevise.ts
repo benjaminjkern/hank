@@ -1,4 +1,4 @@
-// Critique-and-revise loop — the path the walkthrough job arm runs AFTER
+// Critique-and-revise loop — the path the work_on_job procedure runs AFTER
 // drafting an application's answers (via runApplicationDrafting).
 //
 // Flow: load the current persisted form (cover letter + short answers) →

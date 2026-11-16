@@ -4,7 +4,7 @@
 //   <!--widget-response:{"kind":"<widget_kind>", ...payload}-->\n[visible label]
 //
 // The client's buildWidgetSubmissionMessage writes it; the server parsers in
-// src/server/widgets/parse.ts + the walkthrough state machine read it. The regex
+// src/server/widgets/parse.ts read it. The regex
 // and the prefix/suffix have exactly one copy, here. Lives in src/shared
 // (alongside widgetKinds.ts) so both client and server import the same one.
 

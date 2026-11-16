@@ -20,7 +20,6 @@ import {
   type CompanyEnrichResult,
   type CompanyToEnrich,
 } from "@/server/procedures/registry/enrichCompanies";
-import { runWhatsNext } from "@/server/procedures/registry/whatsNext";
 
 import { slugLookupError } from "../lib/slugLookupError";
 
@@ -71,7 +70,7 @@ export const enrichCompaniesTool: ToolDef<z.infer<typeof PARSER>> = {
   name: "enrich_companies",
   affectsViewedState: true,
   description:
-    "Look up who a company is: its careers/ATS page, canonical name, one-line description, and logo. Call with NO arguments when the user is done adding companies (e.g. they clicked \"no\" on the add-more widget, or said they're finished) — it looks up every newly-added company and then shows the \"what next?\" picker. Call with `companies` (slugs) to look up specific ones, plus `force: true` to redo it from scratch when a company's details look wrong (wrong careers page, garbled name, wrong logo). Safe to call when there's nothing to look up. This reads live careers pages a few at a time (~5-30s each), so BEFORE calling, narrate what's happening in plain English so the wait makes sense. NOTE: this does not pull in open roles — roles come in when the user walks the company, or via scrape_jobs_for_company.",
+    "Look up who a company is: its careers/ATS page, canonical name, one-line description, and logo. Call with NO arguments when the user is done adding companies (they said they're finished) — it looks up every newly-added company; then call show_whats_next to put their options up. Call with `companies` (slugs) to look up specific ones, plus `force: true` to redo it from scratch when a company's details look wrong (wrong careers page, garbled name, wrong logo). Safe to call when there's nothing to look up. This reads live careers pages a few at a time (~5-30s each), so BEFORE calling, narrate what's happening in plain English so the wait makes sense. NOTE: this does not pull in open roles — roles come in when the user walks the company, or via scrape_jobs_for_company.",
   parser: PARSER,
   async handle(input, ctx) {
     const targeted = input.companies && input.companies.length > 0;
@@ -119,29 +118,8 @@ export const enrichCompaniesTool: ToolDef<z.infer<typeof PARSER>> = {
       : `nothing new to look up — every company on the watchlist already has its details.`;
 
     if (targeted) return { content: head };
-
-    // Hand off to the walkthrough: surface the next-company picker now that the
-    // companies have their details. Roles get pulled in when one is walked.
-    const next = await runWhatsNext(ctx);
-    const widgets =
-      next.kind === "pick"
-        ? [
-            {
-              kind: "next_company_picker" as const,
-              toolUseId: `enrich_companies_${crypto.randomUUID()}`,
-              payload: {
-                immediate: next.options.immediate,
-                deferred: next.options.deferred,
-                backlog: next.options.backlog,
-                empty: next.empty,
-              },
-            },
-          ]
-        : undefined;
-
     return {
-      content: `${head}\n\nThe "what next?" picker is showing — the user can pick a company to walk through, which is when its open roles get pulled in.`,
-      widgets,
+      content: `${head}\n\nNothing moves on its own after this: if the user said what to look at next, hand off to it; otherwise call show_whats_next to put their options up. Roles get pulled in when a company is walked.`,
     };
   },
 };

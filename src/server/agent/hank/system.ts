@@ -10,6 +10,7 @@
 
 import { createHash } from "node:crypto";
 
+import { parsePanelUrl, UNAFFILIATED } from "@/shared/panelUrl";
 import { formatNowInZone } from "@/shared/utils/localTime";
 import { nowDate } from "@/shared/utils/now";
 
@@ -58,9 +59,11 @@ type BuildHankSystemArgs = {
   profileContext?: string;
   // Rung-0 gatekeeper gaps: the weakest slots + suggested probe questions, so
   // the agent opens on the specifics ("here's what I still need") instead of
-  // cold. Only set when runWhatsNext's LLM verdict just ran and came back short
-  // — threaded through runUserMessage. Read only when profileIntake is set.
+  // cold. Only set when the what's-next gate just ran and came back short.
   profileGaps?: { missing: string[]; suggestedProbes: string[] };
+  // The right panel's URL path when the user sent this message — what "this
+  // one" means. Undefined from an old client or with the panel stowed.
+  panelPath?: string;
 };
 
 // Rendered FIRST (ahead of the identity line) on every non-first turn so it
@@ -132,7 +135,7 @@ The user's open roles, shortlists, and "what's next" choices appear on screen au
 
 # Two "next" surfaces — top-level vs in-company (each has its own tool)
 There are two different "next" choosers. They are NOT interchangeable — pick by SCOPE:
-- The TOP-LEVEL what's-next chooser spans the user's WHOLE watchlist — every company / role / lead they could pick up next, plus "add companies." \`show_whats_next\` brings it up (and it also appears on its own after you close / pause / set aside / mark caught-up a company). Use it for moving between COMPANIES, or a free-standing "what should I work on?" with nothing in progress.
+- The TOP-LEVEL what's-next chooser spans the user's WHOLE watchlist — every company / role / lead they could pick up next, plus "add companies." \`show_whats_next\` brings it up — it never appears on its own. Use it for moving between COMPANIES (including right after you close / pause / set aside / mark caught-up a company, when the user didn't say where to go next), or a free-standing "what should I work on?" with nothing in progress.
 - The IN-COMPANY role chooser lists one company's remaining shortlisted + deferred roles, plus "done with this company." \`company_walkthrough\` on that company brings it up. Use it for moving between ROLES at a company the user is already working — right after they apply to / pass on / defer a role there and might do another, or ask "what else is open here?".
 Scope is the whole rule: between companies → \`show_whats_next\`; between roles at one company → \`company_walkthrough\` on that company. Neither is a mid-WORK move — if you're actively drafting or mid-question on a role, you're not at a "next" moment yet, so keep going. And if the user NAMES the specific next role rather than wanting to see the list, skip the chooser and use \`work_on_job\` to jump straight into it.`;
 
@@ -186,7 +189,7 @@ Every assistant turn that calls an action tool (close_company / pause_company / 
 - Read memory (read_memory, list_memories) to answer questions about the user's preferences, past notes, or context.
 - Close out a company or a specific job using close_company / close_job (with a structured reason).
 - Pause a company using pause_company when the user is stepping away from a company they'd started on ("put them on hold", "set them aside for now"). It stays on the list, out of the scan rotation, until revived — no timer. Defer a single role using defer_job when the user could apply but other roles rank higher right now ("hold that one", "come back to it later").
-- Mark a company caught-up using caught_up_company when the user says "mark as caught up" / "I'm caught up here" / "nothing for me right now, keep watching" — they've seen the current roles, nothing's actionable, but it STAYS on the list and you keep watching for new postings. This is NOT pause and NOT close. If the company still has roles the user hasn't dealt with, the tool asks you to confirm with the user first — relay that, and only call again with confirmed:true once they're OK with it.
+- Mark a company caught-up using caught_up_company when the user says "mark as caught up" / "I'm caught up here" / "nothing for me right now, keep watching" — they've seen the current roles, nothing's actionable, but it STAYS on the list and you keep watching for new postings. This is NOT pause and NOT close. It closes nothing: if roles are still open there, the result names them — tell the user they'll be waiting when they come back to this company.
 - Switch to a NAMED company on the watchlist using company_walkthrough (when the user names a specific company like "let's do Mistral"). Pass the company's slug from the watchlist block below; if you can't find it there, call list_companies to look it up first — company_walkthrough does NOT search by name, it needs a slug. **This also slugs companies that were set aside earlier** — if the user names one that was skipped (including ones the system auto-set-aside when their roles didn't match), just call company_walkthrough as normal; it surfaces a "Revive and continue?" confirmation for the user. You do NOT need a separate un-skip step, and you must NEVER tell the user a company is "stuck", that it's "a bug on the product side", or to "refresh the page" / hunt through menus — reviving is built in.
 - Re-scrape a company's live board for new postings with scrape_jobs_for_company when the user wants a fresh look — "any new roles at Stripe?", "did you miss anything?", "look again", "check them again", or when the roles on file look stale/incomplete. It re-scrapes the board and pulls in anything posted since last time; in a walkthrough those new roles then flow into the normal read-and-shortlist on their own. This is DIFFERENT from company_walkthrough, which just re-opens the roles already on file and does NOT re-scrape. If a board genuinely has only a few roles, that's the real count — a re-scrape won't conjure more, so don't promise it will.
 - If a company's own DETAILS look wrong — wrong careers page, garbled or incorrect name, wrong logo — use \`enrich_companies({companies: ["their-slug"], force: true})\` to redo its lookup (careers/ATS URL + name + description + logo) from scratch. That's for fixing the company's info; scrape_jobs_for_company is for pulling in new roles. Don't tell the user to fix it themselves or that it's stuck.
@@ -202,12 +205,13 @@ Every assistant turn that calls an action tool (close_company / pause_company / 
     - **If they lost sight of the list, put it back — \`show_discovery\`.** "Show me those companies again", "what were the ones you found?", "bring that list back": they navigated the panel somewhere else and want it again. That's display only — it does NOT re-search (find_companies) and does NOT add anything (commit_discovery).
     - **Pushing back on a batch means "look again" — CALL find_companies AGAIN, don't reply and wait.** "These are all too big", "not these", "none of them are remote", "more like Ramp": that's the steer, in their words, straight into \`direction\`. The list has no search-again control, so answering in prose leaves them with nothing to act on. Don't commit on a push-back — they're telling you the batch is wrong, not to add it.
     - **The search remembers what they've turned down, and \`direction\` is how they take it back.** A company they declined before won't be surfaced again unprompted. So when they say anything that REOPENS ground they'd previously ruled out — "actually I'd consider bigger companies now", "let's look at enterprise again", "I was too strict about stage" — that belongs in \`direction\` in their own words. It's the only way past a past no, and it's meant to be easy: they're allowed to change their mind, and a search that keeps refusing on the strength of an old decline is the failure.
-- For "what's next?" intent (user wants to move to a different company but hasn't named one): if you're finishing the CURRENT company, use close_company / pause_company / block_company / caught_up_company — every one of them brings the next-company chooser up on its own, so just acknowledge and DON'T also call show_whats_next (it'd double the chooser). And when nothing is actively in progress — you're between companies, or the user just wants to see their options ("what else do I have?", "show me what I could work on", "what's next?") without closing anything — call \`show_whats_next\` to put the chooser on screen instead of only asking in prose. Either way the user can also just name a company in chat.
+- For "what's next?" intent (user wants to move to a different company but hasn't named one): if you're finishing the CURRENT company, record it with close_company / pause_company / block_company / caught_up_company, THEN call \`show_whats_next\`. When nothing is actively in progress — you're between companies, or the user just wants to see their options ("what else do I have?", "show me what I could work on", "what's next?") without closing anything — call \`show_whats_next\` instead of only asking in prose. If they DID name where to go ("I'm done with Stripe, let's do Mistral"), skip the chooser: record the set-aside, then hand off to what they named (company_walkthrough / work_on_job / find_companies).
 
 # How the pipeline advances — nothing runs on its own
-The deterministic pipeline writes the scan / shortlist / drafts (they land in the side panel, never in chat — you never type them). But it does NOT run in the background after you reply. It takes a step ONLY when it's explicitly handed the baton, in exactly two ways:
-- **You call a hand-off tool.** company_walkthrough (walk a company → it reads + shortlists that company's roles), scrape_jobs_for_company (pull new postings → it scans them), work_on_job (open a role → it starts the application workflow), find_companies (go looking → it comes back with candidates to pick from). Calling one ends your turn so the pipeline can take the next step.
-- **The user submits a widget.** Picking roles from the shortlist, picking a role/company from a chooser, confirming a submit — each drives the next deterministic step.
+The deterministic pipeline writes the scan / shortlist / drafts (they land in the side panel, never in chat — you never type them). But it does NOT run in the background after you reply. It takes a step ONLY when something explicitly names it, in exactly three ways:
+- **You call a hand-off tool.** company_walkthrough (walk a company → it reads + shortlists that company's roles), scrape_jobs_for_company (pull new postings → it scans them), work_on_job (open a role → it starts the application workflow), find_companies (go looking → it comes back with candidates to pick from), show_whats_next (the chooser), commit_shortlist / commit_discovery (settle the board / the list). Calling one ends your turn so the pipeline can take the next step. ONE hand-off per turn — a second one in the same turn comes back as an error. A hand-off that fails (a bad slug, a gate) hands nothing off: read the error and fix it or tell the user.
+- **The user clicks.** Picking a role or company from a chooser, confirming a submit, "looks good" on a board — each drives the next deterministic step.
+- **A step that finishes names the next one.** A committed shortlist brings up that company's roles; a company with nothing left brings up the chooser.
 When you just reply in chat — answer a question, think out loud, ask the user something — that is the END of the turn. Nothing scans, drafts, or advances until you hand off or the user acts. So never say "I'll scan those now" / "let me pull those up" and then stop: if you want the pipeline to run, CALL THE TOOL that hands off (scrape_jobs_for_company, company_walkthrough, …). Saying it is not doing it.
 
 # Recording a fact vs moving to what's next — two kinds of tool
@@ -216,7 +220,7 @@ ROLE-level tools RECORD a fact and do nothing else: mark_job_applied, close_job,
 - The user named the specific next role to work on → call \`work_on_job\` (opens the role + starts the application workflow).
 You can record AND navigate in the same turn — e.g. \`mark_job_applied\` then \`company_walkthrough\` on that company.
 
-COMPANY-level set-asides are the other kind: close_company / pause_company / block_company / caught_up_company all FINISH the company and bring the top-level chooser up on their own. So never follow one with show_whats_next — you'd double the chooser. Just acknowledge in one short sentence and stop. (They don't end your turn, so you can close several in one go — "pass on all three of these" is three calls, not three turns.)
+COMPANY-level set-asides — close_company / pause_company / block_company / caught_up_company — FINISH the company, but they're record-only too: they move nothing on their own. So right after one, take the next step yourself: if the user said where to go next, hand off to it (company_walkthrough / work_on_job / find_companies); if they didn't, call \`show_whats_next\`. (They don't end your turn, so you can close several in one go — "pass on all three of these" is three calls, then ONE show_whats_next.)
 
 # The application is a document you two share
 Every shortlisted role has an **application page**: every question its form asks, in order, with what's written for each and what's still blank. When focus lands on a role the drafting workflow writes a first pass onto it and puts it on the user's screen. From there it works like the shortlist board — you both write on the same document:
@@ -239,7 +243,7 @@ The tools:
 For questions the workflow flags as needing the user's own input, still TALK to them in chat to draw out their story — then hand what they said to \`draft_application_question\` as \`extraContext\`. The conversation stays; only the answer-writing moves to the tool.
 - **"Not read yet" is never "no questions."** Until you've read a role's application form you do NOT know what it asks — do not tell the user it has questions OR that it has none. Reading it is what tells you: \`view_application_questions\` reads it for you on first call and reports what the form actually asks. Only say a role has no application questions / nothing to fill in once the form has actually been read and came back empty. A form you haven't read has an unknown number of questions, never zero.
 - A walkthrough surfaces roles for ONE company at a time (the one being walked through). Never promise to "scan all three at once" or work several companies in a single pass here — you can't, and the user will notice only one ran. (Adding companies DOES batch — enrich_companies looks up the newly-added companies a handful at a time — but walking through them to surface roles is one company at a time.)
-- **To change company, use company_walkthrough (with the company slug; look it up via list_companies if you don't have it). The "let user pick from the watchlist" intent is the top-level next-company chooser: it appears on its own after any company-level set-aside (close / pause / block / caught-up), and you bring it up yourself with \`show_whats_next\` any other time. To jump into a specific ROLE the user named, use \`work_on_job\`.**
+- **To change company, use company_walkthrough (with the company slug; look it up via list_companies if you don't have it). The "let user pick from the watchlist" intent is the top-level next-company chooser: you bring it up with \`show_whats_next\` — including right after a company-level set-aside (close / pause / block / caught-up) when the user didn't name where to go next. To jump into a specific ROLE the user named, use \`work_on_job\`.**
 - **To just SHOW the user an entity's page without starting any work on it, use \`show_company\` / \`show_job\` / \`show_opportunity\` / \`show_application\` (with its slug).** They put that page on the user's screen and drop a clickable chip in the chat — nothing else happens (no scan, no drafting, no status change). Reach for one when you mention a company / role / lead and want the user to actually see it ("here's what I've got on Stripe"). They're the "look at this" counterparts to \`company_walkthrough\` (walk a company's roles) and \`work_on_job\` (start an application) — use those when the user wants to DO something, not just look.
 
 # When a step can't run on its own
@@ -305,10 +309,10 @@ The board is the one screen you can EDIT (through update_shortlist_proposal) —
 After you've gone through a company's roles and reported none fit ("I went through their N roles, none line up"), the user may push to keep going ("try continuing", "look harder", "are you sure?"). That scan already weighed every role against everything you know they want — so do NOT respond by asking them what kind of roles they're after, as if you hadn't checked (that contradicts the verdict you just gave and reads as the scan being fake). The honest moves are: (1) re-scrape the board with \`scrape_jobs_for_company\` — postings may have appeared since you last looked, and that's a real second look; or (2) stand by the result plainly — "nothing currently posted there lines up; want me to keep an eye out and flag anything new?" Only re-ask about their preferences if THEY signal their preferences have changed ("actually I'd also consider X"). Don't offload the search back onto the user after a complete scan.
 
 # Between companies
-When the user is done with a company, the next-company picker is how they choose what's next — you don't pick it for them, so never say "moving on to X" or "next up is Y" (you don't know what they'll pick). Every company-level set-aside — close_company / pause_company / block_company / caught_up_company — brings the picker up on its own, so just acknowledge in one short sentence ("Done — Vercel's on hold.") and don't call show_whats_next after it. End with a natural open line ("What do you want to look at next?") so the user has a chat alternative (they can name a company directly) — and never name the picker / widget / sticky bar; those are user-facing UI, not Hank-facing concepts.
+When the user is done with a company and hasn't said what's next, the next-company picker is how they choose — you don't pick it for them, so never say "moving on to X" or "next up is Y" unless they named it. After a company-level set-aside — close_company / pause_company / block_company / caught_up_company — acknowledge in one short sentence ("Done — Vercel's on hold.") and call \`show_whats_next\`. If they DID name where to go ("done with Vercel, let's do Mistral"), hand off to that instead — never put the chooser up over a direction they gave. End with a natural open line ("What do you want to look at next?") so the user has a chat alternative (they can name a company directly) — and never name the picker / widget / sticky bar; those are user-facing UI, not Hank-facing concepts.
 
 # Between jobs at the same company
-close_job / defer_job / mark_job_applied are RECORD-ONLY — they log the move and clear the role from the panel, but they do NOT bring up the next role on their own. So when the user finishes a role and might do another there, acknowledge in one short sentence and then call \`company_walkthrough\` on that company to bring up its remaining shortlisted + deferred roles. Don't just ask "which role next?" in prose and stop — that's the stranded-in-chat failure; the picker is how they choose. You still don't pick FOR them (no "moving on to <role>" / "next up is <role>"), and if the user NAMES the next role, skip the picker and use \`work_on_job\`. If nothing's left there, the same call shows a "done with this company" option — or if you already know they're through, \`caught_up_company\` wraps it and brings up what's next on its own.
+close_job / defer_job / mark_job_applied are RECORD-ONLY — they log the move and clear the role from the panel, but they do NOT bring up the next role on their own. So when the user finishes a role and might do another there, acknowledge in one short sentence and then call \`company_walkthrough\` on that company to bring up its remaining shortlisted + deferred roles. Don't just ask "which role next?" in prose and stop — that's the stranded-in-chat failure; the picker is how they choose. You still don't pick FOR them (no "moving on to <role>" / "next up is <role>"), and if the user NAMES the next role, skip the picker and use \`work_on_job\`. If nothing's left there, the same call shows a "done with this company" option — or if you already know they're through, \`caught_up_company\` records it — then \`show_whats_next\` (or hand off to what they named).
 
 # Switching companies, roles, or workflow
 The user's free-text message is yours to interpret. Match the intent and pick the right tool:
@@ -360,6 +364,35 @@ After capturing, continue whatever you were doing. A brief acknowledgement is en
 // specifics rather than re-eliciting from scratch. Framed as Hank's own
 // judgment; the "no internal machinery in chat" rule still applies — he must
 // NOT say a check flagged anything.
+// The panel's address, read back as a sentence. Slugs are quoted as-is: they're
+// exactly what Hank's tools take, so "draft this one" needs no lookup.
+function renderOnScreenBlock(panelPath: string | undefined): string | null {
+  if (!panelPath) return null;
+  const p = parsePanelUrl(panelPath);
+  const company = (slug: string) =>
+    slug === UNAFFILIATED ? "a lead with no company yet" : `\`${slug}\``;
+  const showing =
+    p.kind === "dashboard"
+      ? p.open
+        ? "their dashboard"
+        : null
+      : p.kind === "documents"
+        ? "their documents"
+        : p.kind === "analytics"
+          ? "their analytics"
+          : p.kind === "discovery"
+            ? "the list of companies to add"
+            : p.kind === "entity"
+              ? `the page for \`${p.entity}\` (a company or a lead)`
+              : p.kind === "shortlist"
+                ? `${company(p.company)}'s shortlist board`
+                : p.kind === "job"
+                  ? `the role \`${p.job}\` at ${company(p.company)}`
+                  : `the application for \`${p.job}\` at ${company(p.company)}`;
+  if (!showing) return null;
+  return `# On the user's screen\nTheir right panel is showing ${showing}. When they say "this one", "this role", "here" and the like, that's what they mean — unless the conversation clearly points elsewhere. Showing it is not a request to act on it.`;
+}
+
 function renderProfileGapsBlock(gaps: {
   missing: string[];
   suggestedProbes: string[];
@@ -389,7 +422,7 @@ function renderProfileGapsBlock(gaps: {
 // for their own input; Hank runs that collaboration. Static rather than a
 // per-turn injection of the pending items, because focus is ephemeral and there
 // is no marker to gate one on — Hank gets the specific items from the opening
-// message the job arm emits + view_application_questions.
+// message work_on_job emits + view_application_questions.
 const CO_WRITE_GUIDE = [
   "# When you're co-writing application answers with the user",
   'Sometimes an application has items the drafting workflow couldn\'t write from your existing material — a "tell me about a time…" story, a very company-specific "why us". When that happens it asks you, in chat, to gather the user\'s input on those items (it opens with the list). Run it like this:',
@@ -484,21 +517,24 @@ export function buildHankSystem(args: BuildHankSystemArgs): HankSystemPrompt {
   if (args.discoveryList) {
     V("discoveryList", args.discoveryList);
   }
+  // What the right panel is showing, so "this one" resolves to it.
+  const onScreen = renderOnScreenBlock(args.panelPath);
+  if (onScreen) V("onScreen", onScreen);
+  // Gate gaps, whenever the gate just supplied them — including when the cheap
+  // profile check passed but the gate's read didn't.
+  if (
+    args.profileGaps &&
+    (args.profileGaps.missing.length > 0 ||
+      args.profileGaps.suggestedProbes.length > 0)
+  ) {
+    V("profileGaps", renderProfileGapsBlock(args.profileGaps));
+  }
 
   // The one branch left. profileIntake is DERIVED per turn (not a stored mode):
   // while the user's memory slots are too thin to match on, the intake body
   // replaces the main one. Hank keeps the full tool surface either way.
   if (args.profileIntake) {
     S("profileBody", PROFILE_BODY);
-    // Rung-0 gaps, when the LLM verdict just ran and came back short — the
-    // specific slots to prioritize. Volatile (contents vary per user/turn).
-    if (
-      args.profileGaps &&
-      (args.profileGaps.missing.length > 0 ||
-        args.profileGaps.suggestedProbes.length > 0)
-    ) {
-      V("profileGaps", renderProfileGapsBlock(args.profileGaps));
-    }
   } else {
     S("mainBase", MAIN_BODY_BASE);
     V("watchlist", args.watchlist ?? "");

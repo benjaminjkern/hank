@@ -1,8 +1,10 @@
 import { z } from "zod";
 
+import { sayUiEvents } from "@/server/contracts";
 import { COMPANY_BLOCK_REASONS } from "@/server/entities/companies/companyInteractionInputs";
 import { blockCompany } from "@/server/entities/companies/setCompanyAside";
 import type { CompanyBlockReason } from "@/server/generated/prisma/client";
+import { buildShowEvents } from "@/server/panels/showEvents";
 
 import { resolveCompanyArg } from "../lib/resolveEntityArg";
 
@@ -54,9 +56,11 @@ export const blockCompanyTool: ToolDef<{
       reason: input.reason,
       note: input.note,
     });
+    // The panel was showing the company that just ended.
+    await sayUiEvents(ctx.say, (await buildShowEvents(ctx.userId)).events);
     return {
-      content: `Set aside (${input.reason}). Wrapped up this company — what's next comes up on its own after your reply, so don't ask what they want to do next.`,
-      endedCompanyId: companyId,
+      content: `Set aside (${input.reason}). The panel is back on their dashboard. Nothing moves on its own after this: if the user already said where to go next, hand off to it now (company_walkthrough / work_on_job / find_companies); if they didn't, call show_whats_next to put their options up.`,
+      ended: "company",
     };
   },
 };

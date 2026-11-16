@@ -327,6 +327,11 @@ const eslintConfig = defineConfig([
         },
         { type: "views", partialMatch: false, pattern: "src/server/views/**" },
         {
+          type: "panels",
+          partialMatch: false,
+          pattern: "src/server/panels/**",
+        },
+        {
           type: "procedures",
           partialMatch: false,
           pattern: "src/server/procedures/**",
@@ -375,6 +380,7 @@ const eslintConfig = defineConfig([
                         "platform",
                         "entities",
                         "views",
+                        "panels",
                         "procedures",
                         "subagents-lib",
                         "subagents-registry",
@@ -402,6 +408,7 @@ const eslintConfig = defineConfig([
                     types: {
                       anyOf: [
                         "views",
+                        "panels",
                         "procedures",
                         "subagents-lib",
                         "subagents-registry",
@@ -433,6 +440,7 @@ const eslintConfig = defineConfig([
                   element: {
                     types: {
                       anyOf: [
+                        "panels",
                         "procedures",
                         "widgets",
                         "tools",
@@ -458,6 +466,7 @@ const eslintConfig = defineConfig([
                       anyOf: [
                         "entities",
                         "views",
+                        "panels",
                         "procedures",
                         "subagents-lib",
                         "subagents-registry",
@@ -485,7 +494,13 @@ const eslintConfig = defineConfig([
                 to: {
                   element: {
                     types: {
-                      anyOf: ["entities", "views", "procedures", "widgets"],
+                      anyOf: [
+                        "entities",
+                        "views",
+                        "panels",
+                        "procedures",
+                        "widgets",
+                      ],
                     },
                   },
                 },

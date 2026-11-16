@@ -7,7 +7,7 @@
 // (`scrape_jobs_for_company`, or the walkthrough on entry).
 //
 // Three ways in, one chain underneath: the `enrich_companies` tool, the
-// company_checklist / company_disambiguation submissions, and the walkthrough's
+// discovery commit and the company_disambiguation answer, and the walkthrough's
 // on-entry backfill. Import from `@/server/procedures/registry/enrichCompanies`
 // — never a deep path, so the internal file split stays free to move.
 

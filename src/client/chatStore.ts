@@ -1324,6 +1324,12 @@ export const useChatStore = create<State & Actions>((set, get) => ({
             typeof Intl !== "undefined"
               ? Intl.DateTimeFormat().resolvedOptions().timeZone
               : undefined,
+          // What the right panel is showing — its address is the URL path
+          // (PanelUrlSync keeps them in step), so Hank can resolve "this one".
+          panelPath:
+            typeof window !== "undefined"
+              ? window.location.pathname
+              : undefined,
         }),
         signal: stopController.signal,
       });
@@ -1593,7 +1599,7 @@ function appendAssistantStatus(
   ]);
 }
 
-// Append a pipeline widget segment (shortlist_proposal etc.). One widget per
+// Append a pipeline widget segment (next_job_picker etc.). One widget per
 // segment; PipelineWidgetSlot reads the latest widget out of message history.
 function appendAssistantWidget(
   set: (fn: (s: State) => Partial<State>) => void,

@@ -1,6 +1,6 @@
 // Direct company-status flips used outside a chat turn — nothing ends here, so
 // these are plain CompanyInteraction updates rather than the set-asides in
-// setCompanyAside.ts (which report `endedCompanyId` and get narrated). All clear
+// setCompanyAside.ts (which end a company and get narrated). All clear
 // every reason field per the clear-on-transition rule, in one place so the
 // callers can't drift on the cleared-field set.
 //

@@ -1,6 +1,6 @@
 // The bounded worker pool over the per-company enrich — the SINGLE primitive
-// behind the enrich_companies tool, the company_checklist / disambiguation
-// submissions, and the walkthrough's on-entry backfill.
+// behind the enrich_companies tool, the discovery commit and the disambiguation
+// answer, and the walkthrough's on-entry backfill.
 //
 // Reports one progress event per company as each starts and finishes, through
 // the optional `onProgress` — the submission handlers render them; the tool and

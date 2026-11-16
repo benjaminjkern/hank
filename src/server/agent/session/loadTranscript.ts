@@ -3,7 +3,10 @@
 // same-role coalescing, thinking-block normalization, and the provenance notes
 // that tell Hank what the deterministic layer already put on screen.
 
-import { renderWidgetText } from "@/client/components/Chat/widgets/registry";
+import {
+  isRetiredWidgetKind,
+  renderWidgetText,
+} from "@/client/components/Chat/widgets/registry";
 import { buildProvenanceMessage } from "@/server/agent/session/uiProvenance";
 import { prisma } from "@/server/db/prisma";
 import type { Prisma } from "@/server/generated/prisma/client";
@@ -338,9 +341,14 @@ function pipelineRowNoteText(blocks: PipelineUiBlock[]): string | null {
       );
       if (text) parts.push(`Shown to the user: ${text}`);
     } else if (b.type === "pipeline_widget") {
-      const rendered = renderWidgetText(b.kind ?? "", b.payload);
+      const kind = b.kind ?? "";
+      const rendered = renderWidgetText(kind, b.payload);
       if (rendered)
         parts.push(`Shown to the user (interactive widget):\n${rendered}`);
+      else if (isRetiredWidgetKind(kind))
+        parts.push(
+          "Shown to the user: a question from an older version of the app, which can no longer be answered by clicking — if it's still relevant, they'll say so in chat.",
+        );
     } else if (b.type === "pipeline_activity") {
       // Deterministic bookkeeping the pipeline did between turns that was NOT
       // shown to the user (memory consolidation, history compaction, etc.).

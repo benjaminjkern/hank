@@ -1,4 +1,4 @@
-// The walkthrough company arm's Step 2 — put the shortlist board on screen.
+// The company walkthrough's Step 2 — put the shortlist board on screen.
 //
 // The board is a persisted negotiation over JobInteraction stance columns: the
 // seed writes one stance per pool row, the user edits from the panel, Hank
@@ -18,6 +18,7 @@ import type { Say } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { markCompanyShortlisting } from "@/server/entities/companies/markCompanyStatus";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
+import { buildShortlistBoardEvents } from "@/server/panels/showEvents";
 import type { RunContext } from "@/server/platform/runContext";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
@@ -27,7 +28,6 @@ import {
   type ShortlistJobsOutput,
 } from "@/server/subagents/registry/shortlistJobs";
 import { countBoard, type BoardCounts } from "@/server/views/shortlistBoard";
-import { buildShortlistBoardEvents } from "@/server/views/showEvents";
 import type { ShortlistBoardView } from "@/shared/views/shortlistBoard";
 
 import { loadShortlistJobsInput } from "./loadShortlistJobsInput";

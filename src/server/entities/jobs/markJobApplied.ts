@@ -35,8 +35,8 @@ export type MarkJobAppliedResult = {
   // Resolved here (not by the caller) because the DIRECT-vs-RECRUITER default
   // reads the pre-update row's opportunityId inside the transaction.
   applyChannel: ApplyChannel;
-  // Next SHORTLISTED job at the same company so the walkthrough state machine
-  // can focus it. Null when no more shortlisted at this company (caught up).
+  // Next SHORTLISTED job at the same company, for a caller that wants to offer
+  // it. Null when no more shortlisted at this company (caught up).
   nextJobId: string | null;
 };
 

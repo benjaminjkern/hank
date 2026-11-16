@@ -1,64 +1,66 @@
-// next_company_picker dispatch. This widget renders between things, so the
-// dispatch lives at the chat-entry level (dispatchTopLevelSubmission dispatches it
-// deterministically before the runner is invoked). The parser lives in ./parse.
+// The between-things chooser's answer. Per pick:
+//   - "company" → bump NEW/PAUSED → READY (a PAUSED pick is a revive), then walk
+//     it. Picking is not itself progress, so it writes the walkable state and
+//     lets the walkthrough own every status after it.
+//   - "opportunity" → put the lead on screen.
+//   - "job" → a DEFERRED pick revives to SHORTLISTED, then work the role.
+//   - "add_companies" → Hank asks what they're after; he grows the watchlist via
+//     find_companies / create_companies once they say.
 //
-// Per kind:
-//   - "company" → show the company + bump NEW/PAUSED → READY (a PAUSED pick is a
-//     revive). Picking is not itself progress, so it writes the walkable state
-//     and lets the walkthrough own every status after it.
-//   - "opportunity" → show the opportunity.
-//   - "job" → show the role; a DEFERRED pick revives to SHORTLISTED.
-//   - "add_companies" → hands the turn to Hank to ask what they're after. He
-//     grows the watchlist via find_companies / create_companies once they say.
-//
-// It writes no session state: focus is ephemeral, so the entryTarget IS the
-// handoff.
+// Typed equivalents: company_walkthrough, work_on_job, find_companies.
 
-import type { EntryTarget } from "@/server/contracts";
+import { sayUiEvents, statusEvent } from "@/server/contracts";
+import type { Entry } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { companyStatusFields } from "@/server/entities/companies/companyStatusFields";
 import {
   CompanyStatus,
   JobInteractionStatus,
 } from "@/server/generated/prisma/client";
+import { buildShowEvents, showTargetFor } from "@/server/panels/showEvents";
 import { formatFocusRefToken } from "@/shared/focusRefToken";
 
-import type { NextCompanyPickerSubmission } from "./parse";
+import {
+  parseNextCompanyPickerSubmission,
+  type NextCompanyPickerSubmission,
+} from "../parse";
+
+import type { WidgetAnswerDef } from "./types";
 
 // Asking beats guessing here: a search run off the profile alone comes back
 // adjacent to what they already track, and correcting it costs a whole round.
 const ADD_COMPANIES_NUDGE =
   "(They want to add companies to their watchlist but haven't said what kind. Ask what they're after — sector, stage, the shape of the role — or whether they already have names in mind. Don't search yet.)";
 
-// A pick either names somewhere to GO or opens a conversation, and the two need
-// different things from the caller — so they're separate variants rather than
-// one shape with an optional target. A missing target on an "enter" is a stale
-// row: the runner falls through to "what's next", which re-renders the picker
-// against current data. That fall-through is the right answer for a race and
-// the wrong one for add-companies, which is why the latter is its own variant.
-type NextCompanyPickerDispatchResult =
-  | {
-      kind: "enter";
-      // Narration line to surface in chat. Caller emits as a `pipeline_status`
-      // event AND persists as a `pipeline_status` content block on a new
-      // assistant ChatMessage so it survives refresh.
-      statusText: string;
-      // The entity the ensuing silent-entry runner should dispatch on —
-      // threaded in-memory as the runner's entryTarget (there's no focus slot
-      // to read).
-      entryTarget?: EntryTarget;
-    }
-  // Nothing to run and nothing worth canning: Hank opens the next turn on this
-  // instruction. See ChatTurnRunner's openingNudge.
-  | { kind: "ask"; openingNudge: string };
+export const nextCompanyPickerAnswer: WidgetAnswerDef<NextCompanyPickerSubmission> =
+  {
+    parse: parseNextCompanyPickerSubmission,
+    answer: async (submission, args) => {
+      const pick = await resolvePick(args.userId, submission);
+      if (pick.kind === "ask") return { next: pick.next };
+      // Say where we're going and open the panel on it before the entry runs —
+      // the walkthrough it enters can take a while to say anything itself.
+      await args.say(statusEvent(pick.statusText));
+      await sayUiEvents(
+        args.say,
+        (await buildShowEvents(args.userId, showTargetFor(pick.next))).events,
+      );
+      // A pick whose row vanished between render and click re-renders the
+      // chooser against current data.
+      return { next: pick.next ?? { kind: "show_whats_next" } };
+    },
+  };
 
-export async function dispatchNextCompanyPicker(args: {
-  userId: string;
-  sessionId: string;
-  submission: NextCompanyPickerSubmission;
-}): Promise<NextCompanyPickerDispatchResult> {
-  const { userId, submission } = args;
+// A pick either names somewhere to GO (with the line that announces it) or opens
+// a conversation. A missing `next` on a "go" is a stale row.
+type Pick =
+  | { kind: "go"; statusText: string; next?: Entry }
+  | { kind: "ask"; next: Entry };
 
+async function resolvePick(
+  userId: string,
+  submission: NextCompanyPickerSubmission,
+): Promise<Pick> {
   if (submission.choice === "company") {
     const ci = await prisma.companyInteraction.findUnique({
       where: {
@@ -67,10 +69,9 @@ export async function dispatchNextCompanyPicker(args: {
       select: { status: true, company: { select: { name: true } } },
     });
     if (!ci) {
-      // Race: the company was deleted between render and submit. Returning no
-      // entryTarget falls the runner through to "what's next", which re-renders.
+      // Race: the company was deleted between render and submit.
       return {
-        kind: "enter",
+        kind: "go",
         statusText: "That company isn't available anymore — let me re-check.",
       };
     }
@@ -89,9 +90,9 @@ export async function dispatchNextCompanyPicker(args: {
       });
     }
     return {
-      kind: "enter",
+      kind: "go",
       statusText: `Picking up ${formatFocusRefToken("company", submission.companyId, ci.company.name)}.`,
-      entryTarget: { kind: "company", id: submission.companyId },
+      next: { kind: "company_walkthrough", companyId: submission.companyId },
     };
   }
 
@@ -102,15 +103,15 @@ export async function dispatchNextCompanyPicker(args: {
     });
     if (!opp || opp.userId !== userId) {
       return {
-        kind: "enter",
+        kind: "go",
         statusText:
           "That opportunity isn't available anymore — let me re-check.",
       };
     }
     return {
-      kind: "enter",
+      kind: "go",
       statusText: `Picking up ${formatFocusRefToken("opportunity", submission.opportunityId, opp.label)}.`,
-      entryTarget: { kind: "opportunity", id: submission.opportunityId },
+      next: { kind: "opportunity", opportunityId: submission.opportunityId },
     };
   }
 
@@ -131,7 +132,7 @@ export async function dispatchNextCompanyPicker(args: {
     if (!ji) {
       // Race: the job/JobInteraction vanished between render and submit.
       return {
-        kind: "enter",
+        kind: "go",
         statusText: "That role isn't available anymore — let me re-check.",
       };
     }
@@ -165,17 +166,14 @@ export async function dispatchNextCompanyPicker(args: {
             ? `It's been quiet on ${roleChip}${at} since the interview — want to follow up with them?`
             : `Picking ${roleChip}${at} back up.`;
     return {
-      kind: "enter",
+      kind: "go",
       statusText,
-      entryTarget: { kind: "job", id: submission.jobId },
+      next: { kind: "work_on_job", jobId: submission.jobId },
     };
   }
 
   // add_companies — nothing to dispatch on. Hank opens instead of a canned
   // line, because the useful question here depends on what they've been looking
   // at ("more early-stage infra like last time?"), which a fixed string can't ask.
-  return {
-    kind: "ask",
-    openingNudge: ADD_COMPANIES_NUDGE,
-  };
+  return { kind: "ask", next: { kind: "hank", nudge: ADD_COMPANIES_NUDGE } };
 }

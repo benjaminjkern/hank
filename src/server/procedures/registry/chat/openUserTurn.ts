@@ -13,7 +13,7 @@
 // when the user's panel marks ARE the message, and no message at all otherwise.
 
 import { appendUserMessage } from "@/server/agent/session";
-import { buildPanelEditBlocks } from "@/server/widgets/panelEditRelay";
+import { buildPanelEditBlocks } from "@/server/panels/editRelay";
 
 import type { ChatArgs } from "./runChat";
 import type Anthropic from "@anthropic-ai/sdk";

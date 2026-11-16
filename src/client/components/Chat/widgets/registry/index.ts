@@ -21,42 +21,18 @@ import { addMoreCompaniesDef } from "./addMoreCompanies/def";
 import { companyDisambiguationDef } from "./companyDisambiguation/def";
 import { confirmApplicationSubmitDef } from "./confirmApplicationSubmit/def";
 import { confirmReviveCompanyDef } from "./confirmReviveCompany/def";
-import { defineWidget } from "./defineWidget";
 import { nextCompanyPickerDef } from "./nextCompanyPicker/def";
 import { nextJobPickerDef } from "./nextJobPicker/def";
-import { shortlistProposalDef } from "./shortlistProposal/def";
-import { shortlistRegenGateDef } from "./shortlistRegenGate/def";
-import { shortlistScanGateDef } from "./shortlistScanGate/def";
 
 import type { ErasedWidgetDef } from "./defineWidget";
 
-// REPLAY-ONLY: the discovery panel replaced the checklist, so nothing emits or
-// submits this kind — but persisted `pipeline_widget` blocks in old sessions
-// carry it, and renderWidgetText is what turns those into Hank's grounding note.
-const companyChecklistReplayDef = defineWidget<{
-  suggestions?: Array<{ name?: string; reasoning?: string }>;
-}>({
-  kind: "company_checklist",
-  toText: (p) => {
-    const lines = (p.suggestions ?? []).map(
-      (s, i) =>
-        `  ${i + 1}. ${s.name ?? "?"}${s.reasoning ? `\n      \u21b3 ${s.reasoning}` : ""}`,
-    );
-    return `[Companies to add — the user picked which to add to their watchlist:\n${lines.join("\n")}]`;
-  },
-});
-
 const WIDGET_DEFS = {
-  shortlist_proposal: shortlistProposalDef,
-  company_checklist: companyChecklistReplayDef,
   add_more_companies: addMoreCompaniesDef,
   company_disambiguation: companyDisambiguationDef,
   confirm_revive_company: confirmReviveCompanyDef,
   confirm_application_submit: confirmApplicationSubmitDef,
   next_company_picker: nextCompanyPickerDef,
   next_job_picker: nextJobPickerDef,
-  shortlist_scan_gate: shortlistScanGateDef,
-  shortlist_regen_gate: shortlistRegenGateDef,
 } satisfies Record<WidgetKind, ErasedWidgetDef>;
 
 // Runtime-safe accessor (kind arrives as a plain string from persisted history
@@ -66,10 +42,17 @@ export function getWidgetDef(kind: string): ErasedWidgetDef | undefined {
   return (WIDGET_DEFS as Record<string, ErasedWidgetDef>)[kind];
 }
 
+// A kind no longer in the registry — only old persisted history carries one.
+// Nothing emits an unregistered kind (emitters take the WidgetKind union), so
+// unknown here means retired, not malformed.
+export function isRetiredWidgetKind(kind: string): boolean {
+  return getWidgetDef(kind) === undefined;
+}
+
 // Render `kind` + `payload` to the plain TEXT the user saw — the visible
 // labels / options / reasoning, never raw JSON, ids, or the kind enum. Returns
-// null for an unknown kind, a kind with no text projection (the shortlist
-// gates), or a malformed payload. Never throws — a bad historical payload must
+// null for a retired kind, a kind with no text projection, or a malformed
+// payload. Never throws — a bad historical payload must
 // not break the whole chat replay (loadSessionMessages runs on every turn).
 //
 // This is the single source of truth for "what did the widget show the human",

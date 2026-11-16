@@ -4,7 +4,7 @@
 // caller has to phrase, not an exception.
 //
 // Neither touches the panel. Focus is ephemeral: the caller threads the company
-// as the state machine's entry target and emits its own show events.
+// in the Entry it queues and emits its own show events.
 
 import { prisma } from "@/server/db/prisma";
 import {

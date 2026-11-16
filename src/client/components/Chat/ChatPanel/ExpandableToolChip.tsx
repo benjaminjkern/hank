@@ -4,7 +4,6 @@ import type { ToolSegment } from "@/client/chatStore";
 import { stripToolErrorMarker } from "@/shared/toolErrorMarker";
 
 import { Caret } from "../../RightPanel/shared/Caret";
-import { tryParseShortlistProposal } from "../widgets/registry/shortlistProposal/def";
 
 import { SegmentView } from "./SegmentView";
 import {
@@ -23,11 +22,6 @@ import {
 //   2. the result string the tool returned (when available),
 //   3. recursive children — sub-agent inner steps (text + nested tool chips
 //      that are themselves expandable).
-// For propose_shortlist / propose_shortlist_auto with a parsed payload, the
-// header keeps its compact "name · company · count" caption so scrollback
-// stays readable; the expand panel still works the same. Both tools are RETIRED
-// — these names are matched only to replay sessions that predate their removal,
-// so don't drop the branch as dead code.
 export function ExpandableToolChip({
   segment,
   role,
@@ -36,22 +30,6 @@ export function ExpandableToolChip({
   role: "user" | "assistant";
 }) {
   const [open, setOpen] = useState(false);
-
-  const compactShortlist = useMemo(() => {
-    if (
-      (segment.name === "propose_shortlist" ||
-        segment.name === "propose_shortlist_auto") &&
-      segment.status === "done" &&
-      segment.result
-    ) {
-      return tryParseShortlistProposal(segment.result);
-    }
-    return null;
-  }, [segment.name, segment.status, segment.result]);
-
-  const chipLabel = compactShortlist
-    ? `${segment.name} · ${compactShortlist.companyName} · ${compactShortlist.viableJobs.length}`
-    : segment.name;
 
   const hasChildren = segment.children && segment.children.length > 0;
   const inputJson = useMemo(() => {
@@ -70,7 +48,7 @@ export function ExpandableToolChip({
         aria-expanded={open}
       >
         <Caret open={open} size={9} />
-        <ToolChip $status={segment.status}>{chipLabel}</ToolChip>
+        <ToolChip $status={segment.status}>{segment.name}</ToolChip>
       </ToolHeaderButton>
       {segment.progressLabel && segment.status === "pending" && (
         <ToolProgress>{segment.progressLabel}</ToolProgress>

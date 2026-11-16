@@ -1,12 +1,13 @@
 import { z } from "zod";
 
+import { sayUiEvents } from "@/server/contracts";
 import {
   resolveQuestionId,
   persistApplicationAnswer,
 } from "@/server/entities/jobs/applicationQuestions";
+import { buildApplicationEvents } from "@/server/panels/showEvents";
 import { toolError } from "@/server/platform/agent/toolError";
 import { draftSingleApplicationItem } from "@/server/procedures/registry/draftApplication/draftSingleApplicationItem";
-import { buildApplicationEvents } from "@/server/views/showEvents";
 
 import { resolveJobArg } from "../lib/resolveEntityArg";
 
@@ -101,9 +102,9 @@ export const draftApplicationQuestionTool: ToolDef<{
 
     const label = isCover ? "the cover letter" : `"${resolved.text}"`;
     const { events } = await buildApplicationEvents(ctx.userId, jobId);
+    await sayUiEvents(ctx.say, events);
     return {
       content: `Drafted ${label} onto the application page for ${persisted.jobSlug} and put it on the user's screen. Refine with another draft_application_question call if they want changes.`,
-      events,
     };
   },
 };

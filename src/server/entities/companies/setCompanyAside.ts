@@ -2,7 +2,7 @@
 // blocked, paused, caught up. Each is a single coherent state change, and each
 // returns FACTS — no prose, no UI events. How it reads is the caller's: the tool
 // writes Hank-facing content, the walkthrough narrates to the user, and those
-// are different audiences (see procedures/registry/walkthrough/narration.ts).
+// are different audiences (see procedures/registry/companyWalkthrough/narration.ts).
 //
 // Every write goes through `companyStatusFields()` so the clear-on-transition
 // rule can't be hand-rolled wrong, and every company-feed row through
@@ -177,7 +177,7 @@ export async function pauseCompany(args: {
   });
 }
 
-// No open-roles gate here: the caller owns it — the walkthrough state machine has
+// No open-roles gate here: the caller owns it — the company walkthrough has
 // already verified nothing is mid-flight, and the caught_up_company tool bails to
 // a confirmation of its own.
 //

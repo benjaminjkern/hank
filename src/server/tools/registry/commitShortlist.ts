@@ -1,9 +1,10 @@
 import { z } from "zod";
 
+import { sayUiEvents } from "@/server/contracts";
 import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
+import { buildShowEvents } from "@/server/panels/showEvents";
 import { toolError } from "@/server/platform/agent/toolError";
 import { runCommitShortlist } from "@/server/procedures/registry/commitShortlist";
-import { buildShowEvents } from "@/server/views/showEvents";
 
 import { slugLookupError } from "../lib/slugLookupError";
 
@@ -17,22 +18,13 @@ import type { ToolDef } from "../lib/types";
 // picker next, and ending Hank's turn is what denies a free post-commit turn to
 // narrate a picker that isn't his to draw. One company per commit; another
 // company's open board just stays open.
-export const commitShortlistTool: ToolDef<{
-  company: string;
-  confirmed?: boolean;
-}> = {
+export const commitShortlistTool: ToolDef<{ company: string }> = {
   name: "commit_shortlist",
   handoff: true,
   description:
-    "Lock in the shortlist board at a company — call this ONLY when the user has agreed the board is right ('looks good', 'lock it in', 'go with that'). Every stance becomes real: picks become the shortlist, borderline roles are set aside (reversible), and passes are closed. The role picker comes up on its own afterwards — calling this ends your turn, so say anything you want to say BEFORE the call. IMPORTANT: when NOTHING on the board is a pick and nothing is held, committing settles the whole company — the passes close and the company reads as caught up until something new is posted. Tell the user that plainly BEFORE you commit an all-pass board; never let 'lock it in' silently mean 'we're done here'. Never commit while the user is still pushing back. If the board would close a role they'd already started applying to, the tool asks you to check with them first; call again with confirmed:true once they say go. `company` is the company's slug.",
+    "Lock in the shortlist board at a company — call this ONLY when the user has agreed the board is right ('looks good', 'lock it in', 'go with that'). Every stance becomes real: picks become the shortlist, borderline roles are set aside (reversible), and passes are closed. The role picker comes up on its own afterwards — calling this ends your turn, so say anything you want to say BEFORE the call. IMPORTANT: when NOTHING on the board is a pick and nothing is held, committing settles the whole company — the passes close and the company reads as caught up until something new is posted. Tell the user that plainly BEFORE you commit an all-pass board; never let 'lock it in' silently mean 'we're done here'. Never commit while the user is still pushing back. A pass on a role the user had already started applying to sets it aside instead of closing it; if they really want it closed, close_job it. `company` is the company's slug.",
   parser: z.object({
     company: z.string().describe("The company's slug."),
-    confirmed: z
-      .boolean()
-      .optional()
-      .describe(
-        "Pass true only AFTER the user has confirmed they're fine closing a role they'd started applying to (the tool told you to ask). Leave unset on the first call.",
-      ),
   }),
   async handle(input, ctx) {
     const r = await resolveCompanyBySlug(ctx.userId, input.company);
@@ -41,16 +33,7 @@ export const commitShortlistTool: ToolDef<{
       ...ctx,
       companyId: r.value.id,
       companyName: r.value.slug,
-      confirmed: input.confirmed,
     });
-    if (!result.ok && result.code === "CONFIRM_CLOSING_STARTED") {
-      const list = result.startedTitles.map((t) => `"${t}"`).join(", ");
-      return toolError(
-        "GATE_BLOCKED",
-        `nothing committed yet — this board would close ${result.startedTitles.length === 1 ? "a role" : "roles"} the user already started applying to (${list}). Their draft stays on the record either way, but the role gets closed out. Ask whether they want that, or whether they'd rather set it aside and keep it in play; then call again with confirmed:true.`,
-        "commit_shortlist:closing_started",
-      );
-    }
     if (!result.ok) {
       return toolError(
         "GATE_BLOCKED",
@@ -61,12 +44,20 @@ export const commitShortlistTool: ToolDef<{
     // The board closes with the commit — leaving it on screen would offer a
     // surface with nothing left to decide. Back to the company page.
     const show = await buildShowEvents(ctx.userId, { companyId: r.value.id });
+    await sayUiEvents(ctx.say, show.events);
+    // A continuation: the commit's tail surfaces what the round produced — it
+    // must not start new work at the company (no re-scrape).
+    ctx.queue({
+      kind: "company_walkthrough",
+      companyId: r.value.id,
+      continuation: true,
+    });
+    const keptStarted =
+      result.keptStarted.length > 0
+        ? ` The board passed on ${result.keptStarted.map((t) => `"${t}"`).join(", ")}, but the user had started applying, so ${result.keptStarted.length === 1 ? "it was" : "they were"} set aside instead of closed (the user was told). close_job only if they ask.`
+        : "";
     return {
-      content: `Committed the ${r.value.slug} shortlist: ${result.picked} shortlisted, ${result.setAside} set aside, ${result.closed} closed. The board is closed now — changing any of it from here is a normal record change (close_job / defer_job), not a board edit. The deterministic layer takes it from here.`,
-      events: show.events,
-      // A continuation: the commit's tail surfaces what the round produced —
-      // it must not start new work at the company (no re-scrape).
-      entryTarget: { kind: "company", id: r.value.id, continuation: true },
+      content: `Committed the ${r.value.slug} shortlist: ${result.picked} shortlisted, ${result.setAside} set aside, ${result.closed} closed.${keptStarted} The board is closed now — changing any of it from here is a normal record change (close_job / defer_job), not a board edit. The walkthrough takes it from here.`,
     };
   },
 };

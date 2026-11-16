@@ -10,7 +10,7 @@
 // `satisfies Record<WidgetKind, ComponentType<never>>` gives the same
 // exhaustiveness guarantee as WIDGET_DEFS: a new kind won't compile until it
 // has a component here. `never` is the lint-clean base every component is
-// assignable to regardless of its props (they differ — shortlist takes a
+// assignable to regardless of its props (they differ — some take a
 // toolUseId); props stay strict at each component definition and at the single
 // call site in ../index.tsx.
 
@@ -22,21 +22,14 @@ import { ConfirmApplicationSubmitWidget } from "./confirmApplicationSubmit/Widge
 import { ConfirmReviveCompanyWidget } from "./confirmReviveCompany/Widget";
 import { NextCompanyPickerWidget } from "./nextCompanyPicker/Widget";
 import { NextJobPickerWidget } from "./nextJobPicker/Widget";
-import { ShortlistProposalWidget } from "./shortlistProposal/Widget";
-import { ShortlistRegenGateWidget } from "./shortlistRegenGate/Widget";
-import { ShortlistScanGateWidget } from "./shortlistScanGate/Widget";
 
 import type { ComponentType } from "react";
 
 export const WIDGET_COMPONENTS = {
-  shortlist_proposal: ShortlistProposalWidget,
-  company_checklist: () => null,
   add_more_companies: AddMoreCompaniesWidget,
   company_disambiguation: CompanyDisambiguationWidget,
   confirm_revive_company: ConfirmReviveCompanyWidget,
   confirm_application_submit: ConfirmApplicationSubmitWidget,
   next_company_picker: NextCompanyPickerWidget,
   next_job_picker: NextJobPickerWidget,
-  shortlist_scan_gate: ShortlistScanGateWidget,
-  shortlist_regen_gate: ShortlistRegenGateWidget,
 } satisfies Record<WidgetKind, ComponentType<never>>;

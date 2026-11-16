@@ -18,8 +18,9 @@ import { createElement, useEffect } from "react";
 import { useChatStore } from "@/client/chatStore";
 import { reportClientEvent } from "@/client/clientEvents";
 
-import { getWidgetDef } from "./registry";
+import { getWidgetDef, isRetiredWidgetKind } from "./registry";
 import { WIDGET_COMPONENTS } from "./registry/components";
+import { RetiredWidget } from "./RetiredWidget";
 
 import type { ComponentType } from "react";
 
@@ -68,13 +69,15 @@ export function PipelineWidgetSlot() {
     if (widget) break;
   }
 
-  // Detect a widget we can't render (unknown kind, or a payload that fails its
-  // def's validate — only shortlist_proposal has one today). Cheap enough to
+  // Detect a widget we can't render: a registered kind whose payload fails its
+  // def's validate. (An unregistered kind is RETIRED, not broken — old history
+  // carries it — and gets its own note below instead of a report.) Cheap enough to
   // compute each render; the effect below keys off the resulting string so the
   // report fires once per distinct failure (not during render — keeping the
   // render pure).
   let widgetFailureKind: string | null = null;
-  if (widget) {
+  const retired = !!widget && isRetiredWidgetKind(widget.kind);
+  if (widget && !retired) {
     const def = getWidgetDef(widget.kind);
     if (!resolveComponent(widget.kind)) widgetFailureKind = widget.kind;
     else if (def?.validate && !def.validate(widget.payload))
@@ -92,11 +95,12 @@ export function PipelineWidgetSlot() {
   }, [widgetFailureKind]);
 
   if (!widget) return null;
+  if (retired) return <RetiredWidget />;
   const component = resolveComponent(widget.kind);
   if (!component) return null;
 
   // Run the def's validate (if any) so a malformed payload renders nothing
-  // instead of throwing — the shortlist widget relies on this. Widgets without
+  // instead of throwing. Widgets without
   // a validate pass the payload through untouched.
   const def = getWidgetDef(widget.kind);
   const payload = def?.validate ? def.validate(widget.payload) : widget.payload;

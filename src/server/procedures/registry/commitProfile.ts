@@ -9,8 +9,8 @@
 //
 // It persists no mode either way. Profile intake is derived per turn from the
 // memory slots step 1 just wrote, so a passing verdict drops Hank out of intake
-// on the next turn by itself — and runChatTurn reads that same flip as the
-// completion that brings up the what's-next chooser.
+// on the next turn by itself — and the hank step (chat/hankTurns.ts) reads that
+// same flip as the completion that brings up the what's-next chooser.
 
 import { appendPipelineActivity } from "@/server/agent/session";
 import type { RunContext } from "@/server/platform/runContext";
@@ -20,8 +20,8 @@ import { runConsolidateSessionMemory } from "@/server/procedures/registry/consol
 import { runProfileEnrichmentGate } from "@/server/procedures/registry/profileEnrichmentGate";
 
 type CommitProfileResult =
-  | { wrappedUp: true; summary: string }
-  | { wrappedUp: false; missing: string[]; suggestedProbes: string[] };
+  | { committed: true; summary: string }
+  | { committed: false; missing: string[]; suggestedProbes: string[] };
 
 // The sub-agent context IS the args here: every step this procedure composes is
 // a sub-agent call, so it carries the context rather than re-listing its fields.
@@ -33,7 +33,7 @@ export const runCommitProfile = procedure(
     await commitProfile(args),
   {
     summarize: (r) =>
-      r.wrappedUp ? "profile committed" : "still missing slots",
+      r.committed ? "profile committed" : "still missing slots",
   },
 );
 
@@ -57,7 +57,7 @@ async function commitProfile(
     // quote the probes (or paraphrase them) — the runner doesn't generate
     // chat text here.
     return {
-      wrappedUp: false,
+      committed: false,
       missing: verdict.missing,
       suggestedProbes: verdict.suggestedProbes,
     };
@@ -86,5 +86,5 @@ async function commitProfile(
   const summary = compactResult.compacted
     ? `Profile committed; compacted ${compactResult.summarizedMessageCount} earlier message${compactResult.summarizedMessageCount === 1 ? "" : "s"}.`
     : "Profile committed; chat was short so no compaction needed.";
-  return { wrappedUp: true, summary };
+  return { committed: true, summary };
 }

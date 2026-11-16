@@ -14,18 +14,18 @@
 // carry (company/job names, logos, the shortlist job list) rides in `_view`,
 // embedded by buildWidgetSubmissionMessage so the card survives a reload.
 //
-// Wired in at MessageBubble level (like ShortlistCommitCard) because the card
+// Wired in at MessageBubble level because the card
 // replaces the whole bubble. When `_view` is missing the dispatcher falls back
 // to a clean label chip — the marker still never renders raw.
 
-import { useState, type ReactNode } from "react";
 import styled from "styled-components";
 
 import { useChatStore } from "@/client/chatStore";
-import { asArray, asNonEmptyString, isRecord } from "@/shared/utils/guards";
+import { asNonEmptyString, isRecord } from "@/shared/utils/guards";
 
-import { Caret } from "../../RightPanel/shared/Caret";
 import { CompanyLogoChip } from "../../RightPanel/shared/CompanyLogoChip";
+
+import type { ReactNode } from "react";
 
 const MARKER_RE = /^<!--widget-response:(\{[\s\S]*?\})-->/;
 
@@ -68,36 +68,6 @@ export function WidgetResponseCard({
   const { kind, obj, view, label } = parsed;
 
   switch (kind) {
-    case "company_checklist": {
-      // Each pick is `{name, context, url}` — the extra fields are what let the
-      // add resolve a name collision to the right company, so the card has to
-      // reach into the record for the name rather than read a flat list.
-      const picked = asArray(obj.picked).flatMap((p) =>
-        isRecord(p) && typeof p.name === "string" && p.name.length > 0
-          ? [p.name]
-          : [],
-      );
-      if (picked.length === 0) {
-        return <Chip icon="⊘" tone="muted" title="Added none of these" />;
-      }
-      return (
-        <Card>
-          <Header>
-            <Icon $tone="accent">+</Icon>
-            <Title>
-              Added {picked.length}{" "}
-              {picked.length === 1 ? "company" : "companies"}
-            </Title>
-          </Header>
-          <NameChips>
-            {picked.map((n) => (
-              <NameChip key={n}>{n}</NameChip>
-            ))}
-          </NameChips>
-        </Card>
-      );
-    }
-
     case "confirm_application_submit": {
       const jobId = asNonEmptyString(obj.jobId);
       const jobTitle = asNonEmptyString(view.jobTitle);
@@ -176,87 +146,9 @@ export function WidgetResponseCard({
       );
     }
 
-    case "shortlist_proposal":
-      return <ShortlistResponseCard view={view} fallback={label} />;
-
     default:
       return <Chip title={label} />;
   }
-}
-
-// ---- shortlist (full expandable recap) --------------------------------
-
-type ShortlistJob = {
-  id: string;
-  title: string;
-  approved: boolean;
-  recommended: boolean;
-};
-
-function shortlistTag(j: ShortlistJob): "pick" | "pass" | "override" {
-  if (j.approved) return j.recommended ? "pick" : "override";
-  return j.recommended ? "override" : "pass";
-}
-
-function ShortlistResponseCard({
-  view,
-  fallback,
-}: {
-  view: Record<string, unknown>;
-  fallback: string;
-}) {
-  const [open, setOpen] = useState(false);
-
-  const companyName = asNonEmptyString(view.companyName);
-  const reason = asNonEmptyString(view.reason);
-  const jobs = parseShortlistJobs(view.jobs);
-
-  // History without _view (or a malformed payload) → clean label chip.
-  if (!companyName || jobs.length === 0) {
-    return <Chip icon="✓" tone="accent" title={fallback} />;
-  }
-
-  const approved = jobs.filter((j) => j.approved);
-  const total = jobs.length;
-  const headline =
-    approved.length === 0
-      ? `Picked none of the ${total} at ${companyName}`
-      : approved.length === total
-        ? `Shortlisted all ${total} at ${companyName}`
-        : `Shortlisted ${approved.length} of ${total} at ${companyName}`;
-
-  return (
-    <Card>
-      <Header
-        as="button"
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        $expandable
-      >
-        <Caret open={open} />
-        <Icon $tone="accent">✓</Icon>
-        <Title>{headline}</Title>
-      </Header>
-      {reason && <Sub>{reason}</Sub>}
-      {open && (
-        <Body>
-          {jobs.map((j) => {
-            const tag = shortlistTag(j);
-            return (
-              <Row key={j.id}>
-                <RowMark $approved={j.approved}>
-                  {j.approved ? "✓" : "✕"}
-                </RowMark>
-                <JobLink jobId={j.id} label={j.title} block />
-                <Tag $variant={tag}>{tag}</Tag>
-              </Row>
-            );
-          })}
-        </Body>
-      )}
-    </Card>
-  );
 }
 
 // ---- shared bits ------------------------------------------------------
@@ -326,22 +218,6 @@ function viewCompany(id: string) {
 }
 function viewOpportunity(id: string) {
   return useChatStore.getState().viewOpportunity(id);
-}
-
-function parseShortlistJobs(raw: unknown): ShortlistJob[] {
-  if (!Array.isArray(raw)) return [];
-  const out: ShortlistJob[] = [];
-  for (const j of raw) {
-    if (!isRecord(j)) continue;
-    if (typeof j.id !== "string" || typeof j.title !== "string") continue;
-    out.push({
-      id: j.id,
-      title: j.title,
-      approved: j.approved === true,
-      recommended: j.recommended === true,
-    });
-  }
-  return out;
 }
 
 // ---- styled ------------------------------------------------------------
@@ -424,33 +300,6 @@ const Sub = styled.div`
   word-break: break-word;
 `;
 
-const Body = styled.div`
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid ${({ theme }) => theme.colors.border};
-  background: ${({ theme }) => theme.colors.bgPanel};
-`;
-
-const Row = styled.div`
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: ${({ theme }) => theme.space.md};
-  padding: ${({ theme }) => `${theme.space.xs} ${theme.space.lg}`};
-  border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-
-  &:last-child {
-    border-bottom: none;
-  }
-`;
-
-const RowMark = styled.span<{ $approved: boolean }>`
-  font-size: 11px;
-  font-family: ${({ theme }) => theme.font.mono};
-  color: ${({ theme, $approved }) =>
-    $approved ? theme.colors.accent : theme.colors.textSubtle};
-`;
-
 const LinkText = styled.button<{ $block?: boolean }>`
   appearance: none;
   background: transparent;
@@ -470,43 +319,4 @@ const LinkText = styled.button<{ $block?: boolean }>`
     color: ${({ theme }) => theme.colors.accent};
     text-decoration: underline;
   }
-`;
-
-const Tag = styled.span<{ $variant: "pick" | "pass" | "override" }>`
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-family: ${({ theme }) => theme.font.mono};
-  color: ${({ theme, $variant }) =>
-    $variant === "pick"
-      ? theme.colors.accent
-      : $variant === "override"
-        ? theme.colors.danger
-        : theme.colors.textSubtle};
-  background: ${({ theme }) => theme.colors.bgMuted};
-  border: 1px solid
-    ${({ theme, $variant }) =>
-      $variant === "pick"
-        ? theme.colors.accent
-        : $variant === "override"
-          ? theme.colors.danger
-          : theme.colors.border};
-`;
-
-const NameChips = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: ${({ theme }) => theme.space.xs};
-  padding: 0 ${({ theme }) => theme.space.lg} ${({ theme }) => theme.space.sm};
-`;
-
-const NameChip = styled.span`
-  font-size: 12px;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: ${({ theme }) => theme.colors.bgMuted};
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  color: ${({ theme }) => theme.colors.text};
 `;

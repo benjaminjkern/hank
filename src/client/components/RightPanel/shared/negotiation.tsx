@@ -207,22 +207,21 @@ export function NegotiationFooter() {
 // The shortlist board's settle control — the one place the commit's consequence
 // is spelled out before it happens. The label branches on what the commit will
 // DO: with picks it's a plain agreement; with only holds it says they're kept;
-// with nothing kept it says the company gets marked caught up. And when locking
-// in would close an application the user already started, the first press asks
-// — naming the roles — and only the second sends, carrying `confirmed` so the
-// deterministic commit may pass the same gate Hank's confirmed re-call does.
+// with nothing kept it says the company gets marked caught up. A pass on a role
+// the user already started applying to is set aside rather than closed (the
+// commit never closes work in progress), so it counts as kept, and the one
+// thing the screen can't show — that this pass won't close it — gets a note.
 function ShortlistSettleFooter({ board }: { board: ShortlistBoardView }) {
   const streaming = useChatStore((s) => s.streaming);
   const boardSettling = useChatStore((s) => s.boardSettling);
   const setBoardSettling = useChatStore((s) => s.setBoardSettling);
   const send = useChatStore((s) => s.send);
-  const [confirmingClose, setConfirmingClose] = useState(false);
 
   // The footer only renders with no pending marks, so a row's TIER is its live
   // stance — counting tiers is counting the decision.
   let picks = 0;
   let kept = 0;
-  const closingStarted: string[] = [];
+  const keptStarted: string[] = [];
   for (const { tier, rows } of board.tiers) {
     if (BOARD_GROUP_OF_TIER[tier] === "keep") {
       kept += rows.length;
@@ -230,39 +229,31 @@ function ShortlistSettleFooter({ board }: { board: ShortlistBoardView }) {
       continue;
     }
     for (const row of rows) {
-      if (row.status === "APPLYING") closingStarted.push(row.title);
+      if (row.status === "APPLYING") keptStarted.push(row.title);
     }
   }
+  kept += keptStarted.length;
 
-  const asking = confirmingClose && closingStarted.length > 0;
   const label = boardSettling
     ? "Settling…"
-    : asking
-      ? closingStarted.length === 1
-        ? "Yes — close it and lock in"
-        : "Yes — close them and lock in"
-      : picks > 0
-        ? "Looks good to me"
-        : kept > 0
-          ? `Lock it in — keep ${kept} for later`
-          : `Close these out — mark ${board.companyName} caught up`;
+    : picks > 0
+      ? "Looks good to me"
+      : kept > 0
+        ? `Lock it in — keep ${kept} for later`
+        : `Close these out — mark ${board.companyName} caught up`;
 
   return (
     <Footer>
-      {asking && !boardSettling && (
+      {keptStarted.length > 0 && !boardSettling && (
         <FooterNote>
-          {closingStarted.length === 1
-            ? `Locking in closes “${closingStarted[0]}” — an application you started.`
-            : `Locking in closes ${closingStarted.length} roles you'd started applying to.`}
+          {keptStarted.length === 1
+            ? `“${keptStarted[0]}” is set aside, not closed — you’d started applying.`
+            : `${keptStarted.length} roles you’d started applying to are set aside, not closed.`}
         </FooterNote>
       )}
       <SettleButton
         disabled={streaming || boardSettling}
         onClick={() => {
-          if (closingStarted.length > 0 && !confirmingClose) {
-            setConfirmingClose(true);
-            return;
-          }
           setBoardSettling(true);
           void send(
             buildWidgetSubmissionMessage(
@@ -270,9 +261,6 @@ function ShortlistSettleFooter({ board }: { board: ShortlistBoardView }) {
                 kind: "commit_negotiation",
                 panel: "shortlist-board",
                 companyId: board.companyId,
-                ...(closingStarted.length > 0
-                  ? { confirmed: true as const }
-                  : {}),
               },
               "[The board looks right — lock it in]",
             ),

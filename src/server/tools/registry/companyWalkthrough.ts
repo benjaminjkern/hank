@@ -1,11 +1,12 @@
 import { z } from "zod";
 
+import { sayUiEvents } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { switchToCompany } from "@/server/entities/companies/resumeCompany";
 import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
 import { CompanyStatus } from "@/server/generated/prisma/client";
+import { buildShowEvents } from "@/server/panels/showEvents";
 import { toolError } from "@/server/platform/agent/toolError";
-import { buildShowEvents } from "@/server/views/showEvents";
 
 import { slugLookupError } from "../lib/slugLookupError";
 
@@ -16,10 +17,11 @@ import type { ToolDef } from "../lib/types";
 // doesn't resolve it fails; use find_companies / list_companies first.
 //
 // This tool emits no widget. A set-aside company still has to be revived before
-// it can be walked, but that question is now asked by the company arm itself
-// (rung 0), so the same prompt appears however the arm is entered — this tool, a
-// picker pick, or a later re-entry. All the tool does is resolve the slug, mark
-// the company as being worked when that's legal, and hand over the target.
+// it can be walked, but that question is asked by the company walkthrough itself
+// (rung 0), so the same prompt appears however it's entered — this tool, a
+// picker pick, or a later re-entry. `revive` is the typed form of that
+// question's "yes". All the tool does is resolve the slug, mark the company as
+// being worked when that's legal, and queue the walkthrough.
 //
 // It is also the ONLY shortlist entry. Shortlisting is a rung of the company
 // ladder, so re-entering the company reaches it once the earlier rungs no-op —
@@ -42,6 +44,7 @@ const SWITCH_REFUSALS: Record<
 export const companyWalkthroughTool: ToolDef<{
   company: string;
   direction?: string;
+  revive?: boolean;
 }> = {
   name: "company_walkthrough",
   affectsViewedState: true,
@@ -60,6 +63,12 @@ export const companyWalkthroughTool: ToolDef<{
       .describe(
         "Optional steer for the role picks this round, in the user's own terms ('infra roles only', 'I really need remote'). Passing it forces a FRESH round: prior picks are re-ranked on these terms instead of the user being asked whether to keep them. Omit to resume where the company left off — with no direction, an already-decided shortlist is left alone and its roles come straight up.",
       ),
+    revive: z
+      .boolean()
+      .optional()
+      .describe(
+        "Set true ONLY when the company was set aside (passed on, or its board couldn't be read) AND the user has already told you to bring it back ('yes, revive it', 'give Stripe another look'). It brings the company back and walks it. Without it, a set-aside company asks the user first.",
+      ),
   }),
   async handle(input, ctx) {
     const r = await resolveCompanyBySlug(ctx.userId, input.company);
@@ -69,9 +78,9 @@ export const companyWalkthroughTool: ToolDef<{
     const companyId = r.value.id;
     // switchToCompany refuses a CLOSED / BLOCKED company on purpose — walking one
     // means reviving it, and that's the user's call. Skip the status bump for
-    // those and hand off anyway; the company arm's rung 0 re-reads the status and
+    // those and hand off anyway; the company walkthrough's rung 0 re-reads the status and
     // asks. (The read here is only to avoid a refusal we already expect, not a
-    // second copy of the revive rule — the arm owns that.)
+    // second copy of the revive rule — the walkthrough owns that.)
     const ci = await prisma.companyInteraction.findUnique({
       where: { userId_companyId: { userId: ctx.userId, companyId } },
       select: { status: true },
@@ -81,13 +90,16 @@ export const companyWalkthroughTool: ToolDef<{
       ci?.status === CompanyStatus.BLOCKED;
 
     if (setAside) {
+      ctx.queue({
+        kind: "company_walkthrough",
+        companyId,
+        direction: input.direction,
+        ...(input.revive ? { revive: true as const } : {}),
+      });
       return {
-        content: `${r.value.name} was set aside earlier — handing off; the user will be asked whether to bring it back. Nothing more to do this turn.`,
-        entryTarget: {
-          kind: "company",
-          id: companyId,
-          direction: input.direction,
-        },
+        content: input.revive
+          ? `${r.value.name} was set aside earlier — handed off to bring it back and walk it. Nothing more to do this turn.`
+          : `${r.value.name} was set aside earlier — handing off; the user will be asked whether to bring it back. (If they've ALREADY told you to bring it back, pass revive: true next time instead.) Nothing more to do this turn.`,
       };
     }
 
@@ -100,19 +112,17 @@ export const companyWalkthroughTool: ToolDef<{
       );
     }
     // The panel move is the tool's, not the write's — switchToCompany only sets
-    // status. Focus is ephemeral; the entryTarget below is what the state
-    // machine actually runs on.
+    // status. Focus is ephemeral; the queued entry is what the walkthrough runs
+    // on.
     const { events } = await buildShowEvents(ctx.userId, { companyId });
+    await sayUiEvents(ctx.say, events);
+    ctx.queue({
+      kind: "company_walkthrough",
+      companyId,
+      direction: input.direction,
+    });
     return {
       content: `Handed off to the walkthrough on this company. Nothing more to do this turn — it streams its own progress; don't restate the steps or list roles.`,
-      events,
-      // The entity the state machine runs its arm on, plus the optional steer
-      // for its shortlist rung.
-      entryTarget: {
-        kind: "company",
-        id: companyId,
-        direction: input.direction,
-      },
     };
   },
 };

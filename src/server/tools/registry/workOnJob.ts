@@ -1,11 +1,12 @@
 import { z } from "zod";
 
+import { sayUiEvents, statusEvent } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { promoteJobForWork } from "@/server/entities/jobs/setJobAside";
 import { resolveJobBySlug } from "@/server/entities/resolveBySlug";
 import { JobInteractionStatus } from "@/server/generated/prisma/client";
-import { buildShowEvents } from "@/server/views/showEvents";
+import { buildShowEvents } from "@/server/panels/showEvents";
 import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import { slugLookupError } from "../lib/slugLookupError";
@@ -14,16 +15,16 @@ import type { ToolDef } from "../lib/types";
 
 // work_on_job — the "user named a specific role to work on / apply to" handoff.
 //
-// It opens the role and hands the baton to the walkthrough job arm, which
+// It opens the role and queues the work_on_job procedure, which
 // fetches the application form, decides what it can draft, drafts it, and
 // self-reviews — EXACTLY what tapping the role in the next-role picker does
-// (both go through promoteJobForWork → runJobArm). This is the prose counterpart
-// to that widget: when the user says "let's do the X role" the deterministic
-// job arm should start, not a read-only inspection. Without it Hank reaches for
+// (both go through promoteJobForWork → runWorkOnJob). This is the prose
+// counterpart to that widget: when the user says "let's do the X role" the
+// procedure should start, not a read-only inspection. Without it Hank reaches for
 // view_application_questions, which only INSPECTS a form and will report
 // "nothing to draft" on forms the drafting workflow can in fact draft.
 //
-// handoff:true — the turn ends and the walkthrough job arm owns what shows next
+// handoff:true — the turn ends and the work_on_job procedure owns what shows next
 // (drafting status lines → submit prompt / co-write hand-off). This is a pure
 // handoff, never an atomic mutation: it does one thing (focus + start the
 // workflow) and stops.
@@ -58,21 +59,19 @@ export const workOnJobTool: ToolDef<{ job: string }> = {
     // next_job_picker pick, which chips via narrateJobFocus). Only for the
     // pre-application entry — a non-draftable role hands straight back.
     const roleLabel = ji?.job.title ?? r.value.slug ?? "this role";
+    await sayUiEvents(ctx.say, events);
+    if (preApplication) {
+      await ctx.say(
+        statusEvent(
+          `Working on ${formatFocusRefToken("job", jobId, roleLabel)}.`,
+        ),
+      );
+    }
+    ctx.queue({ kind: "work_on_job", jobId });
     return {
-      // Threaded to the state machine as the entry target (the job to work on),
-      // so dispatch doesn't read the focus slot.
-      entryTarget: { kind: "job", id: jobId },
       content: preApplication
         ? `Focused ${r.value.slug} and handed off to the application workflow (form → draftable answers → self-review). Nothing more to do this turn — the workflow streams its own progress; don't restate the steps.`
         : `Focused ${r.value.slug}, but this role isn't in a pre-application state (likely already applied or closed), so the workflow will hand back to this company's role picker rather than draft. Nothing more to do this turn.`,
-      events,
-      ...(preApplication
-        ? {
-            statusLines: [
-              `Working on ${formatFocusRefToken("job", jobId, roleLabel)}.`,
-            ],
-          }
-        : {}),
     };
   },
 };

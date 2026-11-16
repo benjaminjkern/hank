@@ -9,14 +9,13 @@
 // Pulling new postings should feed them into scan + shortlist, and per the
 // "nothing runs unless Hank hands off" invariant (AGENTS.md) that continuation
 // must be a tool Hank knowingly calls, not a re-derivation that fires behind his
-// back after a quiet turn. Ending the loop here lets the walkthrough state
-// machine take over and scan the new survivors (narrated). In the default flow
-// (no state machine) the turn simply ends after the scrape — the procedure's own
-// PRE_SCAN already triaged the delta, and Hank's pre-call narration already told
-// the user what he's doing.
+// back after a quiet turn. It queues the company walkthrough, which scans the
+// new survivors (narrated); the procedure's own PRE_SCAN already triaged the
+// delta, and Hank's pre-call narration already told the user what he's doing.
 
 import { z } from "zod";
 
+import { sayUiEvents } from "@/server/contracts";
 import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
 import { toolError } from "@/server/platform/agent/toolError";
 import type { ReconBoardResult } from "@/server/procedures/registry/reconBoard";
@@ -87,13 +86,10 @@ export const scrapeJobsForCompanyTool: ToolDef<z.infer<typeof PARSER>> = {
       }
     }
 
-    // Threaded so the walkthrough state machine scans/shortlists the new
-    // survivors for this company (instead of reading the focus slot).
-    return {
-      content: describeOutcome(name, result.outcome),
-      events: result.events,
-      entryTarget: { kind: "company", id: r.value.id },
-    };
+    await sayUiEvents(ctx.say, result.events);
+    // The company walkthrough scans and shortlists the new survivors.
+    ctx.queue({ kind: "company_walkthrough", companyId: r.value.id });
+    return { content: describeOutcome(name, result.outcome) };
   },
 };
 

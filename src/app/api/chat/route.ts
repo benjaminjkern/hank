@@ -17,6 +17,9 @@ const Body = z.object({
   // The browser's IANA timezone (Intl…resolvedOptions().timeZone). Optional so
   // an old client / non-browser caller still works (falls back to UTC).
   clientTimeZone: z.string().optional(),
+  // The right panel's URL path (window.location.pathname), so Hank can resolve
+  // "this one" to what's on screen. Optional for the same reason.
+  panelPath: z.string().max(512).optional(),
 });
 
 export const dynamic = "force-dynamic";
@@ -111,6 +114,7 @@ export async function POST(req: Request) {
           userMessage: parsed.data.message,
           attachmentIds: parsed.data.attachmentIds,
           timeZone: parsed.data.clientTimeZone,
+          panelPath: parsed.data.panelPath,
           signal: runController.signal,
           say: sayTo((event) => {
             safeEnqueue(`data: ${JSON.stringify(event)}\n\n`);

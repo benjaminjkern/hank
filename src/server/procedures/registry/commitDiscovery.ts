@@ -1,5 +1,6 @@
 // Make the discovery list real: add every company still checked, record the
-// unchecked ones so the search stops proposing them.
+// unchecked ones so the search stops proposing them. Entered by `commit_discovery`
+// — Hank's tool, or the panel's "Looks good" when nothing is left to discuss.
 //
 // The board's analogue, down to the shape — the user negotiates on a panel, and
 // ONE agent call settles the whole surface. It settles the BATCH, not "the
@@ -18,10 +19,10 @@
 
 import { appendPipelineActivity } from "@/server/agent/session/appendMessages";
 import { sayUiEvents } from "@/server/contracts";
-import type { Say } from "@/server/contracts";
+import type { StepArgs, StepOutcome } from "@/server/contracts";
 import { settleSuggestionBatch } from "@/server/entities/companies/suggestionMark";
 import { CompanySuggestionVerdict } from "@/server/generated/prisma/client";
-import type { RunContext } from "@/server/platform/runContext";
+import { buildShowEvents } from "@/server/panels/showEvents";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
 import {
@@ -29,15 +30,6 @@ import {
   runChecklistAdd,
 } from "@/server/procedures/registry/enrichCompanies";
 import { loadDiscoveryList } from "@/server/views/discoveryList";
-import { buildShowEvents } from "@/server/views/showEvents";
-
-export type CommitDiscoveryResult = {
-  // The list was already empty — the caller turns this into a "there's nothing
-  // on screen" nudge rather than a silent no-op.
-  empty: boolean;
-  added: string[];
-  passed: string[];
-};
 
 function renderPassRelay(passed: string[], added: string[]): string {
   const kept = added.length
@@ -53,12 +45,14 @@ function renderPassRelay(passed: string[], added: string[]): string {
 
 export const runCommitDiscovery = procedure(
   "commit_discovery",
-  async (
-    args: RunContext & { sessionId: string; say: Say },
-  ): Promise<CommitDiscoveryResult> => {
+  async (args: StepArgs): Promise<StepOutcome> => {
     const { rows } = await loadDiscoveryList(args.userId);
     if (rows.length === 0) {
-      return { empty: true, added: [], passed: [] };
+      await args.say({
+        type: "text",
+        text: "There's no company list on screen right now — say the word and I'll go find some.",
+      });
+      return {};
     }
 
     const toAdd = rows.filter((r) => r.checked);
@@ -86,7 +80,7 @@ export const runCommitDiscovery = procedure(
     // careers-page reads and the consolidation is two LLM calls, and until this
     // ran at the end of all that, the user watched a settled list the whole time
     // and kept it forever if anything cut the run short. Same move, same reason,
-    // as the "Looks good to me" path (widgets/dispatchTopLevelSubmission.ts).
+    // as the "Looks good to me" path (panels/commitNegotiation.ts).
     await sayUiEvents(args.say, (await buildShowEvents(args.userId)).events);
 
     const passedNames = toPass.map((r) => r.name);
@@ -107,7 +101,7 @@ export const runCommitDiscovery = procedure(
       // A disambiguation picker is a genuine wait-for-user question — stop rather
       // than stacking the add-more card under an unanswered one.
       if (result.awaitingDisambiguation) {
-        return { empty: false, added, passed: passedNames };
+        return {};
       }
     }
 
@@ -126,6 +120,6 @@ export const runCommitDiscovery = procedure(
     }
 
     await args.say(addMoreCompaniesWidget(added, toPass.length));
-    return { empty: false, added, passed: passedNames };
+    return {};
   },
 );

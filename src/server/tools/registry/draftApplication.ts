@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 import { sayTo } from "@/server/contracts";
+import { buildApplicationEvents } from "@/server/panels/showEvents";
 import { runDraftApplication } from "@/server/procedures/registry/draftApplication";
-import { buildApplicationEvents } from "@/server/views/showEvents";
 
 import { resolveJobArg } from "../lib/resolveEntityArg";
 

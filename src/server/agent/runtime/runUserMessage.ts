@@ -21,8 +21,8 @@
 // Every path to a missing key throws one of two error types, so catching them
 // here needs no probe of its own.
 //
-// What the message MEANS is deliberately not here. Which widget submission
-// commits, when the walkthrough state machine drives, whether the profile is
+// What the message MEANS is deliberately not here. Which widget answer commits,
+// which procedure runs next, whether the profile is
 // thin enough to elicit against, what it means that a company ended — all of it
 // lives in procedures/registry/chat/, because all of it is a product decision.
 // This layer must stay able to run a turn without knowing what a company is.
@@ -65,6 +65,9 @@ type RunUserMessageArgs = {
   say: Say<LoopEvent>;
   userMessage: string;
   attachmentIds?: string[];
+  // The right panel's URL path when the user sent this — context for Hank,
+  // carried through untouched.
+  panelPath?: string;
   signal?: AbortSignal;
   // The browser's IANA timezone (e.g. "America/Los_Angeles"), sent per message.
   // Flows to the # Today block and the event tools so logged times land at the
@@ -149,6 +152,7 @@ export async function runUserMessage(args: RunUserMessageArgs): Promise<void> {
         say,
         userMessage: args.userMessage,
         attachmentIds: args.attachmentIds ?? [],
+        panelPath: args.panelPath,
         timeZone: args.timeZone,
         signal: runController.signal,
         runId,

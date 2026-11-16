@@ -1,7 +1,7 @@
 "use client";
 
 // In-company picker. Fires after SCANNED jobs have been triaged (the
-// shortlist_proposal widget handles SCANNED → SHORTLISTED separately) and
+// shortlist board handles SCANNED → SHORTLISTED separately) and
 // before the runner would auto-focus the stalest SHORTLISTED job. The user
 // picks which job to walk through next from two buckets:
 //

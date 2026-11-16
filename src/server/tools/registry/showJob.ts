@@ -1,8 +1,9 @@
 import { z } from "zod";
 
+import { sayUiEvents, statusEvent } from "@/server/contracts";
 import { resolveJobBySlug } from "@/server/entities/resolveBySlug";
+import { buildShowEvents } from "@/server/panels/showEvents";
 import { toolError } from "@/server/platform/agent/toolError";
-import { buildShowEvents } from "@/server/views/showEvents";
 import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import { slugLookupError } from "../lib/slugLookupError";
@@ -30,12 +31,14 @@ export const showJobTool: ToolDef<{ job: string }> = {
         "show_job:not_found:job",
       );
     }
+    await sayUiEvents(ctx.say, show.events);
+    await ctx.say(
+      statusEvent(
+        `Pulled up ${formatFocusRefToken("job", r.value.id, show.job.title)}.`,
+      ),
+    );
     return {
       content: `Put ${r.value.slug}'s page on the user's screen. Nothing else happens — this is display only.`,
-      events: show.events,
-      statusLines: [
-        `Pulled up ${formatFocusRefToken("job", r.value.id, show.job.title)}.`,
-      ],
     };
   },
 };

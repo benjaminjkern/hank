@@ -13,7 +13,7 @@ import { ExpandableToolChip } from "./ExpandableToolChip";
 import { MarkdownText, UserText } from "./messageTextStyles";
 import { FocusRefChip, JobRefChip } from "./RefChips";
 
-// Pipeline status line — emitted by the deterministic state machine for things
+// Pipeline status line — emitted by the deterministic procedures for things
 // like "Running shortlist over 15 jobs". Distinct from regular agent text:
 // muted background, monospace-ish look, centered, no chat-bubble framing. The
 // LLM sees these rendered to plain text on replay (loadSessionMessages converts

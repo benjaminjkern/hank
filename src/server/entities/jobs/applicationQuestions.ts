@@ -1,6 +1,6 @@
 // Job-entity application-question service — the read/merge/write path over a
 // Job's application form. Consumed by the four drafting tools, the drafting
-// procedure, the walkthrough state machine, the decider, and the job-detail
+// procedure, the work-on-job walkthrough, the decider, and the job-detail
 // loader (getFocusedJobView), so they can't drift.
 //
 // Three concerns live here:

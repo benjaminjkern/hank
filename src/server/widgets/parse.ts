@@ -1,14 +1,11 @@
 // All widget-submission parsers, consolidated. A widget submission is a user
 // chat message carrying the hidden <!--widget-response:{...}--> marker; each
 // parser turns that marker into a typed, validated submission (or null). These
-// are PURE — no DB, no side-effects — which is what lets the pipeline runners
-// import their parser without dragging prisma or risking an import cycle.
+// are PURE — no DB, no side-effects — which is what lets anything import a
+// parser without dragging prisma or risking an import cycle.
 //
-// The top-level submissions (next_company_picker, company_disambiguation,
-// add_more_companies) are dispatched by dispatchTopLevelSubmission; the
-// per-widget dispatch bodies live in the sibling dispatch*.ts files. The
-// walkthrough submissions are dispatched inside the walkthrough state machine —
-// only their parser lives here.
+// What each answer DOES lives in widgets/registry/, one file per kind, and they
+// are all dispatched from one place (widgets/answerWidget.ts) before Hank runs.
 //
 // Marker extraction + JSON.parse is shared via extractWidgetMarker; each parser
 // only owns its per-kind field validation.
@@ -17,15 +14,12 @@ import { extractWidgetMarker } from "@/shared/widgetMarker";
 
 // ---------------------------------------------------------------------------
 // Top-level: settling a negotiation panel. Emitted by the panel's own
-// "looks good to me" pill when nothing is left to argue about; dispatched by
-// dispatchCommitNegotiation, which re-derives that claim before acting on it.
+// "looks good to me" pill when nothing is left to argue about; answered by
+// panels/commitNegotiation.ts, which re-derives that claim first.
 // ---------------------------------------------------------------------------
 
 export type CommitNegotiationSubmission =
-  | { panel: "discovery" }
-  // `confirmed` = the footer already asked about closing a started application
-  // (its own two-tap confirm), so the deterministic commit may pass that gate.
-  | { panel: "shortlist-board"; companyId: string; confirmed?: boolean };
+  { panel: "discovery" } | { panel: "shortlist-board"; companyId: string };
 
 export function parseCommitNegotiationSubmission(
   userMessage: string,
@@ -34,19 +28,14 @@ export function parseCommitNegotiationSubmission(
   if (!obj || obj.kind !== "commit_negotiation") return null;
   if (obj.panel === "discovery") return { panel: "discovery" };
   if (obj.panel === "shortlist-board" && typeof obj.companyId === "string") {
-    return {
-      panel: "shortlist-board",
-      companyId: obj.companyId,
-      confirmed: obj.confirmed === true,
-    };
+    return { panel: "shortlist-board", companyId: obj.companyId };
   }
   return null;
 }
 
 // ---------------------------------------------------------------------------
-// Walkthrough pipeline widgets: confirm_revive_company,
-// confirm_application_submit, next_job_picker. Dispatched by the walkthrough
-// state machine (handleWidgetSubmission).
+// The walkthroughs' own questions: confirm_revive_company (company),
+// next_job_picker (company), confirm_application_submit (role).
 // ---------------------------------------------------------------------------
 
 type WalkthroughWidgetSubmission =
@@ -108,10 +97,10 @@ export function parseWidgetSubmission(
 
 // ---------------------------------------------------------------------------
 // Grow-the-watchlist widgets: company_disambiguation (resolve a name collision
-// the URL hunter flagged) and add_more_companies (done, or keep hunting). Both
-// are dispatched at the TOP LEVEL (dispatchTopLevelSubmission), before Hank runs
-// at all, so either one commits the same way from ANY conversation — growing the
-// watchlist is conversational, not a flow of its own. (Picking WHICH companies
+// the URL hunter flagged) and add_more_companies (done, or keep hunting). Like
+// every answer they're dispatched before Hank runs, so either one commits the
+// same way from ANY conversation — growing the watchlist is conversational, not
+// a flow of its own. (Picking WHICH companies
 // is not a widget at all: it's marks on the discovery panel, relayed as
 // panel_edits and settled by Hank's commit_discovery.)
 // ---------------------------------------------------------------------------
@@ -186,8 +175,7 @@ function asResolutions(v: unknown): DisambiguationResolution[] {
 }
 
 // ---------------------------------------------------------------------------
-// next_company_picker widget: the between-pipeline "what's next" picker.
-// Dispatched at chat-entry level (dispatchNextCompanyPicker).
+// next_company_picker widget: the between-things "what's next" chooser.
 // ---------------------------------------------------------------------------
 
 export type NextCompanyPickerSubmission =
