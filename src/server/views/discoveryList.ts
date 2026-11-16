@@ -6,7 +6,7 @@
 // **One run, not the whole pool.** Older unsettled candidates stay in the table
 // as input to the next search (companySuggestions.ts) — they are how walking
 // away from a list stops being lost work — but drawing them would put names on
-// screen from a batch the user has forgotten, and would make the arm's "found
+// screen from a batch the user has forgotten, and would make the search's "found
 // you N companies" line disagree with what they can count. So the panel shows
 // exactly one run: whichever produced the newest open row. A carried-forward
 // name is re-recorded under the current run when the search re-proposes it, so

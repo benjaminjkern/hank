@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { sayUiEvents, statusEvent } from "@/server/contracts";
 import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
 import { toolError } from "@/server/platform/agent/toolError";
 import { renderShortlistBoardText } from "@/server/views/shortlistBoard";
@@ -32,10 +33,12 @@ export const showShortlistBoardTool: ToolDef<{ company: string }> = {
         "show_shortlist_board:not_found:company",
       );
     }
+    await sayUiEvents(ctx.say, events);
+    await ctx.say(
+      statusEvent(`Pulled up the shortlist board for ${board.companyName}.`),
+    );
     return {
       content: `Put the ${board.companyName} shortlist board on the user's screen.\n\n${renderShortlistBoardText(board, { full: true })}`,
-      events,
-      statusLines: [`Pulled up the shortlist board for ${board.companyName}.`],
     };
   },
 };

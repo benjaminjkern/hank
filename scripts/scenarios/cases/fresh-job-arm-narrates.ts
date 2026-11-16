@@ -29,6 +29,10 @@ const scenario: Scenario = {
         skipped: "no SHORTLISTED job without a cover letter",
       };
     }
+    const companyId = candidate.job.companyId;
+    if (!companyId) {
+      return { ok: true, notes, skipped: "candidate role has no company" };
+    }
     // Focus on that job's company so step 2.5 narrates.
     const result = await withFocus(
       {
@@ -36,7 +40,7 @@ const scenario: Scenario = {
         focusedJobId: null,
         focusedOpportunityId: null,
       },
-      () => drainStateMachine(),
+      () => drainStateMachine({ kind: "company_walkthrough", companyId }),
     );
     const statuses = result.events.filter((e) => e.type === "pipeline_status");
     const text = result.events.filter((e) => e.type === "text");

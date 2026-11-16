@@ -2,7 +2,7 @@
 // `panel_mode` events that move the right panel to it — the one dispatcher every
 // show_* tool and deterministic mutator goes through.
 
-import type { EntryTarget } from "@/server/contracts";
+import type { Entry } from "@/server/contracts";
 import { getFocusedCompanyView } from "@/server/views/getFocusedCompany";
 import { getFocusedJobView } from "@/server/views/getFocusedJob";
 import { getFocusedOpportunityView } from "@/server/views/getFocusedOpportunity";
@@ -159,11 +159,15 @@ export async function buildApplicationEvents(
   };
 }
 
-// EntryTarget → ShowTarget. A discovery entry names no entity and neither does
+// Entry → ShowTarget. A discovery entry names no entity and neither does
 // an absent one, so both open the dashboard.
-export function showTargetFor(t: EntryTarget | undefined): ShowTarget {
-  if (t?.kind === "company") return { companyId: t.id };
-  if (t?.kind === "job") return { jobId: t.id };
-  if (t?.kind === "opportunity") return { opportunityId: t.id };
+export function showTargetFor(entry: Entry | undefined): ShowTarget {
+  if (entry?.kind === "company_walkthrough") {
+    return { companyId: entry.companyId };
+  }
+  if (entry?.kind === "work_on_job") return { jobId: entry.jobId };
+  if (entry?.kind === "opportunity") {
+    return { opportunityId: entry.opportunityId };
+  }
   return {};
 }

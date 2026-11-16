@@ -25,7 +25,7 @@ export type ToolSegment = {
 
 export type TextSegment = { kind: "text"; text: string };
 
-// UI-only segments emitted by the deterministic pipeline state machine, not
+// UI-only segments emitted by the deterministic procedures, not
 // by the LLM. Persisted in ChatMessage.content as `pipeline_status` /
 // `pipeline_widget` blocks. On the model side, loadSessionMessages RENDERS
 // these to plain text on replay (Anthropic rejects the raw block types) so

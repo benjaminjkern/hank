@@ -1,4 +1,4 @@
-// The walkthrough company arm's Step 2 — put the shortlist board on screen.
+// The company walkthrough's Step 2 — put the shortlist board on screen.
 //
 // The board is a persisted negotiation over JobInteraction stance columns: the
 // seed writes one stance per pool row, the user edits from the panel, Hank

@@ -9,7 +9,7 @@
 // Named companies still go through create_companies — this is for "find me some"
 // / "who else should I track?" where the user hasn't named anyone yet.
 //
-// The tool emits nothing itself: the arm owns the panel, the empty-result line,
+// The tool emits nothing itself: the find_companies procedure owns the panel, the empty-result line,
 // and the failure line. `direction` is the steering channel and the ONLY one —
 // the panel has no re-search control of its own, so a user reacting to a batch
 // ("too big", "more like Ramp") reaches the search only if Hank recognizes it as
@@ -44,15 +44,15 @@ export const findCompaniesTool: ToolDef<{
         "Keep the companies already on screen and add these to them. Omit (the default) to replace the list. Only true when the user asked for MORE on top of what they're looking at.",
       ),
   }),
-  async handle(input) {
-    return {
+  handle(input, ctx) {
+    ctx.queue({
+      kind: "find_companies",
+      direction: input.direction,
+      append: input.append,
+    });
+    return Promise.resolve({
       content:
         "Handed off to the company search. It puts the candidates on the discovery panel for the user to prune (or says so if nothing new turned up). Nothing more to do this turn — don't list any companies in chat.",
-      entryTarget: {
-        kind: "discovery",
-        direction: input.direction,
-        append: input.append,
-      },
-    };
+    });
   },
 };

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { sayUiEvents, statusEvent } from "@/server/contracts";
 import { toolError } from "@/server/platform/agent/toolError";
 import { buildApplicationEvents } from "@/server/views/showEvents";
 
@@ -42,12 +43,14 @@ export const showApplicationTool: ToolDef<{ job?: string }> = {
 
     const written = application.items.filter((i) => i.text?.trim()).length;
     const blank = application.items.length - written;
+    await sayUiEvents(ctx.say, events);
+    await ctx.say(
+      statusEvent(
+        `Pulled up the ${application.jobTitle} application at ${application.companyName}.`,
+      ),
+    );
     return {
       content: `Put the ${application.jobTitle} application on the user's screen — ${written} item${written === 1 ? "" : "s"} written, ${blank} still blank.`,
-      events,
-      statusLines: [
-        `Pulled up the ${application.jobTitle} application at ${application.companyName}.`,
-      ],
     };
   },
 };

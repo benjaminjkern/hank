@@ -1,4 +1,4 @@
-// Step 0a of runCompanyArm: make sure we know WHO this company is before doing
+// Step 0a of the company walkthrough: make sure we know WHO this company is before doing
 // anything with their board.
 //
 // The chain itself is shared (procedures/registry/enrichCompanies) and is a
@@ -19,7 +19,7 @@ import { urlHost } from "@/shared/utils/url";
 import { narrateCompanyBlock } from "./narration";
 import { sayStateChange } from "./sayStateChange";
 
-import type { WalkthroughArgs } from "./types";
+import type { StepArgs } from "@/server/contracts";
 
 type EnrichStepResult =
   | { wrapped: true; endedCompanyId?: string }
@@ -31,7 +31,7 @@ type EnrichStepResult =
 export const runCompanyEnrichStep = procedure(
   "company_enrich_step",
   async (
-    input: WalkthroughArgs & { companyId: string },
+    input: StepArgs & { companyId: string },
   ): Promise<EnrichStepResult> => {
     const { companyId, ...args } = input;
     const company = await prisma.company.findUnique({

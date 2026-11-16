@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { sayUiEvents, statusEvent } from "@/server/contracts";
 import { resolveOpportunityBySlug } from "@/server/entities/resolveBySlug";
 import { toolError } from "@/server/platform/agent/toolError";
 import { buildShowEvents } from "@/server/views/showEvents";
@@ -30,12 +31,14 @@ export const showOpportunityTool: ToolDef<{ opportunity: string }> = {
         "show_opportunity:not_found:opportunity",
       );
     }
+    await sayUiEvents(ctx.say, show.events);
+    await ctx.say(
+      statusEvent(
+        `Pulled up ${formatFocusRefToken("opportunity", r.value.id, show.opportunity.label)}.`,
+      ),
+    );
     return {
       content: `Put ${r.value.slug}'s page on the user's screen. Nothing else happens — this is display only.`,
-      events: show.events,
-      statusLines: [
-        `Pulled up ${formatFocusRefToken("opportunity", r.value.id, show.opportunity.label)}.`,
-      ],
     };
   },
 };

@@ -1,8 +1,7 @@
 import { prisma } from "@/server/db/prisma";
 import { JobInteractionStatus } from "@/server/generated/prisma/client";
-import { runWalkthrough } from "@/server/procedures/registry/walkthrough";
 
-import { SESSION_ID, USER_ID, withFocus } from "../lib";
+import { USER_ID, drainAnswer, withFocus } from "../lib";
 
 import type { Scenario } from "../lib";
 
@@ -54,16 +53,11 @@ const scenario: Scenario = {
         async () => {
           // Drive the state machine directly so we can assert the post-pick
           // DB state without depending on the agent loop or pnpm dev being
-          // up. runJobArm queries focused JobInteraction status — the pick
+          // up. runWorkOnJob queries the JobInteraction status — the pick
           // handler's revive transaction is what makes that path succeed
           // here, so simply running it exercises end-to-end. Its narration
           // isn't asserted on, so nothing is recorded.
-          await runWalkthrough({
-            userId: USER_ID,
-            sessionId: SESSION_ID,
-            userMessage,
-            say: async () => {},
-          });
+          await drainAnswer(userMessage, { follow: true });
           const jiNow = await prisma.jobInteraction.findUnique({
             where: { userId_jobId: { userId: USER_ID, jobId: ji.jobId } },
             select: {

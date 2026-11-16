@@ -114,3 +114,27 @@ async function compactSession(
 
   return { compacted: true, summarizedMessageCount: toSummarize.length };
 }
+
+// How much transcript has piled up since the last summary, in characters of the
+// stored message JSON (tool results and thinking included — a deliberately
+// generous proxy for what the replay costs). One statement, so the chat loop can
+// ask after every message.
+export async function transcriptSizeSinceSummary(
+  sessionId: string,
+): Promise<number> {
+  const rows = await prisma.$queryRaw<{ chars: bigint | null }[]>`
+    SELECT SUM(LENGTH(m.content::text)) AS chars
+    FROM "ChatMessage" m
+    WHERE m."sessionId" = ${sessionId}
+      AND m."createdAt" > COALESCE(
+        (
+          SELECT cut."createdAt"
+          FROM "ChatSession" s
+          JOIN "ChatMessage" cut ON cut.id = s."summarizedUpToMessageId"
+          WHERE s.id = ${sessionId}
+        ),
+        'epoch'::timestamp
+      )
+  `;
+  return Number(rows[0]?.chars ?? 0);
+}

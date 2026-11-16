@@ -11,7 +11,6 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-import type { ToolContext } from "@/server/platform/agent/tool";
 import { toolInputSchema } from "@/server/platform/agent/toolInputSchema";
 import {
   SCRATCHPAD_FIELD,
@@ -26,7 +25,7 @@ import type { RunContext, RunTrace } from "@/server/platform/runContext";
 import type { TraceEvent } from "@/server/platform/runs/trace";
 import { traceText } from "@/server/platform/runs/traceText";
 import { recordUsage, type UsageOperation } from "@/server/platform/runs/usage";
-import type { AnyToolDef } from "@/server/tools/lib/types";
+import type { AnyToolDef, ToolContext } from "@/server/tools/lib/types";
 import { isUserAbortError } from "@/shared/utils/abort";
 
 import { recordSubAgentRun, redactCaptureContent } from "./subAgentRun";
@@ -273,8 +272,16 @@ async function runSubAgentLoop<TOutput>(
   // The ambient ctx, forwarded — a read tool runs for the same user, under the
   // same abort signal, inside the same run. Read tools are user-scoped; the
   // session only rides along for handlers that want it, and every call site that
-  // declares readTools runs inside one.
-  const toolCtx: ToolContext = { ...ctx, sessionId: ctx.sessionId ?? "" };
+  // declares readTools runs inside one. A read tool has no chat to show anything
+  // in and nothing to hand off to: what it says is dropped, and a queue throws.
+  const toolCtx: ToolContext = {
+    ...ctx,
+    sessionId: ctx.sessionId ?? "",
+    say: () => Promise.resolve(),
+    queue: () => {
+      throw new Error("a sub-agent's read tool can't hand off");
+    },
+  };
 
   const tools: Anthropic.ToolUnion[] = withToolsCacheMarker([
     ...call.readTools.map((t) => ({

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { sayUiEvents, statusEvent } from "@/server/contracts";
 import { toolError } from "@/server/platform/agent/toolError";
 import { buildDiscoveryEvents } from "@/server/views/showEvents";
 import { formatFocusRefToken } from "@/shared/focusRefToken";
@@ -29,13 +30,14 @@ export const showDiscoveryTool: ToolDef<Record<string, never>> = {
       );
     }
     const count = `${show.discovery.rows.length} ${show.discovery.rows.length === 1 ? "company" : "companies"}`;
+    await sayUiEvents(ctx.say, show.events);
+    await ctx.say(
+      statusEvent(
+        `Pulled up ${formatFocusRefToken("discovery", null, "Companies to add")}.`,
+      ),
+    );
     return {
       content: `Put the list of ${count} back on the user's screen. Nothing else happens — this is display only; they still have to settle it and you still have to call commit_discovery.`,
-      events: show.events,
-      // The chip names the destination, never the contents — see discoveryArm.
-      statusLines: [
-        `Pulled up ${formatFocusRefToken("discovery", null, "Companies to add")}.`,
-      ],
     };
   },
 };

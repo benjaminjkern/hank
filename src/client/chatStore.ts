@@ -1324,6 +1324,12 @@ export const useChatStore = create<State & Actions>((set, get) => ({
             typeof Intl !== "undefined"
               ? Intl.DateTimeFormat().resolvedOptions().timeZone
               : undefined,
+          // What the right panel is showing — its address is the URL path
+          // (PanelUrlSync keeps them in step), so Hank can resolve "this one".
+          panelPath:
+            typeof window !== "undefined"
+              ? window.location.pathname
+              : undefined,
         }),
         signal: stopController.signal,
       });

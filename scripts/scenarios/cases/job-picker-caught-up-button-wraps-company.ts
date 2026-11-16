@@ -3,9 +3,8 @@ import {
   CompanyStatus,
   JobInteractionStatus,
 } from "@/server/generated/prisma/client";
-import { runWalkthrough } from "@/server/procedures/registry/walkthrough";
 
-import { SESSION_ID, USER_ID, withFocus, withEventCleanup } from "../lib";
+import { USER_ID, drainAnswer, withFocus, withEventCleanup } from "../lib";
 
 import type { Scenario } from "../lib";
 
@@ -107,12 +106,7 @@ const scenario: Scenario = {
             focusedOpportunityId: null,
           },
           async () => {
-            const { wrappedUp } = await runWalkthrough({
-              userId: USER_ID,
-              sessionId: SESSION_ID,
-              userMessage,
-              say: async () => {},
-            });
+            const { wrappedUp } = await drainAnswer(userMessage);
             const post = await prisma.companyInteraction.findUnique({
               where: {
                 userId_companyId: {

@@ -4,8 +4,9 @@
 // because emitting UI events is the runner's job, not a procedure's.
 //
 // `subject` names what just ended, and it is the ONLY thing that varies: a
-// company the user finished, or a round of adding companies they said they were
-// done with. Both are the same event — a topic boundary, after which the
+// company the user finished, a round of adding companies they said they were
+// done with, or simply a stretch of conversation long enough that the replay
+// needs condensing. All three are the same event — a boundary, after which the
 // transcript ahead of it is worth summarizing and what it revealed is worth
 // keeping.
 //
@@ -19,17 +20,17 @@
 // `runConsolidateSessionMemory` has no such guard and would re-run in full each
 // time.
 //
-// So it runs at most ONCE per user message, from a caller that knows the
-// message ended something: the chat runner off `endedCompanyId`, or the
-// add-more dispatch when the user says they're done adding.
+// So it runs at most ONCE per user message, from the one caller that knows what
+// the message ended: the chat loop, after the message's last step.
 
 import { appendPipelineActivity } from "@/server/agent/session";
+import type { Segment } from "@/server/contracts";
 import type { RunContext } from "@/server/platform/runContext";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runCompactSession } from "@/server/procedures/registry/compactSession";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
 
-export type WrapSubject = "company" | "discovery";
+export type WrapSubject = Segment | "long_stretch";
 
 export const runWrapSegment = procedure(
   "wrap_segment",
@@ -41,6 +42,7 @@ export const runWrapSegment = procedure(
 const WHAT_ENDED: Record<WrapSubject, string> = {
   company: "the company just finished",
   discovery: "the round of adding companies the user just finished",
+  long_stretch: "a long stretch of conversation",
 };
 
 async function wrapSegment(

@@ -1,9 +1,11 @@
 import { z } from "zod";
 
+import { sayUiEvents } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { caughtUpCompany } from "@/server/entities/companies/setCompanyAside";
 import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { JobInteractionStatus } from "@/server/generated/prisma/client";
+import { buildShowEvents } from "@/server/views/showEvents";
 
 import { resolveCompanyArg } from "../lib/resolveEntityArg";
 
@@ -29,7 +31,7 @@ export const caughtUpCompanyTool: ToolDef<{
   name: "caught_up_company",
   affectsViewedState: true,
   description:
-    "Mark a company as caught-up: the user has seen its current roles and nothing's actionable right now, but it STAYS on their list and you keep watching for new postings. This is NOT skip (not pursuing at all) and NOT defer (no revisit timer) — it's the open-ended 'keep it, check back later' state. Use it when the user says 'mark as caught up' / 'I'm caught up here' / 'nothing for me now, keep watching' / 'done with this one for now but keep it.' Wraps the company up and brings what's next up on its own — don't call show_whats_next after it. **`company` is the company's slug — pass the one the user means.** If the company still has roles the user hasn't dealt with, the tool will ask you to confirm first; once the user is OK with it, call again with confirmed:true.",
+    "Mark a company as caught-up: the user has seen its current roles and nothing's actionable right now, but it STAYS on their list and you keep watching for new postings. This is NOT skip (not pursuing at all) and NOT defer (no revisit timer) — it's the open-ended 'keep it, check back later' state. Use it when the user says 'mark as caught up' / 'I'm caught up here' / 'nothing for me now, keep watching' / 'done with this one for now but keep it.' It moves nothing on its own — then hand off to wherever the user said to go next, or call show_whats_next if they didn't. **`company` is the company's slug — pass the one the user means.** If the company still has roles the user hasn't dealt with, the tool will ask you to confirm first; once the user is OK with it, call again with confirmed:true.",
   parser: z.object({
     company: z
       .string()
@@ -69,12 +71,14 @@ export const caughtUpCompanyTool: ToolDef<{
       }
     }
     await caughtUpCompany({ userId: ctx.userId, companyId });
+    // The panel was showing the company that just ended.
+    await sayUiEvents(ctx.say, (await buildShowEvents(ctx.userId)).events);
     return {
-      content: `Marked caught-up — the company stays on the list and the panel cleared. Wrapped up this company — what's next comes up on its own after your reply, so don't ask what they want to do next.`,
-      // Only the path that actually set the status wraps. The open-roles bail
-      // above returns without this — nothing was mutated, so there's nothing to
-      // wrap and what's-next must not fire over the confirmation question.
-      endedCompanyId: companyId,
+      content: `Marked caught-up — the company stays on the list and the panel is back on their dashboard. Nothing moves on its own after this: if the user already said where to go next, hand off to it now (company_walkthrough / work_on_job / find_companies); if they didn't, call show_whats_next to put their options up.`,
+      // Only the path that actually set the status reports it. The open-roles
+      // bail above returns without this — nothing was mutated, so there's
+      // nothing to file away.
+      ended: "company",
     };
   },
 };

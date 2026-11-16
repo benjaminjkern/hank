@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { sayUiEvents } from "@/server/contracts";
 import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
 import { toolError } from "@/server/platform/agent/toolError";
 import { runCommitShortlist } from "@/server/procedures/registry/commitShortlist";
@@ -61,12 +62,16 @@ export const commitShortlistTool: ToolDef<{
     // The board closes with the commit — leaving it on screen would offer a
     // surface with nothing left to decide. Back to the company page.
     const show = await buildShowEvents(ctx.userId, { companyId: r.value.id });
+    await sayUiEvents(ctx.say, show.events);
+    // A continuation: the commit's tail surfaces what the round produced — it
+    // must not start new work at the company (no re-scrape).
+    ctx.queue({
+      kind: "company_walkthrough",
+      companyId: r.value.id,
+      continuation: true,
+    });
     return {
-      content: `Committed the ${r.value.slug} shortlist: ${result.picked} shortlisted, ${result.setAside} set aside, ${result.closed} closed. The board is closed now — changing any of it from here is a normal record change (close_job / defer_job), not a board edit. The deterministic layer takes it from here.`,
-      events: show.events,
-      // A continuation: the commit's tail surfaces what the round produced —
-      // it must not start new work at the company (no re-scrape).
-      entryTarget: { kind: "company", id: r.value.id, continuation: true },
+      content: `Committed the ${r.value.slug} shortlist: ${result.picked} shortlisted, ${result.setAside} set aside, ${result.closed} closed. The board is closed now — changing any of it from here is a normal record change (close_job / defer_job), not a board edit. The walkthrough takes it from here.`,
     };
   },
 };

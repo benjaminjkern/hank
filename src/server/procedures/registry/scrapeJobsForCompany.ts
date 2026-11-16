@@ -3,10 +3,9 @@
 // shared scrapeJobsForCompany core), triages the genuinely-new postings with
 // PRE_SCAN, and shows the company so the right panel reflects the outcome.
 //
-// The tool is handoff: true, so once it returns the deterministic layer owns
-// what shows next: in a walkthrough the state machine scans the new survivors;
-// in the default flow the turn simply ends — which is why the PRE_SCAN here is
-// load-bearing (nothing else triages the delta when no state machine follows).
+// The tool queues the company walkthrough, which scans the new survivors. The
+// PRE_SCAN here is still load-bearing: it's what triages the delta on any path
+// where nothing follows the scrape.
 // See scrapeJobsForCompany.ts for the handoff rationale.
 //
 // Gates (not on the watchlist / CLOSED / no careers URL) reject up front. A

@@ -28,11 +28,12 @@ import {
   isTransientStreamError,
   emptyAbortedMessage,
 } from "@/server/platform/agent/streamingCore";
-import type {
-  AgentToolDef,
-  AgentToolResult,
-  AgentToolWidget,
-  ToolContext,
+import {
+  HandoffConflictError,
+  type AgentToolDef,
+  type AgentToolResult,
+  type ToolContext,
+  type ToolSaid,
 } from "@/server/platform/agent/tool";
 import { toolErrorContent } from "@/server/platform/agent/toolError";
 import { toolInputSchema } from "@/server/platform/agent/toolInputSchema";
@@ -49,13 +50,12 @@ import { isUserAbortError } from "@/shared/utils/abort";
 import type Anthropic from "@anthropic-ai/sdk";
 
 // One dispatched tool, in dispatch order: which tool ran and exactly what it
-// returned. The caller reads whatever it cares about off `result` — a handoff's
-// entryTarget, a mutation's endedCompanyId — and this file stays ignorant of
-// both. `result` is absent when dispatch never reached the handler (unknown tool
+// returned. The caller reads whatever it cares about off `result` — a
+// mutation's outcome fields — and this file stays ignorant of them. `result` is absent when dispatch never reached the handler (unknown tool
 // / input that failed its parser); the error is already in `toolResults`.
 export type DispatchedTool<TResult> = { name: string; result?: TResult };
 
-export type AgentTurnResult<TResult> = {
+export type AgentTurnResult<TResult, TNext = unknown> = {
   stopReason: string | null;
   // Assistant content blocks (text + tool_use). Caller persists these as the
   // next assistant ChatMessage row.
@@ -67,32 +67,23 @@ export type AgentTurnResult<TResult> = {
     content: string;
     is_error?: boolean;
   }>;
-  // Pipeline widgets a tool emitted on top of its content. Caller persists
-  // these as a follow-up assistant ChatMessage (one pipeline_widget block per
-  // entry) AFTER the tool_results message so the order is
-  // assistant(text+tool_use) → user(tool_result) → assistant(widget). The
-  // runner already yielded them as live `pipeline_widget` events; this is
-  // just the persistence side. Empty when no tool emitted widgets.
-  emittedWidgets: Array<{
-    kind: string;
-    toolUseId: string;
-    payload: unknown;
-  }>;
-  // Status lines tools emitted (see ToolResult.statusLines) — e.g. the show_*
-  // tools' "Pulled up <focus-ref…/>" chip line. Caller persists these as
-  // `pipeline_status` blocks on a follow-up assistant message, like
-  // emittedWidgets. Empty when no tool emitted any.
+  // Status lines tools said (ctx.say) — e.g. the show_* tools' "Pulled up
+  // <focus-ref…/>" chip line. Caller persists these as `pipeline_status` blocks
+  // on a follow-up assistant message AFTER the tool_results message, so the
+  // replay keeps every tool_use next to its tool_result. Empty when none.
   emittedStatusLines: string[];
-  // The pre-minted row ids for those two follow-up messages. The runner already
-  // named them in `message_start` boundaries as it streamed, so the caller MUST
-  // persist under these ids — otherwise the bubbles the client painted live are
-  // strangers to the rows the end-of-turn reconcile loads back, and the whole
-  // turn re-shuffles on screen the moment it ends.
-  widgetsMessageId: string;
+  // The pre-minted row id for that follow-up message. The runner already named
+  // it in a `message_start` boundary as it streamed, so the caller MUST persist
+  // under this id — otherwise the bubble the client painted live is a stranger to
+  // the row the end-of-turn reconcile loads back, and the turn re-shuffles on
+  // screen the moment it ends.
   statusLinesMessageId: string;
+  // What a handoff tool queued this turn (at most one), from a tool that didn't
+  // fail. The caller runs it once the agent's turn is over.
+  queued?: TNext;
   // Every tool this turn dispatched, in order, with its raw result. The domain
-  // layer folds these into whatever it means (last handoff wins; first company
-  // to end wins) — see procedures/registry/chat/runChatTurn.ts.
+  // layer folds these into whatever it means — see
+  // procedures/registry/chat/hankTurns.ts.
   dispatched: DispatchedTool<TResult>[];
   // True if the turn was cut off cleanly mid-stream — a user Stop abort or a
   // transient server↔Anthropic socket drop. Caller persists the partial +
@@ -133,7 +124,8 @@ export type AgentTurnResult<TResult> = {
 type AgentTurnArgs<
   TUi,
   TKind extends string,
-  TResult extends AgentToolResult<TUi, TKind>,
+  TResult extends AgentToolResult,
+  TNext,
 > = RunContext & {
   sessionId: string;
   // Where the turn's stream goes — text deltas, tool chips, panel events. Each
@@ -147,22 +139,25 @@ type AgentTurnArgs<
   // put a scratchpad.
   reasoning: Reasoning;
   system: string | Anthropic.TextBlockParam[];
-  tools: AgentToolDef<unknown, TResult>[];
+  tools: AgentToolDef<unknown, TResult, TUi, TNext>[];
   // Conversation messages to send. Caller is responsible for cache markers
   // (applyHistoryCacheMarker) and for ensuring the final message is USER.
   history: Anthropic.MessageParam[];
 };
 
 // Generic over what the loop carries but never reads: the panel events (`TUi`)
-// and widget kinds (`TKind`) a tool emits, and the tools' full result type. The
-// loop reads `content`, `error`, `events`, `widgets` and `statusLines` off a
-// result (AgentToolResult) and hands every result back whole in `dispatched`,
-// so whatever else the product puts on one reaches the caller untouched.
+// and widget kinds (`TKind`) on the stream, what a handoff tool queues
+// (`TNext`), and the tools' full result type. The loop reads `content` and
+// `error` off a result (AgentToolResult) and hands every result back whole in
+// `dispatched`, so whatever else the product puts on one reaches the caller.
 export async function runAgentTurn<
   TUi,
   TKind extends string,
-  TResult extends AgentToolResult<TUi, TKind>,
->(args: AgentTurnArgs<TUi, TKind, TResult>): Promise<AgentTurnResult<TResult>> {
+  TResult extends AgentToolResult,
+  TNext,
+>(
+  args: AgentTurnArgs<TUi, TKind, TResult, TNext>,
+): Promise<AgentTurnResult<TResult, TNext>> {
   const toolDefs = args.tools.map((t) => ({
     name: t.name,
     description: t.description,
@@ -172,12 +167,11 @@ export async function runAgentTurn<
   // Pre-mint the ids of every ChatMessage row this turn will produce. Two
   // separate needs, one mint: sub-agents spawned mid-turn record the assistant id
   // as their parentMessageId before the row is written (run-tree capture), and
-  // the boundaries below name all three so the client groups its live bubbles
-  // exactly the way the reconcile will.
+  // the boundaries below name both so the client groups its live bubbles exactly
+  // the way the reconcile will.
   const assistantMessageId = newRunTreeId();
-  const widgetsMessageId = newRunTreeId();
   const statusLinesMessageId = newRunTreeId();
-  // A turn writes up to three rows and interleaves their events (tool 1's status
+  // A turn writes up to two rows and interleaves their events (tool 1's status
   // line streams before tool 2's chip completes), so the stream has to say which
   // row it's writing into as it moves between them. Deduped: re-announcing the
   // row already open is a no-op, so call it freely before any group of events.
@@ -201,7 +195,7 @@ export async function runAgentTurn<
     args.reasoning.mode === "thinking" ? args.reasoning.budget : null;
   // Run-tree capture: the exact params this turn sends. Caller merges the
   // system-prompt hash/volatile in and stores it on the TokenUsage row.
-  const requestParams: AgentTurnResult<TResult>["requestParams"] = {
+  const requestParams: AgentTurnResult<TResult, TNext>["requestParams"] = {
     model: args.model,
     maxTokens: args.maxTokens,
     thinkingBudget,
@@ -291,9 +285,7 @@ export async function runAgentTurn<
       stopReason: final.stop_reason,
       content: final.content,
       toolResults: [],
-      emittedWidgets: [],
       emittedStatusLines: [],
-      widgetsMessageId,
       statusLinesMessageId,
       // The stream died before any tool ran.
       dispatched: [],
@@ -328,22 +320,22 @@ export async function runAgentTurn<
   // when they do, the order matters for the replay invariant (tool_results
   // must match tool_use order).
   const toolByName = new Map(args.tools.map((t) => [t.name, t] as const));
-  const toolResults: AgentTurnResult<TResult>["toolResults"] = [];
-  const emittedWidgets: AgentTurnResult<TResult>["emittedWidgets"] = [];
+  const toolResults: AgentTurnResult<TResult, TNext>["toolResults"] = [];
   const emittedStatusLines: string[] = [];
   const dispatched: DispatchedTool<TResult>[] = [];
+  let queued: TNext | undefined;
   // Every await in this loop is ordered on purpose: tools dispatch one at a time
   // (a later call may depend on an earlier one's write, and Stop has to be able
-  // to land between two of them), and each tool's chip, panel events, widgets,
-  // and status lines are said in order after it finishes.
+  // to land between two of them), and each tool's chip, then what it said, go
+  // out in order after it finishes.
   /* eslint-disable no-await-in-loop */
   for (const tu of toolUses) {
     const hidden = HIDDEN_TOOLS.has(tu.name);
     let content = "";
-    // Whatever a handler put in `events` / `widgets`, relayed untouched.
-    let uiEvents: TUi[] = [];
-    let widgets: AgentToolWidget<TKind>[] = [];
-    let statusLines: string[] = [];
+    // What the handler said (ctx.say), relayed untouched once its chip completes,
+    // and what it queued (ctx.queue), kept only if it didn't fail.
+    const said: ToolSaid<TUi>[] = [];
+    let queuedHere: { next: TNext } | undefined;
     let isError = false;
     // One of the two places a RunContext is assembled (the other is
     // runUserMessage opening the run). Everything below this point — the
@@ -351,16 +343,34 @@ export async function runAgentTurn<
     // threads this verbatim. The accumulating emitTrace captures sub-agent
     // interiors for the run tree AND forwards to any live sink; naming this
     // tool's own id as the parent is what nests its children under its chip.
-    const ctx: ToolContext = {
+    const ctx: ToolContext<TUi, TNext> = {
       userId: args.userId,
       sessionId: args.sessionId,
       signal: args.signal,
       trace: { onTrace: emitTrace, parentToolUseId: tu.id },
       runId: args.runId,
       timeZone: args.timeZone,
+      deadlineAt: args.deadlineAt,
+      say: (event) => {
+        said.push(event);
+        return Promise.resolve();
+      },
+      queue: (next) => {
+        if (!toolByName.get(tu.name)?.handoff) {
+          throw new Error(
+            `${tu.name} is not a handoff tool, so it can't queue`,
+          );
+        }
+        if (queued !== undefined || queuedHere !== undefined) {
+          throw new HandoffConflictError(
+            "something was already handed off this turn — one hand-off per turn. Tell the user what's happening; they can ask for the rest next.",
+          );
+        }
+        queuedHere = { next };
+      },
     };
     // Back to the assistant row: the previous iteration may have left the stream
-    // writing into the widget or status row.
+    // writing into the status row.
     await enterRow(assistantMessageId);
     const tool = toolByName.get(tu.name);
     dispatched.push({ name: tu.name });
@@ -396,11 +406,9 @@ export async function runAgentTurn<
             () => tool.handle(parsed.data, ctx),
           );
           content = r.content;
-          uiEvents = r.events ?? [];
-          widgets = r.widgets ?? [];
-          statusLines = r.statusLines ?? [];
           dispatched[dispatched.length - 1].result = r;
           isError = r.error != null;
+          if (!isError && queuedHere) queued = queuedHere.next;
         } catch (err) {
           if (isUserAbortError(err)) {
             if (!hidden) {
@@ -415,9 +423,7 @@ export async function runAgentTurn<
               stopReason: final.stop_reason,
               content: final.content,
               toolResults,
-              emittedWidgets,
               emittedStatusLines,
-              widgetsMessageId,
               statusLinesMessageId,
               dispatched,
               stopped: true,
@@ -428,11 +434,18 @@ export async function runAgentTurn<
               traces: traceAcc.snapshot(),
             };
           }
-          content = toolErrorContent(
-            "DISPATCH_ERROR",
-            `tool ${tu.name} failed: ${err instanceof Error ? err.message : String(err)}`,
-            `${tu.name}:exception`,
-          );
+          content =
+            err instanceof HandoffConflictError
+              ? toolErrorContent(
+                  "STATE_CONFLICT",
+                  `${tu.name} didn't hand off: ${err.message}`,
+                  `${tu.name}:second_handoff`,
+                )
+              : toolErrorContent(
+                  "DISPATCH_ERROR",
+                  `tool ${tu.name} failed: ${err instanceof Error ? err.message : String(err)}`,
+                  `${tu.name}:exception`,
+                );
           isError = true;
         }
       }
@@ -453,26 +466,17 @@ export async function runAgentTurn<
         ...(isError ? { error: true } : {}),
         ...(affectsViewedState ? { affectsViewedState: true } : {}),
       });
-      for (const ui of uiEvents) {
-        await args.say({ type: "ui", event: ui });
-      }
-      // Widgets and status lines are persisted as their own follow-up rows (see
-      // runHankTurn), so the stream moves into them here and back to the
-      // assistant row at the top of the next iteration.
-      if (widgets.length > 0) await enterRow(widgetsMessageId);
-      for (const w of widgets) {
-        emittedWidgets.push(w);
-        await args.say({
-          type: "pipeline_widget",
-          toolUseId: w.toolUseId,
-          kind: w.kind,
-          payload: w.payload,
-        });
-      }
-      if (statusLines.length > 0) await enterRow(statusLinesMessageId);
-      for (const line of statusLines) {
-        emittedStatusLines.push(line);
-        await args.say({ type: "pipeline_status", text: line });
+      // Status lines are persisted as their own follow-up row (see runHankTurn),
+      // so the stream moves into it here and back to the assistant row at the
+      // top of the next iteration. Panel moves aren't row content.
+      for (const event of said) {
+        if (event.type === "ui") {
+          await args.say({ type: "ui", event: event.event });
+        } else {
+          await enterRow(statusLinesMessageId);
+          emittedStatusLines.push(event.text);
+          await args.say({ type: "pipeline_status", text: event.text });
+        }
       }
     }
   }
@@ -482,10 +486,9 @@ export async function runAgentTurn<
     stopReason: final.stop_reason,
     content: final.content,
     toolResults,
-    emittedWidgets,
     emittedStatusLines,
-    widgetsMessageId,
     statusLinesMessageId,
+    queued,
     dispatched,
     stopped: false,
     errored: null,

@@ -43,7 +43,7 @@ Each `ScrapedJob` carries the **canonical role attributes** — the cleaned, use
 
 ## Application-questions support
 
-Only the providers that wire `matchesQuestions` + `fetchQuestions` (greenhouse / lever / ashby / workday / teamtailor / gem / workable / jazzhr) expose scrapeable apply-form questions. The rest omit both, and the router returns `{status:"unsupported"}` **by design** — leave them omitted whenever a provider's apply flow is genuinely login/auth/SPA-gated. **A learned board never supports questions**: nothing in the registry matches its URL, so the router returns `unsupported` with no extra wiring. When questions are unsupported the walkthrough hands off gracefully (`formUnavailable` in [walkthrough/jobArm.ts](../src/server/procedures/registry/walkthrough/jobArm.ts)): Hank asks the user to describe any cover-letter / short-answer fields and drafts them.
+Only the providers that wire `matchesQuestions` + `fetchQuestions` (greenhouse / lever / ashby / workday / teamtailor / gem / workable / jazzhr) expose scrapeable apply-form questions. The rest omit both, and the router returns `{status:"unsupported"}` **by design** — leave them omitted whenever a provider's apply flow is genuinely login/auth/SPA-gated. **A learned board never supports questions**: nothing in the registry matches its URL, so the router returns `unsupported` with no extra wiring. When questions are unsupported the walkthrough hands off gracefully (`formUnavailable` in [walkthrough/jobArm.ts](../src/server/procedures/registry/workOnJob/index.ts)): Hank asks the user to describe any cover-letter / short-answer fields and drafts them.
 
 ### `Company.greenhouseSlug` — reconstructing the apply-form URL
 

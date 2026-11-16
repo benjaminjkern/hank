@@ -1,5 +1,5 @@
 // How a deterministic state change READS to the user. The entity writes return
-// facts; this turns them into the one sentence the state machine yields as a
+// facts; this turns them into the one sentence a walkthrough says as a
 // `pipeline_status` before the panel events fire, so the chat history records
 // what just happened alongside the visual side effect.
 //
@@ -25,10 +25,10 @@ import {
 import type { CritiqueStop } from "@/server/procedures/registry/draftApplication/critiqueAndRevise";
 import { formatFocusRefToken } from "@/shared/focusRefToken";
 
-// Appended to the company set-asides the machine performs so the user sees one
-// coherent transition instead of [action] + [silent gap] + [next picker]. Same
-// string across them so the post-action chrome reads consistently — the
-// no-target reentry branch in dispatchByEntryTarget matches it.
+// Appended to the company set-asides the walkthrough performs (each hands off to
+// the chooser) so the user sees one coherent transition instead of [action] +
+// [silent gap] + [next picker]. Same string across them so the post-action
+// chrome reads consistently.
 const WRAP_DEBRIEF = " Pulling up what's next.";
 
 const MAX_NOTE_CHARS = 80;

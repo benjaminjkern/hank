@@ -9,6 +9,6 @@
 // is handed.
 
 export { HANK_MODEL, HANK_MAX_TOKENS, HANK_REASONING } from "./call";
-export { hankTools, turnCalledHandoffTool } from "./toolset";
+export { hankTools } from "./toolset";
 export { buildHankSystem } from "./system";
 export type { HankSystemPrompt } from "./system";

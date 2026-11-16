@@ -1,4 +1,6 @@
-// The company arm (steps 0-3): the rung ladder for walking ONE company.
+// The company walkthrough (steps 0-3): the rung ladder for walking ONE company.
+// Entered by `company_walkthrough` — Hank's tool, a picker pick, a revive answer,
+// or the tail of a commit / submitted application.
 //
 //   revive-confirm if it was set aside → prep/refresh the board → prescan + scan
 //   the unreviewed postings → shortlist board (seed or re-show) → offer the
@@ -13,9 +15,11 @@
 // what the settle produced, never to start new work — a re-scrape here is how
 // "close these out" turned into a fresh round the user didn't ask for.
 
-import { statusEvent, widgetEvent } from "@/server/contracts";
+import { sayUiEvents, statusEvent, widgetEvent } from "@/server/contracts";
+import type { StepArgs, StepOutcome } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { markCompanyReady } from "@/server/entities/companies/markCompanyStatus";
+import { reviveCompany } from "@/server/entities/companies/resumeCompany";
 import { caughtUpCompany } from "@/server/entities/companies/setCompanyAside";
 import { roundStartedAt } from "@/server/entities/jobs/boardStance";
 import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
@@ -31,31 +35,37 @@ import { preScanPoolWhere } from "@/server/procedures/registry/preScan/pool";
 import { runScan } from "@/server/procedures/registry/scan";
 import { scanPoolWhere } from "@/server/procedures/registry/scan/pool";
 import { runShortlist } from "@/server/procedures/registry/shortlist";
+import { buildShowEvents } from "@/server/views/showEvents";
 
 import { isScrapeStale, runBoardScrape } from "./boardScrape";
 import { runCompanyEnrichStep } from "./companyEnrichStep";
-import { narrateCompanyCaughtUp, narrateCompanySettled } from "./narration";
+import {
+  narrateCompanyCaughtUp,
+  narrateCompanyRevive,
+  narrateCompanySettled,
+} from "./narration";
 import { sayStateChange } from "./sayStateChange";
 import { summarizeCloseRationales } from "./summarizeCloseRationales";
 
-import type { WalkthroughArgs, WalkthroughResult } from "./types";
-
-export const runCompanyArm = procedure(
-  "company_arm",
+export const runCompanyWalkthrough = procedure(
+  "company_walkthrough",
   async (
-    input: WalkthroughArgs & {
+    input: StepArgs & {
       companyId: string;
       // Free-text steer for the shortlist rung, forwarded from company_walkthrough's
       // `direction`. Only the shortlist rung reads it; the earlier rungs (revive,
       // prep, scrape, scan) are unconditional work that a steer can't change.
       direction?: string;
       continuation?: boolean;
+      // The user already said yes to bringing a set-aside company back.
+      revive?: boolean;
     },
-  ): Promise<WalkthroughResult> => {
+  ): Promise<StepOutcome> => {
     const {
       companyId: entryCompanyId,
       direction,
       continuation,
+      revive,
       ...args
     } = input;
     const opts = { continuation };
@@ -66,7 +76,7 @@ export const runCompanyArm = procedure(
 
     // Rung 0: the company was set aside. Walking it again is a REVIVE, and a
     // revive is the user's call — ask before re-checking a board they closed.
-    // It lives in the arm rather than in company_walkthrough so that every way in
+    // It lives here rather than in the company_walkthrough tool so that every way in
     // — the tool, a picker pick, a later re-entry — asks the same question, and
     // the deterministic layer owns every wait-for-user surface. CLOSED = a fit
     // dead-end;
@@ -75,11 +85,32 @@ export const runCompanyArm = procedure(
       where: { userId_companyId: { userId: args.userId, companyId } },
       select: { status: true, company: { select: { name: true } } },
     });
-    if (
+    const setAside =
       revivable &&
       (revivable.status === CompanyStatus.CLOSED ||
-        revivable.status === CompanyStatus.BLOCKED)
-    ) {
+        revivable.status === CompanyStatus.BLOCKED);
+    if (setAside && revive) {
+      // The yes is already in hand (the revive widget, or Hank passing what the
+      // user typed), so revive and keep walking. The on-entry scrape below is
+      // forced fresh by reviveCompany and scans only genuinely-NEW postings;
+      // closed roles stay closed, so a revive can't resurrect a closed backlog.
+      const revived = await reviveCompany({ userId: args.userId, companyId });
+      if (!revived.ok) {
+        await args.say({
+          type: "text",
+          text: "Hmm, I couldn't pull that company back up — let's pick something else to look at.",
+        });
+        return { next: { kind: "show_whats_next" } };
+      }
+      await sayStateChange(
+        args.say,
+        narrateCompanyRevive({
+          companyId,
+          companyName: revivable.company.name,
+        }),
+        (await buildShowEvents(args.userId, { companyId })).events,
+      );
+    } else if (setAside) {
       const name = revivable.company.name;
       await args.say(
         widgetEvent("confirm_revive_company", {
@@ -91,7 +122,7 @@ export const runCompanyArm = procedure(
               : `${name} was set aside earlier because its open roles didn't line up with what you're looking for. Want me to pull it back up and check for anything new?`,
         }),
       );
-      return { wrappedUp: false };
+      return {};
     }
 
     // Step 0a: know who the company is before touching their board — careers URL,
@@ -102,7 +133,7 @@ export const runCompanyArm = procedure(
     // on — and ignores a Stop — is the hidden work we're removing.
     const enriched = await runCompanyEnrichStep({ ...args, companyId });
     if (enriched.wrapped) {
-      return { wrappedUp: true, endedCompanyId: enriched.endedCompanyId };
+      return await afterSetAside(args, enriched.endedCompanyId);
     }
     companyId = enriched.companyId;
 
@@ -146,7 +177,7 @@ export const runCompanyArm = procedure(
           hadRoles: userJobCount > 0,
         });
         if (scraped.wrapped) {
-          return { wrappedUp: true, endedCompanyId: scraped.endedCompanyId };
+          return await afterSetAside(args, scraped.endedCompanyId);
         }
         scrapeDelta = scraped.delta;
       }
@@ -223,8 +254,8 @@ export const runCompanyArm = procedure(
         const scan = await runScan({ ...args, companyId });
         if (scan.rateLimited || scan.timedOut) {
           // Partial scan — rate-limit wall or out of run budget; some jobs are
-          // still unjudged. Don't run the shortlist on a partial pool. Bail with
-          // wrappedUp:false; the next turn re-enters this arm, re-runs scan
+          // still unjudged. Don't run the shortlist on a partial pool. Stop and
+          // wait; the next visit re-enters this walkthrough, re-runs scan
           // (enrichment is cached on the Job and the pool query only picks up
           // the unjudged leftovers), and finishes the rest.
           const readSoFar = scan.matched + scan.skipped + scan.errors;
@@ -235,7 +266,7 @@ export const runCompanyArm = procedure(
                 : "Hit a rate limit partway through — say the word and I'll pick up the rest.",
             ),
           );
-          return { wrappedUp: false };
+          return {};
         }
         if (scan.total > 0) {
           const setAside =
@@ -290,7 +321,7 @@ export const runCompanyArm = procedure(
     // just settled.
     if (scannedCount > 0 || openStanceCount > 0 || rerankable > 0) {
       await runShortlist({ ...args, companyId, direction });
-      return { wrappedUp: false };
+      return {};
     }
 
     // Step 2.5: SHORTLISTED + DEFERRED at this company are the two pools the
@@ -313,7 +344,7 @@ export const runCompanyArm = procedure(
           deferred: pickable.deferred,
         }),
       );
-      return { wrappedUp: false };
+      return {};
     }
 
     // Step 3, continuation form: the user just settled this company themselves —
@@ -339,7 +370,7 @@ export const runCompanyArm = procedure(
           status,
         }),
       );
-      return { wrappedUp: true, endedCompanyId: companyId };
+      return await companyEnded(args);
     }
 
     // Step 3: nothing pickable at this company (no SHORTLISTED, no DEFERRED).
@@ -438,7 +469,7 @@ export const runCompanyArm = procedure(
       await caughtUpCompany({ userId: args.userId, companyId, derive: true });
       // Deliberately NOT narrated — the reasoning above already told the user, in
       // specifics, what happened; the generic "Marked X as caught up" would repeat it.
-      return { wrappedUp: true, endedCompanyId: companyId };
+      return await companyEnded(args);
     }
 
     // Otherwise the user genuinely worked through it — wrap up as caught up.
@@ -458,14 +489,33 @@ export const runCompanyArm = procedure(
         status,
       }),
     );
-    return { wrappedUp: true, endedCompanyId: companyId };
+    return await companyEnded(args);
   },
 );
+
+// The company ended here (caught up, settled, or set aside on entry): drop the
+// panel off it — it's showing a company with nothing left to decide — and hand
+// off to the chooser. `ended` is what files the stretch away once the message is
+// done.
+async function companyEnded(args: StepArgs): Promise<StepOutcome> {
+  await sayUiEvents(args.say, (await buildShowEvents(args.userId)).events);
+  return { next: { kind: "show_whats_next" }, ended: "company" };
+}
+
+// An on-entry step stopped the walk — set the company aside (unreadable board)
+// or not. Only an actual set-aside has a stretch to file away.
+async function afterSetAside(
+  args: StepArgs,
+  endedCompanyId: string | undefined,
+): Promise<StepOutcome> {
+  if (endedCompanyId) return await companyEnded(args);
+  return { next: { kind: "show_whats_next" } };
+}
 
 // Build the SHORTLISTED + DEFERRED row lists for the next_job_picker payload.
 // Both sort by updatedAt asc — stalest first, and the stable order given
 // deferred roles carry no revisit timer.
-// Re-entering the arm (company_walkthrough) is how Hank surfaces the remaining
+// Re-entering the walkthrough (company_walkthrough) is how Hank surfaces the remaining
 // roles after an atomic apply/close/defer — the earlier rungs no-op and it lands
 // on Step 2.5.
 async function loadPickableJobs(

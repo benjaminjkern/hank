@@ -7,10 +7,15 @@
 // expensive. Per-file scenarios = self-contained example + cheap to add.
 
 import "dotenv/config";
-import { sayTo, type Say } from "@/server/contracts";
+import {
+  sayTo,
+  type Entry,
+  type Say,
+  type StepOutcome,
+} from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
-import { runChatTurn } from "@/server/procedures/registry/chat";
-import { runWalkthrough } from "@/server/procedures/registry/walkthrough";
+import { runEntry } from "@/server/procedures/registry/chat";
+import { answerWidget } from "@/server/widgets/answerWidget";
 
 // Constants used by every scenario.
 
@@ -89,21 +94,46 @@ export type Scenario = {
   run: () => Promise<ScenarioResult>;
 };
 
-// Run the walkthrough state machine until exhaustion, collecting events for
-// assertion. Uses SESSION_ID + USER_ID (the scenario sets focus via
-// withFocus before calling this).
-export async function drainStateMachine(): Promise<{
+// Run ONE step on `entry` — no chaining, so a scenario asserts on exactly the
+// procedure it names — collecting events. `wrappedUp` = the step handed off to
+// the what's-next chooser.
+export async function drainStateMachine(entry: Entry): Promise<{
   events: EventRecord[];
+  outcome: StepOutcome;
   wrappedUp: boolean;
 }> {
   const events: EventRecord[] = [];
-  const result = await runWalkthrough({
+  const outcome = await runEntry(entry, {
     userId: USER_ID,
     sessionId: SESSION_ID,
-    userMessage: "",
     say: recordInto(events),
+    afterOtherWork: false,
   });
-  return { events, wrappedUp: result.wrappedUp };
+  return { events, outcome, wrappedUp: wrappedUpBy(outcome) };
+}
+
+// Answer a widget click (the marker text the button sends), optionally running
+// the step it hands off to once. Never runs a `hank` step — that bills a turn.
+export async function drainAnswer(
+  userMessage: string,
+  opts: { follow?: boolean; say?: Say } = {},
+): Promise<{ outcome: StepOutcome | null; wrappedUp: boolean }> {
+  const step = {
+    userId: USER_ID,
+    sessionId: SESSION_ID,
+    say: opts.say ?? sayTo(() => {}),
+  };
+  const outcome = await answerWidget({ ...step, userMessage });
+  const answered = { outcome, wrappedUp: !!outcome && wrappedUpBy(outcome) };
+  if (!opts.follow || !outcome?.next || outcome.next.kind === "hank") {
+    return answered;
+  }
+  await runEntry(outcome.next, { ...step, afterOtherWork: true });
+  return answered;
+}
+
+function wrappedUpBy(outcome: StepOutcome): boolean {
+  return outcome.next?.kind === "show_whats_next";
 }
 
 // A `say` that records what a run tells the user, for assertions. Nothing is
@@ -147,18 +177,24 @@ export async function drainPipeline(userMessage: string): Promise<{
   ]);
   let actionToolCalls = 0;
   const record = recordInto(events);
-  await runChatTurn({
-    userId: USER_ID,
-    sessionId: SESSION_ID,
-    userMessage,
-    say: async (ev) => {
-      if (ev.type === "tool_use_start") {
-        toolCalls++;
-        if (ACTION_TOOL_NAMES.has(ev.name)) actionToolCalls++;
-      }
-      await record(ev);
+  // A typed message is Hank's to answer. Like the app, nothing here writes the
+  // user's row — the scenario's transcript is what Hank reads.
+  void userMessage;
+  await runEntry(
+    { kind: "hank" },
+    {
+      userId: USER_ID,
+      sessionId: SESSION_ID,
+      afterOtherWork: false,
+      say: async (ev) => {
+        if (ev.type === "tool_use_start") {
+          toolCalls++;
+          if (ACTION_TOOL_NAMES.has(ev.name)) actionToolCalls++;
+        }
+        await record(ev);
+      },
     },
-  });
+  );
   return { events, toolCalls, actionToolCalls };
 }
 
@@ -194,8 +230,8 @@ export async function withEventCleanup<T>(body: () => Promise<T>): Promise<T> {
 
 // Focus is ephemeral now — there's no slot to set/restore. Kept as a thin
 // pass-through so existing scenario call sites (which used to set focus) still
-// compile; the focus arg is ignored. A scenario that drives the state machine
-// directly passes an `entryTarget` to runWalkthrough instead.
+// compile; the focus arg is ignored. A scenario that drives a step directly
+// passes its Entry to drainStateMachine instead.
 export async function withFocus<T>(
   _focus: {
     focusedCompanyId: string | null;

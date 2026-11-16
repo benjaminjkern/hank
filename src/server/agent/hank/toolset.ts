@@ -117,7 +117,7 @@ const HANK_TOOLS: AnyToolDef[] = [
   showWhatsNextTool as AnyToolDef,
   // Focus a specific role + hand off to the application workflow — the prose
   // counterpart to tapping a role in the next-role picker. For "let's do the X
-  // role" / "first one's fine". handoff: the walkthrough job arm owns what shows
+  // role" / "first one's fine". handoff: the work_on_job procedure owns what shows
   // next (drafting → submit prompt). Distinct from view_application_questions
   // (read-only inspection — it can't start drafting).
   workOnJobTool as AnyToolDef,
@@ -150,8 +150,8 @@ const HANK_TOOLS: AnyToolDef[] = [
   listCompaniesTool as AnyToolDef,
   // Scrape a company's live board for new postings ("any new roles?", "look
   // again"). Distinct from company_walkthrough, which reads jobs already on
-  // file. handoff: an explicit hand-off to the walkthrough pipeline — after the
-  // scrape, the state machine scans + shortlists the new survivors, narrated.
+  // file. handoff: after the scrape it queues the company walkthrough, which
+  // scans + shortlists the new survivors, narrated.
   // See scrapeJobsForCompany.ts.
   scrapeJobsForCompanyTool as AnyToolDef,
   // Correct a company's stored status / reason on the watchlist row — the
@@ -192,8 +192,9 @@ const HANK_TOOLS: AnyToolDef[] = [
   // NONE of these are `handoff`. They're mutations, not entries into a
   // sequence — ending Hank's turn on one would cut his reply off mid-sentence
   // and cap "close these three" at one company. The company-level ones report
-  // `endedCompanyId`, off which runUserMessage runs the segment wrap once per
-  // message; close_job / defer_job are per-row and end no company.
+  // `ended`, off which the chat loop files the stretch away once per message;
+  // close_job / defer_job are per-row and end no company. None moves on by
+  // itself either — Hank hands off to what the user named, or show_whats_next.
   closeCompanyTool as AnyToolDef,
   pauseCompanyTool as AnyToolDef,
   // Block a company (couldn't read its board) — a TECHNICAL set-aside, never a
@@ -247,7 +248,7 @@ const HANK_TOOLS: AnyToolDef[] = [
   listOpportunitiesTool as AnyToolDef,
   listContactsTool as AnyToolDef,
   // Co-write persist primitive — merge-upserts one answer at a time so the
-  // collaborative drafting flow doesn't clobber sibling answers and the job arm
+  // collaborative drafting flow doesn't clobber sibling answers and work_on_job
   // can auto-detect completion. Resolves its job by slug and touches only that
   // job's answers, so there's nothing for it to corrupt from an unrelated turn.
   reviewApplicationTool as AnyToolDef,
@@ -256,21 +257,4 @@ const HANK_TOOLS: AnyToolDef[] = [
 
 export function hankTools(): AnyToolDef[] {
   return [...HANK_TOOLS];
-}
-
-// Names of tools flagged `handoff: true` (see ToolDef.handoff). Derived from the
-// tool defs so a new routing tool is picked up automatically by setting the flag
-// — no hardcoded name list to keep in sync. The runner stops its agent loop after
-// a turn that called one of these (the deterministic layer owns what shows next).
-const HANDOFF_TOOLS: ReadonlySet<string> = new Set(
-  HANK_TOOLS.filter((t) => t.handoff === true).map((t) => t.name),
-);
-
-// True if any tool_use block in this turn's content called a handoff tool.
-export function turnCalledHandoffTool(
-  content: ReadonlyArray<{ type: string; name?: string }>,
-): boolean {
-  return content.some(
-    (b) => b.type === "tool_use" && !!b.name && HANDOFF_TOOLS.has(b.name),
-  );
 }

@@ -1,6 +1,7 @@
 import { prisma } from "@/server/db/prisma";
 import { CompanyStatus } from "@/server/generated/prisma/client";
-import { dispatchNextCompanyPicker } from "@/server/widgets/dispatchNextCompanyPicker";
+import { sayTo } from "@/server/contracts";
+import { nextCompanyPickerAnswer } from "@/server/widgets/registry/nextCompanyPicker";
 
 import { SESSION_ID, USER_ID } from "../lib";
 
@@ -29,15 +30,22 @@ const scenario: Scenario = {
       select: { companyId: true },
     });
     try {
-      const result = await dispatchNextCompanyPicker({
-        userId: USER_ID,
-        sessionId: SESSION_ID,
-        submission: {
+      const said: string[] = [];
+      const result = await nextCompanyPickerAnswer.answer(
+        {
           kind: "next_company_picker",
           choice: "company",
           companyId: target.companyId,
         },
-      });
+        {
+          userId: USER_ID,
+          sessionId: SESSION_ID,
+          say: sayTo((ev) => {
+            if (ev.type === "pipeline_status") said.push(ev.text);
+          }),
+        },
+      );
+      const next = result?.next;
       const post = await prisma.companyInteraction.findUniqueOrThrow({
         where: {
           userId_companyId: { userId: USER_ID, companyId: target.companyId },
@@ -51,20 +59,16 @@ const scenario: Scenario = {
           companyId: { in: priorActives.map((c) => c.companyId) },
         },
       });
-      if (result.kind !== "enter") {
-        notes.push(`dispatch returned ${result.kind}, expected a destination`);
-        return { ok: false, notes };
-      }
       notes.push(
         `target status after dispatch: ${post.status} (expected APPLYING)`,
-        `entryTarget: ${JSON.stringify(result.entryTarget)} (expected company ${target.companyId})`,
-        `statusText: "${result.statusText}"`,
+        `next: ${JSON.stringify(next)} (expected company ${target.companyId})`,
+        `said: ${JSON.stringify(said)}`,
         `prior APPLYING count preserved: ${stillActiveCount}/${priorActives.length}`,
       );
       const ok =
         post.status === CompanyStatus.APPLYING &&
-        result.entryTarget?.kind === "company" &&
-        result.entryTarget?.id === target.companyId &&
+        next?.kind === "company_walkthrough" &&
+        next.companyId === target.companyId &&
         stillActiveCount === priorActives.length;
       return { ok, notes };
     } finally {

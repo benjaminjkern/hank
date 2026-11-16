@@ -1,5 +1,6 @@
-// The job arm (steps 4-6): fetch the application form, draft the cover letter +
-// short answers, then wait for the user to submit.
+// Work one role (steps 4-6): fetch the application form, draft the cover letter
+// + short answers, then wait for the user to submit. Entered by `work_on_job` —
+// Hank's tool or a next-job-picker pick.
 //
 // Focus is ephemeral, so there's no sticky co-write / paused-drafting marker:
 // re-entering a job just re-runs the draft procedure, which re-derives what's
@@ -7,7 +8,7 @@
 // Resume is automatic and idempotent — nothing to check.
 
 import { statusEvent, sayUiEvents } from "@/server/contracts";
-import type { Say } from "@/server/contracts";
+import type { Say, StepArgs, StepOutcome } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { JobInteractionStatus } from "@/server/generated/prisma/client";
@@ -18,15 +19,12 @@ import {
   buildShowEvents,
 } from "@/server/views/showEvents";
 
-import { runCompanyArm } from "./companyArm";
-import { narrateApplicationReady } from "./narration";
+import { narrateApplicationReady } from "../companyWalkthrough/narration";
 
-import type { WalkthroughArgs, WalkthroughResult } from "./types";
-
-export const runJobArm = procedure(
-  "job_arm",
+export const runWorkOnJob = procedure(
+  "work_on_job",
   async (
-    input: WalkthroughArgs & {
+    input: StepArgs & {
       jobId: string;
       // freshEntry = the user deliberately entered this job THIS turn (picked it
       // from the next-job picker, or said "resume drafting"), as opposed to an
@@ -35,12 +33,12 @@ export const runJobArm = procedure(
       // status instead of going silent.
       freshEntry?: boolean;
     },
-  ): Promise<WalkthroughResult> => {
+  ): Promise<StepOutcome> => {
     const { jobId, freshEntry, ...args } = input;
     const opts = { freshEntry };
     // Defensive: if the dispatched job is no longer live work (the user skipped /
-    // deferred / applied since it was picked), self-correct — re-dispatch via the
-    // company arm, which picks the next one. Prevents the state machine from
+    // deferred / applied since it was picked), self-correct — hand off to the
+    // company walkthrough, which picks the next one. Prevents a stale pick from
     // sitting on a terminal job and doing nothing every subsequent turn.
     // A row already mid-draft (APPLYING) is live: re-entering it resumes.
     const ji = await prisma.jobInteraction.findFirst({
@@ -56,23 +54,25 @@ export const runJobArm = procedure(
           "That job is no longer shortlisted — going back to the company.",
         ),
       );
-      // Focus is ephemeral — nothing to clear; re-dispatch to the company arm
+      // Focus is ephemeral — nothing to clear; hand off to the company walkthrough
       // (which surfaces the next-role picker) and show the company page. A
       // continuation — this bounce corrects a stale pick mid-flow, it doesn't
-      // start a fresh visit, so the arm must not re-scrape on the way through.
+      // start a fresh visit, so the walkthrough must not re-scrape on the way through.
       if (ji?.job.companyId) {
         await sayUiEvents(
           args.say,
           (await buildShowEvents(args.userId, { companyId: ji.job.companyId }))
             .events,
         );
-        return await runCompanyArm({
-          ...args,
-          companyId: ji.job.companyId,
-          continuation: true,
-        });
+        return {
+          next: {
+            kind: "company_walkthrough",
+            companyId: ji.job.companyId,
+            continuation: true,
+          },
+        };
       }
-      return { wrappedUp: true };
+      return { next: { kind: "show_whats_next" } };
     }
 
     // Steps 4–5.25: fetch the form, decide, draft, and run the critique/revise
@@ -163,7 +163,7 @@ export const runJobArm = procedure(
         });
       }
     }
-    return { wrappedUp: false };
+    return {};
   },
 );
 
@@ -178,7 +178,7 @@ async function enterCoWrite(
   companyName: string,
   items: string[],
   drafted: boolean,
-): Promise<WalkthroughResult> {
+): Promise<StepOutcome> {
   const list = items.map((i) => `- ${i}`).join("\n");
   const lead = drafted
     ? `I've written what I could for ${companyName} — it's on the right. `
@@ -192,5 +192,5 @@ async function enterCoWrite(
       ? `Tell me a bit about it and I'll shape it into a strong answer with you.`
       : `Tell me about the first and I'll shape it into a strong answer — we'll work through them together.`;
   await say({ type: "text", text: `${intro}\n\n${list}\n\n${closer}` });
-  return { wrappedUp: false };
+  return {};
 }

@@ -4,9 +4,9 @@
 // Import from `@/server/procedures/registry/chat`, not a deep path — the file
 // split inside stays free to move.
 //
-// `runChat` is the entry. `runChatTurn` is exported only because the offline
-// scenario harness drives a single turn in isolation (scripts/scenarios/lib.ts);
+// `runChat` is the entry. `runEntry` is exported only because the offline
+// scenario harness drives a single step in isolation (scripts/scenarios/lib.ts);
 // in the app nothing but runChat should be calling it.
 
 export { runChat, type ChatArgs } from "./runChat";
-export { runChatTurn } from "./runChatTurn";
+export { runEntry } from "./runEntry";

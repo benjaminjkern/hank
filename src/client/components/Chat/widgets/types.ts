@@ -103,11 +103,11 @@ export type ShortlistRegenGatePayload = {
   scannedOnly?: boolean;
 };
 
-// next_job_picker — emitted by the walkthrough state machine inside a company
-// arm once SCANNED jobs have been triaged. Replaces the silent auto-focus
+// next_job_picker — emitted by the company walkthrough once SCANNED jobs have
+// been triaged. Replaces the silent auto-focus
 // onto the stalest SHORTLISTED job: the user picks which job to walk through
 // next from a list of SHORTLISTED + DEFERRED. Picking a DEFERRED row revives
-// it (status → SHORTLISTED + defer fields cleared) and enters the job arm.
+// it (status → SHORTLISTED + defer fields cleared) and enters work_on_job.
 // The "Done with this company" button wraps the company as CAUGHT_UP.
 export type NextJobPickerShortlistedRow = {
   jobId: string;
@@ -261,7 +261,7 @@ export type WidgetSubmission =
   | { kind: "next_company_picker"; choice: "job"; jobId: string }
   | { kind: "next_company_picker"; choice: "add_companies" }
   // Two branches for the next-job picker:
-  //   - pick a job → enter the job arm; DEFERRED rows are auto-revived to
+  //   - pick a job → enter work_on_job; DEFERRED rows are auto-revived to
   //     SHORTLISTED in the same transaction (deferReason/Note/Until cleared).
   //   - caught_up → mark the company CAUGHT_UP and emit the next-company
   //     picker on the following pass.

@@ -32,9 +32,9 @@ export type WidgetKind =
   // next-company picker. The "I want this one" override for an auto-skip.
   | "confirm_revive_company"
   | "confirm_application_submit"
-  // The between-things chooser, emitted by renderWhatsNext.
+  // The between-things chooser, emitted by the show_whats_next entry.
   | "next_company_picker"
-  // Emitted by the walkthrough state machine inside a company arm after
+  // Emitted by the company walkthrough after
   // SCANNED jobs have been triaged. Replaces the silent auto-focus onto the
   // stalest SHORTLISTED job — the user picks which to work on next (incl.
   // DEFERRED rows that get revived on pick).

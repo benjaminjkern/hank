@@ -408,7 +408,7 @@ async function loadBacklog(userId: string): Promise<NextOptionRow[]> {
   // scraped and has zero Job rows on file. The picker calls these out
   // BEFORE the user clicks so picking the row isn't a surprise — and so
   // the user knows the walkthrough is going to run the prep step
-  // automatically (step 0 in runCompanyArm).
+  // automatically (step 0 of the company walkthrough).
   const needsScrape = (
     lastScrapedJobsAt: Date | null,
     jobCount: number,

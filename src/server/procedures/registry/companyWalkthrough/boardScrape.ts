@@ -1,4 +1,4 @@
-// Step 0b of runCompanyArm: pull the company's live board. The ONE scrape path
+// Step 0b of the company walkthrough: pull the company's live board. The ONE scrape path
 // in the walkthrough — entered both when the user has no roles on file yet and
 // when they do but the board is stale.
 //
@@ -23,7 +23,7 @@ import { urlHost } from "@/shared/utils/url";
 import { narrateCompanyBlock, narrateCompanyCaughtUp } from "./narration";
 import { sayStateChange } from "./sayStateChange";
 
-import type { WalkthroughArgs } from "./types";
+import type { StepArgs } from "@/server/contracts";
 
 // How stale a company's last board scrape can be before walkthrough-entry
 // re-scrapes it. 24h: a returning-the-next-day user picks up new postings on
@@ -54,7 +54,7 @@ type BoardScrapeResult =
 export const runBoardScrape = procedure(
   "board_scrape",
   async (
-    input: WalkthroughArgs & {
+    input: StepArgs & {
       companyId: string;
       sourceUrl: string;
       displayName: string;

@@ -42,7 +42,7 @@ const scenario: Scenario = {
         focusedJobId: candidate.jobId,
         focusedOpportunityId: null,
       },
-      () => drainStateMachine(),
+      () => drainStateMachine({ kind: "work_on_job", jobId: candidate.jobId }),
     );
     const noisy = result.events.filter(
       (e) =>

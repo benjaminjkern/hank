@@ -18,7 +18,7 @@ export const commitProfileTool: ToolDef<Record<string, never>> = {
   parser: z.object({}).strict(),
   async handle(_input, ctx) {
     const r = await runCommitProfile(ctx);
-    if (r.wrappedUp) {
+    if (r.committed) {
       return { content: r.summary };
     }
     const missing = r.missing.length

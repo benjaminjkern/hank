@@ -66,12 +66,12 @@ export async function deferJob(args: {
 }
 
 // Work a role: promote a pre-application row (NEW / SCANNED / DEFERRED) to
-// SHORTLISTED so the walkthrough job arm treats it as live. The shared write
+// SHORTLISTED so the work_on_job procedure treats it as live. The shared write
 // behind two entry points — the next_job_picker "pick" branch and the
 // `work_on_job` tool.
 //
-// APPLIED / CLOSED / interview+ rows are left alone; the job arm's defensive
-// status check self-corrects those back to the company arm. Idempotent:
+// APPLIED / CLOSED / interview+ rows are left alone; work_on_job's defensive
+// status check hands those back to the company walkthrough. Idempotent:
 // re-working an already-SHORTLISTED job is a no-op-shaped write.
 export async function promoteJobForWork(args: {
   userId: string;

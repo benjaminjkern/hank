@@ -1,4 +1,4 @@
-// The draft-application procedure — the reusable chain the walkthrough job arm
+// The draft-application procedure — the reusable chain the work_on_job procedure
 // runs once a job is being applied to, AND the on-demand engine the
 // draft_application tool drives. Steps:
 //
@@ -8,12 +8,12 @@
 //   4. critique + revise            → critiqueAndReviseForm (./critiqueAndRevise)
 //
 // It narrates through `say` (pipeline_status / text / refresh_viewed_state) and
-// RETURNS the outcome the shell (runJobArm) needs to decide the
+// RETURNS the outcome the shell (runWorkOnJob) needs to decide the
 // co-write hand-off (Step 5.5) and the terminal narration (Step 6). The co-write
 // gates + enterCoWrite stay in the shell; co-write re-derives its pending items
 // on job re-entry (no persisted marker — focus is ephemeral).
 //
-// Two triggers: the state machine auto-runs it on job entry (no extraContext);
+// Two triggers: runWorkOnJob runs it on job entry (no extraContext);
 // the draft_application tool runs it on demand (extraContext = the user's chat
 // guidance, forceRedecide to re-run from scratch). Questions = the scraped form
 // MERGED with the per-user hand-added overlay (loadMergedQuestions). Every write
@@ -132,7 +132,7 @@ export const runDraftApplication = procedure(
     // Starting a pass is what separates the role being written from the ones
     // queued behind it — both read SHORTLISTED otherwise, so nothing could tell
     // "next up" from "on screen right now". It lives here rather than in
-    // work_on_job so both entries (the walkthrough job arm and draft_application)
+    // work_on_job so both entries (the work_on_job procedure and draft_application)
     // get it. Idempotent, and it only ever moves a row forward.
     await prisma.jobInteraction.updateMany({
       where: {

@@ -2,7 +2,7 @@ import { CompanyStatus } from "@/server/generated/prisma/client";
 import {
   narrateCompanyCaughtUp,
   narrateJobClose,
-} from "@/server/procedures/registry/walkthrough/narration";
+} from "@/server/procedures/registry/companyWalkthrough/narration";
 
 import type { Scenario } from "../lib";
 

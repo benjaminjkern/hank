@@ -19,7 +19,7 @@
 // it; an open thread means he asked something nobody answered. Only when BOTH
 // are zero is "looks good to me" a structured choice rather than a message —
 // there is nothing left for him to react to, so the commit skips the LLM turn
-// entirely (widgets/dispatchCommitNegotiation.ts).
+// entirely (widgets/registry/commitNegotiation.ts).
 //
 // Every surface implements the pending half; only the application has open
 // threads today, and the other two report zero rather than omitting the field —

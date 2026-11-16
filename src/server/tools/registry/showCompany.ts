@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { sayUiEvents, statusEvent } from "@/server/contracts";
 import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
 import { toolError } from "@/server/platform/agent/toolError";
 import { buildShowEvents } from "@/server/views/showEvents";
@@ -32,12 +33,14 @@ export const showCompanyTool: ToolDef<{ company: string }> = {
         "show_company:not_found:company",
       );
     }
+    await sayUiEvents(ctx.say, show.events);
+    await ctx.say(
+      statusEvent(
+        `Pulled up ${formatFocusRefToken("company", r.value.id, show.company.name)}.`,
+      ),
+    );
     return {
       content: `Put ${r.value.slug}'s page on the user's screen. Nothing else happens — this is display only.`,
-      events: show.events,
-      statusLines: [
-        `Pulled up ${formatFocusRefToken("company", r.value.id, show.company.name)}.`,
-      ],
     };
   },
 };

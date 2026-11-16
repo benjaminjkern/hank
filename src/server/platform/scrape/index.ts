@@ -42,7 +42,7 @@ type TestScrapeResult =
 // Verify a candidate careers URL without writing anything to the DB. The
 // orchestrator runs the real scrape (and the upsert) exactly once after the
 // hunter commits — see huntThenFinalize in
-// procedures/registry/walkthrough/boardScrape.ts.
+// procedures/registry/companyWalkthrough/boardScrape.ts.
 //
 // Deliberately WIRED-PROVIDERS-ONLY, no probe: this is the function
 // probeAtsBoards fans out across ~24 slug candidates in parallel, and paying

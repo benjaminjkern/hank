@@ -19,11 +19,11 @@ export const commitDiscoveryTool: ToolDef<Record<string, never>> = {
   description:
     "Act on the company list on the user's screen: add every company still checked, record the ones they unchecked. **Every company you found starts CHECKED** — surfacing it is the proposal that it's worth tracking — so the user's job is to uncheck what they don't want and tell you to go. Call this the moment they do: any go-ahead ('add those', 'yeah go ahead', 'looks good', 'that's right') means call it, and so does a message that is only checkbox changes, since changing the list IS the ask. Do NOT call it when they're still reacting to the batch ('these are all too big', 'anything smaller?') — that's find_companies again with what they said as the direction. This settles the whole list, so don't call it while they're mid-thought. Takes no arguments: it reads what's on screen. Calling this ends your turn, so say anything you want to say BEFORE it.",
   parser: z.object({}),
-  handle() {
+  handle(_input, ctx) {
+    ctx.queue({ kind: "commit_discovery" });
     return Promise.resolve({
       content:
         "Handed off to the company-list commit. It adds the checked companies, records the passes, and clears the list off screen. Nothing more to do this turn — don't list any companies in chat.",
-      entryTarget: { kind: "discovery_commit" as const },
     });
   },
 };

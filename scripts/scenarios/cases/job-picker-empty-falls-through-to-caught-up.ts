@@ -109,7 +109,11 @@ const scenario: Scenario = {
             focusedJobId: null,
             focusedOpportunityId: null,
           },
-          async () => await drainStateMachine(),
+          async () =>
+            await drainStateMachine({
+              kind: "company_walkthrough",
+              companyId: ci.companyId,
+            }),
         );
         const sawPickerWidget = result.events.some(
           (e) => e.type === "pipeline_widget" && e.kind === "next_job_picker",

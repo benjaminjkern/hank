@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { sayUiEvents } from "@/server/contracts";
 import {
   resolveQuestionId,
   persistApplicationAnswer,
@@ -101,9 +102,9 @@ export const draftApplicationQuestionTool: ToolDef<{
 
     const label = isCover ? "the cover letter" : `"${resolved.text}"`;
     const { events } = await buildApplicationEvents(ctx.userId, jobId);
+    await sayUiEvents(ctx.say, events);
     return {
       content: `Drafted ${label} onto the application page for ${persisted.jobSlug} and put it on the user's screen. Refine with another draft_application_question call if they want changes.`,
-      events,
     };
   },
 };

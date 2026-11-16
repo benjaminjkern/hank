@@ -9,15 +9,14 @@
 // (hasPriorAssistantTurn) and the caller decides what it means. Deciding whether
 // this turn runs the profile-intake body, which companies are switchable, or
 // what gaps to open on is domain work and lives with the domain
-// (procedures/registry/chat/runChatTurn.ts). Same for the outcome — this returns
-// each tool's raw result and lets the caller decide one of them ended a company.
+// (procedures/registry/chat/hankTurns.ts). Same for the outcome — this returns
+// each tool's raw result and what was queued, and lets the caller decide.
 
 import {
   HANK_MAX_TOKENS,
   HANK_MODEL,
   HANK_REASONING,
   hankTools,
-  turnCalledHandoffTool,
   type HankSystemPrompt,
 } from "@/server/agent/hank";
 import {
@@ -25,7 +24,7 @@ import {
   appendToolResultMessage,
   loadSessionMessages,
 } from "@/server/agent/session";
-import type { Say } from "@/server/contracts";
+import type { Entry, Say } from "@/server/contracts";
 import {
   runAgentTurn,
   type DispatchedTool,
@@ -73,10 +72,9 @@ export type HankTurnArgs = RunContext & {
 
 export type HankTurnResult = {
   agentCalledTool: boolean;
-  // The agent handed control to the deterministic layer this turn, so the loop
-  // stops here. A `handoff` is a ToolDef flag, not a name list — see
-  // agent/hank/toolset.ts.
-  calledHandoffTool: boolean;
+  // What a handoff tool queued this turn (only from one that didn't fail). Set
+  // means Hank handed off, so his loop stops and the caller runs it.
+  queued?: Entry;
   // The user hit Stop (or the stream dropped) mid-turn; the partial is saved and
   // the `stopped` event already said. Nothing should run after it.
   stopped: boolean;
@@ -94,7 +92,7 @@ export async function runHankTurn(args: HankTurnArgs): Promise<HankTurnResult> {
   );
   const loaded = await loadSessionMessages(args.sessionId);
 
-  // A prior loop iteration that emitted a widget or a status line leaves the
+  // A prior loop iteration that emitted a status line leaves the
   // reloaded history ending on a completed assistant/UI turn with nothing new to
   // respond to. That's a wait-for-user terminal (and re-invoking on a trailing
   // assistant is an invalid prefill — DeepSeek v4-pro 400s it, as does
@@ -103,12 +101,7 @@ export async function runHankTurn(args: HankTurnArgs): Promise<HankTurnResult> {
   // computes this from the RAW rows, because provenance re-roling can move the
   // terminal off the assistant channel — see endsAwaitingUser.
   if (loaded.endsAwaitingUser && !args.openingNudge) {
-    return {
-      agentCalledTool: false,
-      calledHandoffTool: false,
-      stopped: false,
-      dispatched: [],
-    };
+    return { agentCalledTool: false, stopped: false, dispatched: [] };
   }
   const history = applyHistoryCacheMarker(
     args.openingNudge
@@ -119,7 +112,7 @@ export async function runHankTurn(args: HankTurnArgs): Promise<HankTurnResult> {
     hasPriorAssistantTurn: history.some((m) => m.role === "assistant"),
   });
 
-  const turn = await runAgentTurn<UiEvent, WidgetKind, ToolResult>({
+  const turn = await runAgentTurn<UiEvent, WidgetKind, ToolResult, Entry>({
     ...args,
     client,
     model,
@@ -143,28 +136,9 @@ export async function runHankTurn(args: HankTurnArgs): Promise<HankTurnResult> {
       turnIndex: args.turnIndex,
     });
   }
-  // These two rows carry the ids runAgentTurn already announced on the stream —
-  // pass them through, or the client's live bubbles and these rows are different
-  // messages and the turn re-shuffles on screen when the reconcile lands.
-  if (turn.emittedWidgets.length > 0) {
-    await appendAssistantMessage(
-      args.sessionId,
-      turn.emittedWidgets.map(
-        (w) =>
-          ({
-            type: "pipeline_widget",
-            toolUseId: w.toolUseId,
-            kind: w.kind,
-            payload: w.payload,
-          }) as unknown as Anthropic.ContentBlock,
-      ),
-      {
-        id: turn.widgetsMessageId,
-        runId: args.runId,
-        turnIndex: args.turnIndex,
-      },
-    );
-  }
+  // This row carries the id runAgentTurn already announced on the stream — pass
+  // it through, or the client's live bubble and this row are different messages
+  // and the turn re-shuffles on screen when the reconcile lands.
   if (turn.emittedStatusLines.length > 0) {
     await appendAssistantMessage(
       args.sessionId,
@@ -186,8 +160,8 @@ export async function runHankTurn(args: HankTurnArgs): Promise<HankTurnResult> {
   // Release the rows runAgentTurn announced. This turn is the one emitter that
   // writes its own — its assistant row carries `thinking` / `tool_use` blocks
   // the stream never sees, so recordTranscript can't build it — and the release
-  // is what hands the stream back, so whatever runs after this turn (the
-  // walkthrough state machine, the what's-next picker) gets persisted again.
+  // is what hands the stream back, so whatever runs after this turn (a queued
+  // procedure, the what's-next picker) gets persisted again.
   await args.say({ type: "message_end" });
 
   await recordUsage({
@@ -221,7 +195,7 @@ export async function runHankTurn(args: HankTurnArgs): Promise<HankTurnResult> {
 
   return {
     agentCalledTool: turn.content.some((b) => b.type === "tool_use"),
-    calledHandoffTool: !turn.stopped && turnCalledHandoffTool(turn.content),
+    ...(turn.stopped || !turn.queued ? {} : { queued: turn.queued }),
     stopped: turn.stopped,
     dispatched: turn.dispatched,
   };

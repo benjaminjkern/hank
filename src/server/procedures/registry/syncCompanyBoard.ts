@@ -2,7 +2,7 @@
 // shared scrape→persist core behind BOTH callers that pull a company's board:
 //   - the scrape_jobs_for_company procedure (runScrapeJobsForCompany, which
 //     additionally prescans the delta + shows the result in the panel), and
-//   - the walkthrough state machine's on-entry board pull (runBoardScrape).
+//   - the company walkthrough's on-entry board pull (runBoardScrape).
 // One scrape, one upsert, one stamp — so the two paths can't drift.
 //
 // Deliberately narrow: it does NOT prescan, flip status, or touch the panel.
