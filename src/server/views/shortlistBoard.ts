@@ -11,11 +11,6 @@ import {
   JobInteractionStatus,
   ProposedVerdict,
 } from "@/generated/prisma/client";
-import {
-  BOARD_GROUP_OF_TIER,
-  SHORTLIST_BOARD_TIERS,
-  type ShortlistBoardTier,
-} from "@/lib/shortlistBoardTiers";
 import { prisma } from "@/server/db/prisma";
 import {
   isOnBoard,
@@ -34,6 +29,11 @@ import type {
   NegotiationRow,
   NegotiationState,
 } from "@/server/views/negotiationPanel";
+import {
+  BOARD_GROUP_OF_TIER,
+  SHORTLIST_BOARD_TIERS,
+  type ShortlistBoardTier,
+} from "@/shared/shortlistBoardTiers";
 
 export type BoardCounts = {
   picked: number;

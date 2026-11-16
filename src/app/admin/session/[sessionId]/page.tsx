@@ -1,14 +1,14 @@
 import { notFound } from "next/navigation";
 
-import { ChatPanel } from "@/components/Chat/ChatPanel";
-import { ChatHydrator } from "@/components/ChatHydrator";
-import { ImpersonationBanner } from "@/components/Layout/ImpersonationBanner";
-import { SplitLayout } from "@/components/Layout/SplitLayout";
-import { TopBar } from "@/components/Layout/TopBar";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { RightPanel } from "@/components/RightPanel/RightPanel";
-import { requireAdmin } from "@/server/auth/requireAdmin";
+import { ChatPanel } from "@/client/components/Chat/ChatPanel";
+import { ChatHydrator } from "@/client/components/ChatHydrator";
+import { ImpersonationBanner } from "@/client/components/Layout/ImpersonationBanner";
+import { SplitLayout } from "@/client/components/Layout/SplitLayout";
+import { TopBar } from "@/client/components/Layout/TopBar";
+import { LoadingOverlay } from "@/client/components/LoadingOverlay";
+import { RightPanel } from "@/client/components/RightPanel/RightPanel";
 import { prisma } from "@/server/db/prisma";
+import { requireAdmin } from "@/server/platform/auth/requireAdmin";
 
 export const dynamic = "force-dynamic";
 

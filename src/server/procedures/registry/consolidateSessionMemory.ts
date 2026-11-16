@@ -25,8 +25,8 @@ import {
   appendMemory,
   mergeMemorySection,
   listMemories,
-} from "@/server/memory/store";
-import { withTraceSpan } from "@/server/platform/trace/span";
+} from "@/server/entities/memory/store";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {
   memoryConsolidationSubAgent,
@@ -43,16 +43,16 @@ const RECENT_MESSAGES = 40;
 // and downgraded to an append — see the guard below.
 const ANTI_SHRINK_FLOOR = 200;
 
-export async function runConsolidateSessionMemory(
-  args: RunContext & { sessionId: string },
-): Promise<{ writeCount: number }> {
-  return await withTraceSpan(
-    "consolidate_session_memory",
-    args.trace,
-    (trace) => consolidateSessionMemory({ ...args, trace }),
-    (r) => `${r.writeCount} memory write${r.writeCount === 1 ? "" : "s"}`,
-  );
-}
+export const runConsolidateSessionMemory = procedure(
+  "consolidate_session_memory",
+  async (
+    args: RunContext & { sessionId: string },
+  ): Promise<{ writeCount: number }> => await consolidateSessionMemory(args),
+  {
+    summarize: (r) =>
+      `${r.writeCount} memory write${r.writeCount === 1 ? "" : "s"}`,
+  },
+);
 
 async function consolidateSessionMemory(
   args: RunContext & { sessionId: string },

@@ -6,9 +6,9 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import styled from "styled-components";
 
-import { money } from "@/utils/format";
-import { isRecord, isScalar } from "@/utils/guards";
-import { prettyJson, tryParseJson } from "@/utils/json";
+import { money } from "@/shared/utils/format";
+import { isRecord, isScalar } from "@/shared/utils/guards";
+import { prettyJson, tryParseJson } from "@/shared/utils/json";
 
 import type {
   LlmCallInfo,

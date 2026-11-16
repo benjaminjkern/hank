@@ -15,7 +15,7 @@ import {
   applicationDeciderSubAgent,
   type ApplicationDecision,
 } from "@/server/subagents/registry/applicationDecider";
-import { normalizeForCompare } from "@/utils/text";
+import { normalizeForCompare } from "@/shared/utils/text";
 
 import {
   loadApplicationDeciderInput,

@@ -1,10 +1,10 @@
 import { z } from "zod";
 
-import { isStockItem } from "@/lib/applicationItem";
 import {
   loadApplicationView,
   type ApplicationItemStatus,
 } from "@/server/views/application";
+import { isStockItem } from "@/shared/applicationItem";
 
 import { resolveJobArg } from "../lib/resolveEntityArg";
 import { toolError } from "../lib/toolError";
@@ -24,17 +24,12 @@ export const readApplicationDraftsTool: ToolDef<{ job?: string }> = {
   name: "read_application_drafts",
   description:
     "Read the cover letter and short-answer responses already drafted/saved for a job, so you can quote, summarize, or revise them with the user. `job` (the role's slug) is the role the user means (pass a different slug to read another job's drafts — use list_jobs / list_companies to find it). Returns the full cover-letter text and every short-answer question + answer, noting which the user has already worked on vs. which are still just a draft Hank wrote. Call this whenever the user asks about, wants to see, or wants to change what's been written for an application — don't say you can't see it.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: {
-        type: "string",
-        description: "The role's slug — the role the user means.",
-      },
-    },
-    required: [],
-  },
-  parser: z.object({ job: z.string().optional() }),
+  parser: z.object({
+    job: z
+      .string()
+      .optional()
+      .describe("The role's slug — the role the user means."),
+  }),
   async handle({ job: jobSlug }, ctx) {
     const jobResolved = await resolveJobArg(ctx, jobSlug, {
       source: "read_application_drafts",

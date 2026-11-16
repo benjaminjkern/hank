@@ -9,7 +9,7 @@
 
 import { prisma } from "@/server/db/prisma";
 import type { LogoVerifierResult } from "@/server/subagents/registry/logoVerifier";
-import { nowDate } from "@/utils/now";
+import { nowDate } from "@/shared/utils/now";
 
 // `verdict` is null when the check never ran (no candidate URL, or the vision
 // call threw) — the stamp still lands, the logo is left alone.

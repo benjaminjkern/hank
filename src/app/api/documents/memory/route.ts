@@ -1,11 +1,11 @@
 import { z } from "zod";
 
-import { getCurrentUser } from "@/server/auth/currentUser";
-import { rejectImpersonatedWrite } from "@/server/auth/viewerScope";
 import {
   isEditableDocKind,
   saveUserDoc,
 } from "@/server/entities/narrativeDocs";
+import { rejectImpersonatedWrite } from "@/server/platform/admin/viewerScope";
+import { getCurrentUser } from "@/server/platform/auth/currentUser";
 
 export const dynamic = "force-dynamic";
 

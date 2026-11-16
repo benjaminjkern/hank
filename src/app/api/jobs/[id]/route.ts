@@ -1,4 +1,4 @@
-import { resolveViewedUser } from "@/server/auth/viewerScope";
+import { resolveViewedUser } from "@/server/platform/admin/viewerScope";
 import { getFocusedJobView } from "@/server/views/getFocusedJob";
 
 export const dynamic = "force-dynamic";

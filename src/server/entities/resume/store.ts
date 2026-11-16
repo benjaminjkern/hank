@@ -12,7 +12,7 @@
 // frequent_questions.md. This note is raw background facts.
 
 import { prisma } from "@/server/db/prisma";
-import { readMemory, writeMemory } from "@/server/memory/store";
+import { readMemory, writeMemory } from "@/server/entities/memory/store";
 
 export const RESUME_PATH = "resume.md";
 

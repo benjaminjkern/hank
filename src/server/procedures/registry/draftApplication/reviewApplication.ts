@@ -13,6 +13,7 @@
 
 import type { RunContext } from "@/server/agent/contracts";
 import type { ReviewFinding } from "@/server/entities/jobs/applicationReview";
+import { procedure } from "@/server/procedures/lib/procedure";
 
 import { critiqueAndReviseForm, type CritiqueStop } from "./critiqueAndRevise";
 import { persistApplicationReview } from "./persistApplicationReview";
@@ -32,30 +33,37 @@ export type ReviewApplicationResult = {
   failed: boolean;
 };
 
-export async function runReviewApplication(
-  args: RunContext & { sessionId: string; jobId: string },
-  onStatus?: (label: string) => void,
-): Promise<ReviewApplicationResult> {
-  // Pumped by hand rather than `for await`, which discards a generator's return
-  // value — and the return value IS the verdict.
-  const loop = critiqueAndReviseForm(args);
-  let step = await loop.next();
-  while (!step.done) {
-    if (step.value.type === "progress") onStatus?.(step.value.label);
-    // eslint-disable-next-line no-await-in-loop -- draining a generator: each step is produced by the previous one
-    step = await loop.next();
-  }
-  const review = await persistApplicationReview(
-    args.userId,
-    args.jobId,
-    step.value,
-  );
-  return {
-    ran: step.value.ran,
-    note: step.value.note,
-    open: review?.open ?? [],
-    revisedTargets: step.value.revisedTargets,
-    stop: step.value.stop,
-    failed: step.value.stop === "error",
-  };
-}
+export const runReviewApplication = procedure(
+  "review_application",
+  async (
+    input: RunContext & {
+      sessionId: string;
+      jobId: string;
+      onStatus?: (label: string) => void;
+    },
+  ): Promise<ReviewApplicationResult> => {
+    const { onStatus, ...args } = input;
+    // Pumped by hand rather than `for await`, which discards a generator's return
+    // value — and the return value IS the verdict.
+    const loop = critiqueAndReviseForm(args);
+    let step = await loop.next();
+    while (!step.done) {
+      if (step.value.type === "progress") onStatus?.(step.value.label);
+      // eslint-disable-next-line no-await-in-loop -- draining a generator: each step is produced by the previous one
+      step = await loop.next();
+    }
+    const review = await persistApplicationReview(
+      args.userId,
+      args.jobId,
+      step.value,
+    );
+    return {
+      ran: step.value.ran,
+      note: step.value.note,
+      open: review?.open ?? [],
+      revisedTargets: step.value.revisedTargets,
+      stop: step.value.stop,
+      failed: step.value.stop === "error",
+    };
+  },
+);

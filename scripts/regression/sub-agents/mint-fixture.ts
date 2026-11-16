@@ -31,7 +31,7 @@ import {
   isStockFieldType,
   type ApplicationQuestion,
   type ApplicationQuestionsEnvelope,
-} from "../../../src/server/scrape/types";
+} from "../../../src/server/platform/scrape/types";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });

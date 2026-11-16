@@ -28,15 +28,15 @@
 import type { RunContext, RunTrace } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
 import { passOnJobs } from "@/server/entities/jobs/passOnJobs";
-import { withTraceSpan } from "@/server/platform/trace/span";
 import { traceText } from "@/server/platform/trace/traceText";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {
   preScanJobBatchSubAgent,
   type PreScanJobBatchInput,
 } from "@/server/subagents/registry/preScanJobBatch";
-import { chunk } from "@/utils/array";
-import { nowDate } from "@/utils/now";
+import { chunk } from "@/shared/utils/array";
+import { nowDate } from "@/shared/utils/now";
 
 import { loadPreScanContext, type PreScanContext } from "./loadContext";
 import {
@@ -82,15 +82,14 @@ type PreScanArgs = RunContext & {
   context?: PreScanContext;
 };
 
-export async function runPreScan(args: PreScanArgs): Promise<PreScanResult> {
-  return await withTraceSpan(
-    "pre_scan",
-    args.trace,
-    (trace) => preScan({ ...args, trace }),
-    (r) =>
+export const runPreScan = procedure(
+  "pre_scan",
+  async (args: PreScanArgs): Promise<PreScanResult> => await preScan(args),
+  {
+    summarize: (r) =>
       r.ok ? `${r.skippedJobs} skipped, ${r.survivingJobs} survived` : r.error,
-  );
-}
+  },
+);
 
 async function preScan(args: PreScanArgs): Promise<PreScanResult> {
   const context =

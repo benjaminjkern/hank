@@ -37,12 +37,12 @@ import {
 import { prisma } from "../../src/server/db/prisma";
 import { saveBoardReader } from "../../src/server/entities/boardReaders/recordReaderRun";
 import { reviveCompany } from "../../src/server/entities/companies/resumeCompany";
+import { testScrape } from "../../src/server/platform/scrape";
+import { detectAts } from "../../src/server/platform/scrape/ats";
+import { MIN_REAL_JOBS } from "../../src/server/platform/scrape/ats/shared";
+import { probeGenericBoard } from "../../src/server/platform/scrape/generic/genericProbe";
 import { runEnrichCompaniesCollect } from "../../src/server/procedures/registry/enrichCompanies";
-import { testScrape } from "../../src/server/scrape";
-import { detectAts } from "../../src/server/scrape/ats";
-import { MIN_REAL_JOBS } from "../../src/server/scrape/ats/shared";
 import { runReconBoard } from "../../src/server/procedures/registry/reconBoard";
-import { probeGenericBoard } from "../../src/server/scrape/generic/genericProbe";
 
 const APPLY = process.argv.includes("--apply");
 const WITH_RECON = process.argv.includes("--recon");
@@ -269,7 +269,6 @@ async function reviveAll(args: {
   userIds: string[];
 }): Promise<void> {
   for (const userId of args.userIds) {
-    // eslint-disable-next-line no-await-in-loop -- a handful of users at most, and reviveCompany is a per-user transaction
     await reviveCompany({ userId, companyId: args.companyId });
   }
 }

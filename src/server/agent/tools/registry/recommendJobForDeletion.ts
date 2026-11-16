@@ -17,22 +17,18 @@ export const recommendJobForDeletionTool: ToolDef<{
   affectsViewedState: false,
   description:
     "Flag a posting for an admin to hard-delete. Sets a deletion recommendation + reason; the posting stays in place and renders normally until an admin reviews it and either approves the delete or clears the flag. This never deletes data itself, and it flags the GLOBAL posting for everyone — so reach for the softer options first: close_job keeps the history; untrack_job removes only this user's copy. Only flag when the posting itself is junk (scraper hallucination like a 'View open roles' link, a duplicate row, a listing that never really existed). Re-calling with a new reason updates the recommendation. `job` is the role's slug — pass the posting the user means.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: {
-        type: "string",
-        description: "The role's slug — the posting the user means.",
-      },
-      reason: {
-        type: "string",
-        description:
-          "One-sentence justification (e.g. 'scraper hallucination — the URL is the Ashby board root, not a posting'). Shown to the admin reviewing the flag.",
-      },
-    },
-    required: ["reason"],
-  },
-  parser: z.object({ job: z.string().optional(), reason: z.string().min(1) }),
+  parser: z.object({
+    job: z
+      .string()
+      .optional()
+      .describe("The role's slug — the posting the user means."),
+    reason: z
+      .string()
+      .min(1)
+      .describe(
+        "One-sentence justification (e.g. 'scraper hallucination — the URL is the Ashby board root, not a posting'). Shown to the admin reviewing the flag.",
+      ),
+  }),
   async handle({ job, reason }, ctx) {
     const resolved = await resolveJobArg(ctx, job, {
       source: "recommend_job_for_deletion",

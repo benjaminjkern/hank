@@ -3,14 +3,14 @@
 // same-role coalescing, thinking-block normalization, and the provenance notes
 // that tell Hank what the deterministic layer already put on screen.
 
-import { renderWidgetText } from "@/components/Chat/widgets/registry";
+import { renderWidgetText } from "@/client/components/Chat/widgets/registry";
 import type { Prisma } from "@/generated/prisma/client";
 import { Role } from "@/generated/prisma/client";
-import { stripFocusRefTokens } from "@/lib/focusRefToken";
-import { stripWidgetMarker } from "@/lib/widgetMarker";
 import { buildProvenanceMessage } from "@/server/agent/session/uiProvenance";
 import { prisma } from "@/server/db/prisma";
 import { listAttachmentsForMessages } from "@/server/platform/storage/attachments";
+import { stripFocusRefTokens } from "@/shared/focusRefToken";
+import { stripWidgetMarker } from "@/shared/widgetMarker";
 
 import type Anthropic from "@anthropic-ai/sdk";
 
@@ -298,7 +298,7 @@ function normalizeThinkingForReplay(
 // buildProvenanceMessage (uiProvenance.ts) wraps it in a non-assistant channel (a
 // role:"system" message). Widget text goes through the shared renderWidgetText so
 // the model's grounding matches what the QA persona-simulator perceives. Keep the
-// *segment* converter in src/app/api/session/route.ts (the UI render path) in sync
+// *segment* converter in src/server/views/chatTranscript.ts (the UI render path) in sync
 // structurally.
 //
 // PROVENANCE: pipeline rows are ASSISTANT rows, so a note left in the assistant

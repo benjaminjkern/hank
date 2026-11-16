@@ -25,19 +25,15 @@ export const commitShortlistTool: ToolDef<{
   handoff: true,
   description:
     "Lock in the shortlist board at a company — call this ONLY when the user has agreed the board is right ('looks good', 'lock it in', 'go with that'). Every stance becomes real: picks become the shortlist, borderline roles are set aside (reversible), and passes are closed. The role picker comes up on its own afterwards — calling this ends your turn, so say anything you want to say BEFORE the call. IMPORTANT: when NOTHING on the board is a pick and nothing is held, committing settles the whole company — the passes close and the company reads as caught up until something new is posted. Tell the user that plainly BEFORE you commit an all-pass board; never let 'lock it in' silently mean 'we're done here'. Never commit while the user is still pushing back. If the board would close a role they'd already started applying to, the tool asks you to check with them first; call again with confirmed:true once they say go. `company` is the company's slug.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      company: { type: "string", description: "The company's slug." },
-      confirmed: {
-        type: "boolean",
-        description:
-          "Pass true only AFTER the user has confirmed they're fine closing a role they'd started applying to (the tool told you to ask). Leave unset on the first call.",
-      },
-    },
-    required: ["company"],
-  },
-  parser: z.object({ company: z.string(), confirmed: z.boolean().optional() }),
+  parser: z.object({
+    company: z.string().describe("The company's slug."),
+    confirmed: z
+      .boolean()
+      .optional()
+      .describe(
+        "Pass true only AFTER the user has confirmed they're fine closing a role they'd started applying to (the tool told you to ask). Leave unset on the first call.",
+      ),
+  }),
   async handle(input, ctx) {
     const r = await resolveCompanyBySlug(ctx.userId, input.company);
     if (!r.ok) return slugLookupError(r);

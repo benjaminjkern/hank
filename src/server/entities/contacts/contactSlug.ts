@@ -4,7 +4,7 @@
 
 import { prisma } from "@/server/db/prisma";
 import { mintSlug } from "@/server/platform/slug/mintSlug";
-import { capSlug, slugify } from "@/server/platform/slug/slugify";
+import { capSlug, slugify } from "@/shared/utils/slugify";
 
 export async function mintContactSlug(
   contactId: string,

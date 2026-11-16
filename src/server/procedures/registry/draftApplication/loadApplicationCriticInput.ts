@@ -17,7 +17,7 @@ import type {
   ApplicationCriticInput,
   SiblingApplication,
 } from "@/server/subagents/registry/applicationCritic";
-import { relativeTime } from "@/utils/date";
+import { relativeTime } from "@/shared/utils/date";
 
 // How many sibling applications to scan before ranking, and how many to show.
 const SIBLING_SCAN_LIMIT = 20;

@@ -1,6 +1,6 @@
-import { parsePanelUrl } from "@/lib/panelUrl";
-import { resolveViewedUser } from "@/server/auth/viewerScope";
+import { resolveViewedUser } from "@/server/platform/admin/viewerScope";
 import { DASHBOARD_PANEL_VIEW, loadPanelView } from "@/server/views/panelView";
+import { parsePanelUrl } from "@/shared/panelUrl";
 
 export const dynamic = "force-dynamic";
 

@@ -10,9 +10,9 @@
 import { z } from "zod";
 
 import { CompanySuggestionMark } from "@/generated/prisma/client";
-import { getCurrentUser } from "@/server/auth/currentUser";
-import { rejectImpersonatedWrite } from "@/server/auth/viewerScope";
 import { setSuggestionMark } from "@/server/entities/companies/suggestionMark";
+import { rejectImpersonatedWrite } from "@/server/platform/admin/viewerScope";
+import { getCurrentUser } from "@/server/platform/auth/currentUser";
 import { loadDiscoveryList } from "@/server/views/discoveryList";
 
 export const dynamic = "force-dynamic";

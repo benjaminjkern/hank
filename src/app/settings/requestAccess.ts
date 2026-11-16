@@ -1,10 +1,10 @@
 "use server";
 
-import { getCurrentUser } from "@/server/auth/currentUser";
+import { getCurrentUser } from "@/server/platform/auth/currentUser";
 import {
   requestServerKeyAccess,
   type AccessRequestResult,
-} from "@/server/auth/requestServerKeyAccess";
+} from "@/server/platform/llm/requestServerKeyAccess";
 
 // Thin action wrapper: resolve who's asking, then hand off. The blocker modal
 // is the only caller.

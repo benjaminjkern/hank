@@ -24,10 +24,11 @@ import type { RunContext, UiEvent } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
 import { markCompanyPostFilter } from "@/server/entities/companies/markCompanyStatus";
 import { syncCompanyBoard } from "@/server/entities/jobs/syncCompanyBoard";
+import type { ScrapeFailureKind } from "@/server/platform/scrape/types";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runPreScan } from "@/server/procedures/registry/preScan";
 import { runReconBoard } from "@/server/procedures/registry/reconBoard";
 import type { ReconBoardResult } from "@/server/procedures/registry/reconBoard";
-import type { ScrapeFailureKind } from "@/server/scrape/types";
 import { buildShowEvents } from "@/server/views/showEvents";
 
 const TIMEOUT_MS = 90_000;
@@ -109,70 +110,73 @@ export type ScrapeJobsForCompanyResult =
   | { ok: false; kind: "failed"; error: string }
   | { ok: true; outcome: ScrapeOutcome; events: UiEvent[] };
 
-export async function runScrapeJobsForCompany(
-  args: ScrapeJobsForCompanyArgs,
-): Promise<ScrapeJobsForCompanyResult> {
-  const companyInteraction = await prisma.companyInteraction.findUnique({
-    where: {
-      userId_companyId: { userId: args.userId, companyId: args.companyId },
-    },
-    include: { company: true },
-  });
-  if (!companyInteraction) {
-    return { ok: false, kind: "not_on_watchlist" };
-  }
-  if (companyInteraction.status === CompanyStatus.CLOSED) {
-    return {
-      ok: false,
-      kind: "company_closed",
-      closeReason: companyInteraction.closeReason,
-    };
-  }
-  const sourceUrl = companyInteraction.company.sourceUrl;
-  if (!sourceUrl) {
-    return { ok: false, kind: "no_source_url" };
-  }
-
-  const driveArgs = {
-    ...args,
-    company: companyInteraction.company,
-    priorStatus: companyInteraction.status,
-  };
-
-  const first = await raceDrive(driveArgs);
-
-  // The board is unreadable in a way a better plan could fix. Recon runs
-  // OUTSIDE the scrape's timeout with its own budget, because it's a different
-  // kind of work — an LLM loop, not a fetch — and squeezing it into a window
-  // sized for HTTP would guarantee it never finishes.
-  if (
-    first.ok &&
-    first.outcome.kind === "scrape_failed" &&
-    RECON_WORTHY_FAILURES.has(first.outcome.failureKind)
-  ) {
-    const recon = await raceRecon({
-      ...args,
-      companyId: companyInteraction.company.id,
-      companyName: companyInteraction.company.name,
-      sourceUrl,
+export const runScrapeJobsForCompany = procedure(
+  "scrape_jobs_for_company",
+  async (
+    args: ScrapeJobsForCompanyArgs,
+  ): Promise<ScrapeJobsForCompanyResult> => {
+    const companyInteraction = await prisma.companyInteraction.findUnique({
+      where: {
+        userId_companyId: { userId: args.userId, companyId: args.companyId },
+      },
+      include: { company: true },
     });
-    if (recon?.kind === "learned") {
-      const retried = await raceDrive(driveArgs);
-      // Only take the retry if it actually worked — a second failure should
-      // report the original problem, not "we tried again and it broke too".
-      if (retried.ok && retried.outcome.kind !== "scrape_failed")
-        return retried;
+    if (!companyInteraction) {
+      return { ok: false, kind: "not_on_watchlist" };
     }
-    if (recon) {
+    if (companyInteraction.status === CompanyStatus.CLOSED) {
       return {
-        ...first,
-        outcome: { ...first.outcome, recon },
+        ok: false,
+        kind: "company_closed",
+        closeReason: companyInteraction.closeReason,
       };
     }
-  }
+    const sourceUrl = companyInteraction.company.sourceUrl;
+    if (!sourceUrl) {
+      return { ok: false, kind: "no_source_url" };
+    }
 
-  return first;
-}
+    const driveArgs = {
+      ...args,
+      company: companyInteraction.company,
+      priorStatus: companyInteraction.status,
+    };
+
+    const first = await raceDrive(driveArgs);
+
+    // The board is unreadable in a way a better plan could fix. Recon runs
+    // OUTSIDE the scrape's timeout with its own budget, because it's a different
+    // kind of work — an LLM loop, not a fetch — and squeezing it into a window
+    // sized for HTTP would guarantee it never finishes.
+    if (
+      first.ok &&
+      first.outcome.kind === "scrape_failed" &&
+      RECON_WORTHY_FAILURES.has(first.outcome.failureKind)
+    ) {
+      const recon = await raceRecon({
+        ...args,
+        companyId: companyInteraction.company.id,
+        companyName: companyInteraction.company.name,
+        sourceUrl,
+      });
+      if (recon?.kind === "learned") {
+        const retried = await raceDrive(driveArgs);
+        // Only take the retry if it actually worked — a second failure should
+        // report the original problem, not "we tried again and it broke too".
+        if (retried.ok && retried.outcome.kind !== "scrape_failed")
+          return retried;
+      }
+      if (recon) {
+        return {
+          ...first,
+          outcome: { ...first.outcome, recon },
+        };
+      }
+    }
+
+    return first;
+  },
+);
 
 async function raceDrive(
   args: Parameters<typeof drive>[0],

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import styled from "styled-components";
 
-import { fullDateTime, relativeTime, shortDate } from "@/utils/date";
+import { fullDateTime, relativeTime, shortDate } from "@/shared/utils/date";
 
 import { setCanUseServerKey } from "./actions";
 

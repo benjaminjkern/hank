@@ -10,10 +10,11 @@
 // "what happens to the background on a second upload."
 
 import type { RunContext } from "@/server/agent/contracts";
+import { readMemory } from "@/server/entities/memory/store";
 import { RESUME_PATH, saveResume } from "@/server/entities/resume/store";
-import { readMemory } from "@/server/memory/store";
 import { getAttachment } from "@/server/platform/storage/attachments";
 import { DOCX_MIME } from "@/server/platform/storage/docx";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {
   parseResumeSubAgent,
@@ -71,43 +72,46 @@ export async function mergeResumeIntoBackground(
   return { ok: true, merged: !!existingBackground?.trim() };
 }
 
-export async function runAttachResumeToProfile(
-  args: RunContext & { attachmentId: string },
-): Promise<AttachResumeToProfileResult> {
-  const att = await getAttachment(args.attachmentId, args.userId);
-  if (!att) {
-    return { ok: false, kind: "not_found" };
-  }
-  const bytes = new Uint8Array(att.fileBytes as unknown as ArrayBufferLike);
-  const isDocxText = att.mediaKind === "text" && att.fileMime === DOCX_MIME;
+export const runAttachResumeToProfile = procedure(
+  "attach_resume_to_profile",
+  async (
+    args: RunContext & { attachmentId: string },
+  ): Promise<AttachResumeToProfileResult> => {
+    const att = await getAttachment(args.attachmentId, args.userId);
+    if (!att) {
+      return { ok: false, kind: "not_found" };
+    }
+    const bytes = new Uint8Array(att.fileBytes as unknown as ArrayBufferLike);
+    const isDocxText = att.mediaKind === "text" && att.fileMime === DOCX_MIME;
 
-  if (att.mediaKind !== "pdf" && !isDocxText) {
-    return {
-      ok: false,
-      kind: "invalid_media",
+    if (att.mediaKind !== "pdf" && !isDocxText) {
+      return {
+        ok: false,
+        kind: "invalid_media",
+        fileName: att.fileName,
+        mediaKind: att.mediaKind,
+      };
+    }
+
+    const result = await mergeResumeIntoBackground({
+      ...args,
       fileName: att.fileName,
-      mediaKind: att.mediaKind,
-    };
-  }
+      fileMime: att.fileMime,
+      storeBytes: bytes,
+      source:
+        att.mediaKind === "pdf"
+          ? { kind: "pdf", bytes }
+          : { kind: "text", text: Buffer.from(bytes).toString("utf8") },
+    });
+    if (!result.ok) {
+      return {
+        ok: false,
+        kind: "unparseable",
+        fileName: att.fileName,
+        error: result.error,
+      };
+    }
 
-  const result = await mergeResumeIntoBackground({
-    ...args,
-    fileName: att.fileName,
-    fileMime: att.fileMime,
-    storeBytes: bytes,
-    source:
-      att.mediaKind === "pdf"
-        ? { kind: "pdf", bytes }
-        : { kind: "text", text: Buffer.from(bytes).toString("utf8") },
-  });
-  if (!result.ok) {
-    return {
-      ok: false,
-      kind: "unparseable",
-      fileName: att.fileName,
-      error: result.error,
-    };
-  }
-
-  return { ok: true, fileName: att.fileName, merged: result.merged };
-}
+    return { ok: true, fileName: att.fileName, merged: result.merged };
+  },
+);

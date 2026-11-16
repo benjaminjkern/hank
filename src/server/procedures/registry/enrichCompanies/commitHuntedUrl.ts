@@ -15,10 +15,10 @@
 // DIFFERENT id than the one passed in.
 
 import { prisma } from "@/server/db/prisma";
-import { slugify } from "@/server/memory/paths";
-import { appendMemory } from "@/server/memory/store";
-import { extractGreenhouseSlugFromBoardUrl } from "@/server/scrape/ats";
-import { nowDate } from "@/utils/now";
+import { slugify } from "@/server/entities/memory/paths";
+import { appendMemory } from "@/server/entities/memory/store";
+import { extractGreenhouseSlugFromBoardUrl } from "@/server/platform/scrape/ats";
+import { nowDate } from "@/shared/utils/now";
 
 import { attachToExistingCompany } from "./statusWrites";
 

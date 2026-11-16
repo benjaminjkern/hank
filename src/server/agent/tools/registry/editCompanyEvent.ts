@@ -4,10 +4,7 @@ import {
   getCompanyEventById,
   editCompanyEvent,
 } from "@/server/entities/companies/companyEventEdits";
-import {
-  parseEventDateTime,
-  formatEventStamp,
-} from "@/server/platform/time/localTime";
+import { parseEventDateTime, formatEventStamp } from "@/shared/utils/localTime";
 
 import { toolError } from "../lib/toolError";
 
@@ -26,32 +23,26 @@ export const editCompanyEventTool: ToolDef<{
   affectsViewedState: true,
   description:
     "Edit a company feed event you already logged — its DATE and/or its NOTES — targeted by the event's `id` (get it from list_company_events). Pass `occurredAt` (ISO date) to fix the date, and/or `notes` to fix the freeform note (empty string clears it). At least one of the two is required. Does NOT change the event's type — to change what KIND of event it is, delete it and log a fresh one. **This edits the feed row and nothing else — it does NOT touch the company's status.** To correct the company's stored status or reason, use update_company_interaction.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      eventId: {
-        type: "string",
-        description:
-          "The id of the event to edit (from list_company_events, shown as `id=…`).",
-      },
-      occurredAt: {
-        type: "string",
-        description:
-          "The corrected date/time, ISO 8601 in the user's local time. Use the # Today block so the year is right. Omit to leave the date unchanged.",
-      },
-      notes: {
-        type: "string",
-        description:
-          "The corrected freeform note. Pass an empty string to clear it. Omit to leave it unchanged.",
-      },
-    },
-    required: ["eventId"],
-  },
   parser: z
     .object({
-      eventId: z.string().min(1),
-      occurredAt: z.string().optional(),
-      notes: z.string().optional(),
+      eventId: z
+        .string()
+        .min(1)
+        .describe(
+          "The id of the event to edit (from list_company_events, shown as `id=…`).",
+        ),
+      occurredAt: z
+        .string()
+        .optional()
+        .describe(
+          "The corrected date/time, ISO 8601 in the user's local time. Use the # Today block so the year is right. Omit to leave the date unchanged.",
+        ),
+      notes: z
+        .string()
+        .optional()
+        .describe(
+          "The corrected freeform note. Pass an empty string to clear it. Omit to leave it unchanged.",
+        ),
     })
     .refine((v) => v.occurredAt !== undefined || v.notes !== undefined, {
       message: "provide occurredAt and/or notes to change",

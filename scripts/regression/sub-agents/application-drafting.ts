@@ -41,7 +41,7 @@ import {
 import { resolveAnthropicApiKey } from "../../../src/server/platform/llm/resolveAnthropicKey";
 import { runSubAgent } from "../../../src/server/subagents/lib/runSubAgent";
 import { applicationDraftingSubAgent } from "../../../src/server/subagents/registry/applicationDrafting";
-import { truncate } from "../../../src/utils/text";
+import { truncate } from "../../../src/shared/utils/text";
 
 import { runJudge, judgeCost } from "./lib/judge";
 import {

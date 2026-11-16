@@ -8,34 +8,44 @@
 // and silently misses half of them — with no typecheck error, because every site
 // is independently well-typed.
 //
-// Adding one: a line in ROLE_ATTR_FIELDS + a line in ROLE_ATTR_SELECT (which has
+// Adding one: a key in ROLE_ATTR_KEYS (platform/scrape/types.ts), a line in
+// ROLE_ATTR_FIELDS + a line in ROLE_ATTR_SELECT (which has
 // to stay an object literal for Prisma to infer the result type — `satisfies`
 // keeps it honest), then fix the compile errors that raises in toRoleAttrs /
 // roleAttrColumns. Every loader, prompt block, and catalog picks it up free.
 //
-// Two things still mirror the list by hand, deliberately: the agent-facing JSON
-// schemas on the create_jobs / update_job tools (each field needs its own prose
-// description aimed at the model) and each ATS provider's field mapping (only
+// Two things still mirror the list by hand, deliberately: the zod parsers on the
+// create_jobs / update_job tools (each field carries its own `.describe` prose
+// aimed at the model) and each ATS provider's field mapping (only
 // the provider knows where its board puts the value).
 //
 // NOT here: `Job.attributes` and `Job.enrichedAttributes`. Those are open-ended
 // bags, rendered by attributePairs() — and WHICH of them a call site includes is
 // a per-site judgement, stated in that file's header.
 
-// `key` is the name every in-app shape uses and every agent reads; `column` is
-// where it comes off the Job row. They differ for exactly one field: `location`
-// is stored as `locationAndArrangement`, because it blends place + work
-// arrangement (remote / hybrid / on-site).
+import type { RoleAttrKey } from "@/server/platform/scrape/types";
+
+// `key` is the name every in-app shape uses and every agent reads (the list
+// itself is ROLE_ATTR_KEYS, beside the scraper that first produces them);
+// `column` is where it comes off the Job row. They differ for exactly one field:
+// `location` is stored as `locationAndArrangement`, because it blends place +
+// work arrangement (remote / hybrid / on-site).
 const ROLE_ATTR_FIELDS = [
   ["location", "locationAndArrangement"],
   ["department", "department"],
   ["compensation", "compensation"],
   ["employmentType", "employmentType"],
-] as const;
+] as const satisfies readonly (readonly [RoleAttrKey, string])[];
 
 type RoleAttrField = (typeof ROLE_ATTR_FIELDS)[number];
-export type RoleAttrKey = RoleAttrField[0];
 export type RoleAttrColumn = RoleAttrField[1];
+
+// Every key has a column: a key added to ROLE_ATTR_KEYS without a row above
+// makes this `false`, and the assignment fails to compile.
+const everyKeyHasAColumn: Exclude<RoleAttrKey, RoleAttrField[0]> extends never
+  ? true
+  : false = true;
+void everyKeyHasAColumn;
 
 // The role's attributes as everything downstream of the DB spells them —
 // sub-agent inputs, view models, widget payloads. Intersect this into a shape

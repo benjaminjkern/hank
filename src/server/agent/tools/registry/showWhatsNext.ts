@@ -21,7 +21,6 @@ export const showWhatsNextTool: ToolDef<Record<string, never>> = {
   handoff: true,
   description:
     'Pull up the user\'s TOP-LEVEL "what\'s next" chooser — the between-things picker of the companies / roles / leads across their whole watchlist they could pick up next, plus an option to add more companies. This is the top-of-the-funnel "what should I work on" chooser, NOT the list of roles inside one company (call company_walkthrough on that company for those) and NOT a mid-walkthrough / mid-application move. Call it INSTEAD of typing "what do you want to look at next?" whenever the user has finished the current thing and wants to move on but hasn\'t named a specific next company: after an interview debrief / offer talk, after capturing a side-trip, or any "what else do I have / what should I work on / show me my options" moment where nothing is actively in progress. Do NOT call it while you\'re still mid-work on a company or role, right after a close_company / pause_company (those already bring the chooser up on their own — calling it again would double it), or when the user asked a specific question you should just answer. Include a brief natural lead in your text first ("Here\'s what\'s on your plate —") and never name "the picker"/"widget"; then call this and STOP.',
-  inputSchema: { type: "object", properties: {} },
   parser: z.object({}).strict(),
   async handle() {
     return {

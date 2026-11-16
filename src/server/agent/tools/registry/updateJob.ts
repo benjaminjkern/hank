@@ -5,7 +5,7 @@ import {
   resolveCompanyBySlug,
   resolveJobBySlug,
 } from "@/server/entities/resolveBySlug";
-import { normalizeUrlInput } from "@/utils/url";
+import { normalizeUrlInput } from "@/shared/utils/url";
 
 import { slugLookupError } from "../lib/slugLookupError";
 import { toolError } from "../lib/toolError";
@@ -28,34 +28,22 @@ export const updateJobTool: ToolDef<{
   affectsViewedState: true,
   description:
     "Update an existing Job's fields. `job` is the job slug (from list_jobs). Use to clean up a messy scrape, fill in details, correct a sourceUrl, or attach a previously-unaffiliated pitched role to a real Company once it's on the watchlist (set `company` to the company slug; the tool auto-clears `companyName`). Pass null on a nullable field to clear it (`company: null` detaches). Does not change JobInteraction status — use log_job_events / close_job / mark_job_applied for that.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: { type: "string", description: "The job slug to update." },
-      company: {
-        type: ["string", "null"],
-        description:
-          "Set to a company slug to link this Job. A non-null value auto-clears `companyName`. Null detaches.",
-      },
-      companyName: {
-        type: ["string", "null"],
-        description:
-          "Human-readable company name when `company` is null. Ignored if `company` is currently set.",
-      },
-      title: { type: "string" },
-      sourceUrl: { type: ["string", "null"] },
-      rawContent: { type: ["string", "null"] },
-      location: { type: ["string", "null"] },
-      department: { type: ["string", "null"] },
-      compensation: { type: ["string", "null"] },
-      employmentType: { type: ["string", "null"] },
-    },
-    required: ["job"],
-  },
   parser: z.object({
-    job: z.string(),
-    company: z.string().nullable().optional(),
-    companyName: z.string().nullable().optional(),
+    job: z.string().describe("The job slug to update."),
+    company: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        "Set to a company slug to link this Job. A non-null value auto-clears `companyName`. Null detaches.",
+      ),
+    companyName: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        "Human-readable company name when `company` is null. Ignored if `company` is currently set.",
+      ),
     title: z.string().min(1).optional(),
     sourceUrl: z
       .string()

@@ -1,7 +1,7 @@
 import { JobEventType, JobInteractionStatus } from "@/generated/prisma/client";
-import { appliedAgeTier } from "@/lib/statusColors";
 import { prisma } from "@/server/db/prisma";
-import { nowMs } from "@/utils/now";
+import { appliedAgeTier } from "@/shared/statusColors";
+import { nowMs } from "@/shared/utils/now";
 
 // Payload for the user-facing Analytics page. Two independent views:
 //   - `advancements`: forward-progress events over the last ~year, for the

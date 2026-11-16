@@ -4,10 +4,7 @@ import {
   getJobEventById,
   editJobEvent,
 } from "@/server/entities/jobs/jobEventEdits";
-import {
-  parseEventDateTime,
-  formatEventStamp,
-} from "@/server/platform/time/localTime";
+import { parseEventDateTime, formatEventStamp } from "@/shared/utils/localTime";
 
 import { toolError } from "../lib/toolError";
 
@@ -29,32 +26,26 @@ export const editJobEventTool: ToolDef<{
   affectsViewedState: true,
   description:
     "Edit a job event you already logged — its DATE and/or its NOTES — targeted by the event's `id` (get it from list_job_events). Pass `occurredAt` (ISO date) to fix the date (e.g. you logged an interview with the wrong year and the user corrected you), and/or `notes` to fix the freeform note (pass an empty string to clear it). At least one of the two is required. Use `occurredAt` with the # Today block so the year is right. This tool does NOT change an event's type or the job's status — to change what KIND of event it is, use delete_job_event then log_job_events. This is the edit path — never tell the user a logged event 'can't be changed'.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      eventId: {
-        type: "string",
-        description:
-          "The id of the event to edit (from list_job_events, shown as `id=…`).",
-      },
-      occurredAt: {
-        type: "string",
-        description:
-          "The corrected date/time, ISO 8601 in the user's local time. Include the clock time for a timed event (e.g. '2026-06-14T14:00' for a 2pm interview); a bare date ('2026-06-14') is fine for untimed events. Use the # Today block so the year/time are right. Omit to leave the date unchanged.",
-      },
-      notes: {
-        type: "string",
-        description:
-          "The corrected freeform note for this event. Pass an empty string to clear the note. Omit to leave the note unchanged.",
-      },
-    },
-    required: ["eventId"],
-  },
   parser: z
     .object({
-      eventId: z.string().min(1),
-      occurredAt: z.string().optional(),
-      notes: z.string().optional(),
+      eventId: z
+        .string()
+        .min(1)
+        .describe(
+          "The id of the event to edit (from list_job_events, shown as `id=…`).",
+        ),
+      occurredAt: z
+        .string()
+        .optional()
+        .describe(
+          "The corrected date/time, ISO 8601 in the user's local time. Include the clock time for a timed event (e.g. '2026-06-14T14:00' for a 2pm interview); a bare date ('2026-06-14') is fine for untimed events. Use the # Today block so the year/time are right. Omit to leave the date unchanged.",
+        ),
+      notes: z
+        .string()
+        .optional()
+        .describe(
+          "The corrected freeform note for this event. Pass an empty string to clear the note. Omit to leave the note unchanged.",
+        ),
     })
     .refine((v) => v.occurredAt !== undefined || v.notes !== undefined, {
       message: "provide occurredAt and/or notes to change",

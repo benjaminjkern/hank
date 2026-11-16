@@ -11,6 +11,7 @@
 // writer-facing note reads as an instruction to someone else.
 
 import { prisma } from "@/server/db/prisma";
+import { readShortAnswers } from "@/server/entities/jobs/applicationDrafts";
 import {
   COVER_LETTER_ID,
   isCoverLetterTarget,
@@ -22,7 +23,6 @@ import {
   type ApplicationReview,
   type ReviewFinding,
 } from "@/server/entities/jobs/applicationReview";
-import { readShortAnswers } from "@/server/entities/jobs/applicationDrafts";
 import type { CritiqueIssue } from "@/server/subagents/registry/applicationCritic";
 
 import type { CritiqueLoopResult } from "./critiqueAndRevise";

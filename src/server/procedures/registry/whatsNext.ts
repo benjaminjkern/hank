@@ -14,6 +14,7 @@
 
 import type { RunContext } from "@/server/agent/contracts";
 import { traceText } from "@/server/platform/trace/traceText";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runProfileEnrichmentGate } from "@/server/procedures/registry/profileEnrichmentGate";
 import {
   computeWhatsNextOptions,
@@ -40,29 +41,30 @@ type WhatsNextArgs = RunContext & { sessionId: string };
 //   - "pick": render the next_company_picker widget with the options payload.
 //     If options.empty is true, the widget renders only the "Add companies"
 //     CTA (no sections).
-export async function runWhatsNext(
-  args: WhatsNextArgs,
-): Promise<WhatsNextResult> {
-  // The full verdict, not just a boolean: the gatekeeper's `missing` /
-  // `suggestedProbes` are what the enrich-profile agent opens with instead of
-  // starting cold.
-  const verdict = await runProfileEnrichmentGate(args);
-  if (!verdict.enriched) {
-    breadcrumb(args, "rung=0 result=profile reason=enrichment_gate_open");
-    return {
-      kind: "profile",
-      missing: verdict.missing,
-      suggestedProbes: verdict.suggestedProbes,
-    };
-  }
+export const runWhatsNext = procedure(
+  "whats_next",
+  async (args: WhatsNextArgs): Promise<WhatsNextResult> => {
+    // The full verdict, not just a boolean: the gatekeeper's `missing` /
+    // `suggestedProbes` are what the enrich-profile agent opens with instead of
+    // starting cold.
+    const verdict = await runProfileEnrichmentGate(args);
+    if (!verdict.enriched) {
+      breadcrumb(args, "rung=0 result=profile reason=enrichment_gate_open");
+      return {
+        kind: "profile",
+        missing: verdict.missing,
+        suggestedProbes: verdict.suggestedProbes,
+      };
+    }
 
-  const { options, empty } = await computeWhatsNextOptions(args.userId);
-  breadcrumb(
-    args,
-    `rung=pick immediate=${options.immediate.length} deferred=${options.deferred.length} backlog=${options.backlog.length} empty=${empty}`,
-  );
-  return { kind: "pick", options, empty };
-}
+    const { options, empty } = await computeWhatsNextOptions(args.userId);
+    breadcrumb(
+      args,
+      `rung=pick immediate=${options.immediate.length} deferred=${options.deferred.length} backlog=${options.backlog.length} empty=${empty}`,
+    );
+    return { kind: "pick", options, empty };
+  },
+);
 
 function breadcrumb(args: WhatsNextArgs, note: string): void {
   console.info(`[whatsNext] ${note}`);

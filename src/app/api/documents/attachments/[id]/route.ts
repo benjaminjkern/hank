@@ -1,4 +1,4 @@
-import { resolveViewedUser } from "@/server/auth/viewerScope";
+import { resolveViewedUser } from "@/server/platform/admin/viewerScope";
 import { getAttachment } from "@/server/platform/storage/attachments";
 import { fileDownloadResponse } from "@/server/platform/storage/download";
 

@@ -2,9 +2,9 @@ import "dotenv/config";
 import { Prisma } from "../../src/generated/prisma/client";
 import { prisma } from "../../src/server/db/prisma";
 import { roleAttrColumns } from "../../src/server/entities/jobs/roleAttrs";
-import { scrapeUrl } from "../../src/server/scrape";
 import { closeHeadless } from "../../src/server/platform/browser/headless";
-import { detectAts } from "../../src/server/scrape/ats";
+import { scrapeUrl } from "../../src/server/platform/scrape";
+import { detectAts } from "../../src/server/platform/scrape/ats";
 
 // Re-scrape every ATS-backed company and refresh the scrape-derived metadata on
 // EXISTING job rows (matched by sourceUrl): location, department, compensation,

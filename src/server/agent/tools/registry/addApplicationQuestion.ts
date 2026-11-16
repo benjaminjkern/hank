@@ -22,30 +22,23 @@ export const addApplicationQuestionTool: ToolDef<{
   affectsViewedState: true,
   description:
     'Register an application question the user tells you about when you couldn\'t read the form automatically (login-gated / unsupported ATS). `question` is the question text as the form asks it (for the cover letter, phrase it as "Cover letter"). `questionType` (optional) is the kind of field — e.g. "textarea" for a long prose box, "select" for a dropdown — if the user says. `job` (the role\'s slug) — pass the role the user means. It\'s saved on the role and shows in its application-form panel, marked as added-by-hand. Returns the new questionId; then draft it with draft_application or draft_application_question.',
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: {
-        type: "string",
-        description: "The role's slug — the role the user means.",
-      },
-      question: {
-        type: "string",
-        description:
-          'The question text as the form asks it. Use "Cover letter" for a cover-letter field.',
-      },
-      questionType: {
-        type: "string",
-        description:
-          'Optional field kind — e.g. "textarea" (long prose), "text" (short), "select" (dropdown). Omit if unknown.',
-      },
-    },
-    required: ["question"],
-  },
   parser: z.object({
-    job: z.string().optional(),
-    question: z.string().min(1),
-    questionType: z.string().optional(),
+    job: z
+      .string()
+      .optional()
+      .describe("The role's slug — the role the user means."),
+    question: z
+      .string()
+      .min(1)
+      .describe(
+        'The question text as the form asks it. Use "Cover letter" for a cover-letter field.',
+      ),
+    questionType: z
+      .string()
+      .optional()
+      .describe(
+        'Optional field kind — e.g. "textarea" (long prose), "text" (short), "select" (dropdown). Omit if unknown.',
+      ),
   }),
   async handle(input, ctx) {
     const jobResolved = await resolveJobArg(ctx, input.job, {

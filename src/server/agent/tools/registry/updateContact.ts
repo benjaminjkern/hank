@@ -27,31 +27,16 @@ export const updateContactTool: ToolDef<{
   affectsViewedState: true,
   description:
     "Update a Contact's fields. `contact` is the contact's slug. Pass only the fields you want to change. Pass `company: null` to clear the company link (e.g. when a contact left their employer), or a company slug to set it.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      contact: { type: "string", description: "The contact's slug." },
-      name: { type: "string" },
-      role: { type: "string" },
-      agency: { type: "string" },
-      company: {
-        type: ["string", "null"],
-        description: "Company slug to link, or null to clear.",
-      },
-      email: { type: "string" },
-      phone: { type: "string" },
-      linkedinUrl: { type: "string" },
-      channel: { type: "string" },
-      notes: { type: "string" },
-    },
-    required: ["contact"],
-  },
   parser: z.object({
-    contact: z.string(),
+    contact: z.string().describe("The contact's slug."),
     name: z.string().min(1).optional(),
     role: z.string().optional(),
     agency: z.string().optional(),
-    company: z.string().nullable().optional(),
+    company: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("Company slug to link, or null to clear."),
     email: z.string().optional(),
     phone: z.string().optional(),
     linkedinUrl: z.string().optional(),

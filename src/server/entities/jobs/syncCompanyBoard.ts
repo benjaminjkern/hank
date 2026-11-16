@@ -24,11 +24,11 @@ import {
   saveBoardReader,
 } from "@/server/entities/boardReaders/recordReaderRun";
 import { upsertScrapedJobs } from "@/server/entities/jobs/upsertScrapedJobs";
-import { scrapeUrl } from "@/server/scrape";
-import type { BoardRecipe } from "@/server/scrape/recipe/types";
-import { isLearnedSource } from "@/server/scrape/types";
-import type { ScrapeFailureKind } from "@/server/scrape/types";
-import { nowDate } from "@/utils/now";
+import { scrapeUrl } from "@/server/platform/scrape";
+import type { BoardRecipe } from "@/server/platform/scrape/recipe/types";
+import { isLearnedSource } from "@/server/platform/scrape/types";
+import type { ScrapeFailureKind } from "@/server/platform/scrape/types";
+import { nowDate } from "@/shared/utils/now";
 
 export type SyncCompanyBoardResult =
   | {

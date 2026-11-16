@@ -10,13 +10,13 @@
 // render and never has to re-derive why.
 
 import type { RunContext } from "@/server/agent/contracts";
+import { recordSuggestions } from "@/server/entities/companies/companySuggestions";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {
   findCompaniesSubAgent,
   type FindCompaniesCandidate,
 } from "@/server/subagents/registry/findCompanies";
-
-import { recordSuggestions } from "@/server/entities/companies/companySuggestions";
 
 import { loadFindCompaniesInput } from "./loadFindCompaniesInput";
 
@@ -36,44 +36,46 @@ export type FindCompaniesResult = {
 const MIN_PROFILE_CHARS = 20;
 const MIN_DIRECTION_CHARS = 3;
 
-export async function runFindCompanies(
-  args: { direction?: string; count?: number; append?: boolean },
-  ctx: RunContext,
-): Promise<FindCompaniesResult> {
-  const input = await loadFindCompaniesInput({
-    userId: ctx.userId,
-    direction: args.direction,
-    count: args.count,
-  });
+export const runFindCompanies = procedure(
+  "find_companies",
+  async (
+    args: RunContext & { direction?: string; count?: number; append?: boolean },
+  ): Promise<FindCompaniesResult> => {
+    const input = await loadFindCompaniesInput({
+      userId: args.userId,
+      direction: args.direction,
+      count: args.count,
+    });
 
-  const canSearch =
-    (input.profile ?? "").trim().length >= MIN_PROFILE_CHARS ||
-    (input.direction ?? "").trim().length >= MIN_DIRECTION_CHARS;
-  if (!canSearch) return { candidates: [], reason: "no_basis" };
+    const canSearch =
+      (input.profile ?? "").trim().length >= MIN_PROFILE_CHARS ||
+      (input.direction ?? "").trim().length >= MIN_DIRECTION_CHARS;
+    if (!canSearch) return { candidates: [], reason: "no_basis" };
 
-  const r = await runSubAgent(findCompaniesSubAgent, input, ctx);
-  if (!r.ok) return { candidates: [], reason: "failed" };
-  if (r.output.candidates.length === 0) {
-    return { candidates: [], reason: "none_found" };
-  }
+    const r = await runSubAgent(findCompaniesSubAgent, input, args);
+    if (!r.ok) return { candidates: [], reason: "failed" };
+    if (r.output.candidates.length === 0) {
+      return { candidates: [], reason: "none_found" };
+    }
 
-  // Record the batch as PROPOSED (no verdict yet). Written here rather than at
-  // submit so a batch the user types past is still on file — and so the decline
-  // that follows has a row to land on.
-  await recordSuggestions({
-    userId: ctx.userId,
-    runId: ctx.runId,
-    sessionId: ctx.sessionId,
-    append: args.append,
-    suggestions: r.output.candidates.map((c) => ({
-      name: c.name,
-      reason: c.oneLineReason,
-      summary: c.summary,
-      url: c.url,
-    })),
-  });
-  return {
-    candidates: r.output.candidates,
-    ...(r.output.provenance ? { provenance: r.output.provenance } : {}),
-  };
-}
+    // Record the batch as PROPOSED (no verdict yet). Written here rather than at
+    // submit so a batch the user types past is still on file — and so the decline
+    // that follows has a row to land on.
+    await recordSuggestions({
+      userId: args.userId,
+      runId: args.runId,
+      sessionId: args.sessionId,
+      append: args.append,
+      suggestions: r.output.candidates.map((c) => ({
+        name: c.name,
+        reason: c.oneLineReason,
+        summary: c.summary,
+        url: c.url,
+      })),
+    });
+    return {
+      candidates: r.output.candidates,
+      ...(r.output.provenance ? { provenance: r.output.provenance } : {}),
+    };
+  },
+);

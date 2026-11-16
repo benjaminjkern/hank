@@ -1,11 +1,11 @@
 // The company detail page — the payload the right panel and chat store render,
 // plus the loader that builds it.
 
-import { companyLogoUrl } from "@/lib/companyLogo";
 import { prisma } from "@/server/db/prisma";
 import { flipDueInterviewsToDebrief } from "@/server/entities/jobs/flipDueInterviews";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
 import { CONTACT_SELECT, type ContactView } from "@/server/views/contactView";
+import { companyLogoUrl } from "@/shared/companyLogo";
 
 export type CompanyJobView = {
   jobId: string;

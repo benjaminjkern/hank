@@ -4,7 +4,7 @@ Three things in this codebase get called "notes" — different lifecycles, consu
 
 ## The three storage shapes
 
-1. **`MemoryNote`** — markdown files keyed by path. Free-form, path-addressed, agent-authored — Hank's notebook. Reads/writes via [memory tools](../src/server/agent/tools/registry/writeMemory.ts); storage in [store.ts](../src/server/memory/store.ts); path allowlist in [paths.ts](../src/server/memory/paths.ts).
+1. **`MemoryNote`** — markdown files keyed by path. Free-form, path-addressed, agent-authored — Hank's notebook. Reads/writes via [memory tools](../src/server/agent/tools/registry/writeMemory.ts); storage in [store.ts](../src/server/entities/memory/store.ts); path allowlist in [paths.ts](../src/server/entities/memory/paths.ts).
 2. **Inline note fields** on domain rows (`Event.notes`, `Opportunity.notes`, `Contact.notes`, the per-status `closeNote`/`deferNote`/`pauseNote`/`blockNote`, …) — bounded freeform attached to one entity. Read/written through the entity's normal tools, surfaced in the focused-entity views. There is deliberately **no general-purpose "notes about this pursuit" field on `JobInteraction`** (dropped 2026-07-25, migration `20260725120000_drop_job_interaction_notes`): `jobs/{slug}.md` covers the same ground better — the agent reads/writes it by slug, the consolidation pass folds it, and it outlives the row. Per-status "why" stays in the reason/note pairs.
 3. **`ChatSession.summary`** + **`AdminNote`** — session-scoped recall and admin-only feedback log.
 
@@ -12,7 +12,7 @@ Before inventing a fourth shape, check whether one of these is the right home.
 
 ## MemoryNote paths
 
-Every entity note is addressed by its **slug, never a cuid** — `companies/{slug}.md` (`Company.slug`), `jobs/{slug}.md` (`Job.slug`), `opportunities/{slug}.md` (`Opportunity.slug`), `contacts/{name-slug}.md`. Ids are error-prone for the agent to reproduce, so none are shown. The store's `resolveFK` accepts slug-or-cuid (legacy rows still resolve); server callers holding an id build the path via `jobNotePath(jobId)` / `opportunityNotePath(id)` in [store.ts](../src/server/memory/store.ts). Existing notes were migrated cuid→slug (`20260710130000_memory_paths_to_slugs`).
+Every entity note is addressed by its **slug, never a cuid** — `companies/{slug}.md` (`Company.slug`), `jobs/{slug}.md` (`Job.slug`), `opportunities/{slug}.md` (`Opportunity.slug`), `contacts/{name-slug}.md`. Ids are error-prone for the agent to reproduce, so none are shown. The store's `resolveFK` accepts slug-or-cuid (legacy rows still resolve); server callers holding an id build the path via `jobNotePath(jobId)` / `opportunityNotePath(id)` in [store.ts](../src/server/entities/memory/store.ts). Existing notes were migrated cuid→slug (`20260710130000_memory_paths_to_slugs`).
 
 | Path                      | Auto-loaded                              | Purpose                                                                                                                     |
 | ------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -24,7 +24,7 @@ Every entity note is addressed by its **slug, never a cuid** — `companies/{slu
 | `opportunities/{slug}.md`   | when opportunity focused                 | Per-lead notes — recruiter pitch style, agency read, what to ask.                                                          |
 | `contacts/{name-slug}.md` | not yet auto-loaded                      | Per-person notes — voice, who they place for. Slug = kebab-cased `Contact.name`.                                            |
 
-`daily/{YYYY-MM-DD}.md` and `weekly/{YYYY-WW}.md` are allowlisted for a v1 rollup feature but have no writer today. Path validation lives in [validatePath](../src/server/memory/paths.ts); adding a pattern means extending the regex set, adding a `PathInfo` variant, extending `resolveFK` in [store.ts](../src/server/memory/store.ts) if it should populate a denormalized FK, and updating the `read_memory` tool description.
+`daily/{YYYY-MM-DD}.md` and `weekly/{YYYY-WW}.md` are allowlisted for a v1 rollup feature but have no writer today. Path validation lives in [validatePath](../src/server/entities/memory/paths.ts); adding a pattern means extending the regex set, adding a `PathInfo` variant, extending `resolveFK` in [store.ts](../src/server/entities/memory/store.ts) if it should populate a denormalized FK, and updating the `read_memory` tool description.
 
 ## Inline note fields (entity-attached)
 

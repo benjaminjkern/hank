@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
-import { requireAdmin } from "@/server/auth/requireAdmin";
 import { prisma } from "@/server/db/prisma";
+import { requireAdmin } from "@/server/platform/auth/requireAdmin";
 
 export async function setCanUseServerKey(formData: FormData): Promise<void> {
   await requireAdmin();

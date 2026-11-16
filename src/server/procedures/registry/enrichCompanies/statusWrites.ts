@@ -5,7 +5,7 @@
 import { CompanyStatus, CompanyBlockReason } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { companyStatusFields } from "@/server/entities/companies/companyStatusFields";
-import { nowDate } from "@/utils/now";
+import { nowDate } from "@/shared/utils/now";
 
 // `huntingStartedAt` drives the "Scanning…" badge, so it brackets the whole
 // chain rather than just the hunter — the logo pass is slow enough to look

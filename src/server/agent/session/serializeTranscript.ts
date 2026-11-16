@@ -5,10 +5,10 @@
 
 import { Role } from "@/generated/prisma/client";
 import type { Prisma } from "@/generated/prisma/client";
-import { stripFocusRefTokens } from "@/lib/focusRefToken";
-import { stripWidgetMarker } from "@/lib/widgetMarker";
-import { isRecord } from "@/utils/guards";
-import { truncate } from "@/utils/text";
+import { stripFocusRefTokens } from "@/shared/focusRefToken";
+import { isRecord } from "@/shared/utils/guards";
+import { truncate } from "@/shared/utils/text";
+import { stripWidgetMarker } from "@/shared/widgetMarker";
 
 export type StoredMessage = {
   role: Role;

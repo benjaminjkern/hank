@@ -128,7 +128,7 @@ export async function appendAssistantMessage(
 // flip) that the user did NOT see. Stored as a lone `pipeline_activity` block on
 // an ASSISTANT row so:
 //   - the client drops it (buildAssistantSegments emits no segment for it, and
-//     zero-segment assistant bubbles are filtered out in api/session/route.ts),
+//     zero-segment assistant bubbles are filtered out in views/chatTranscript.ts),
 //     so it never renders in chat, AND
 //   - loadSessionMessages replays it as a `<system-reminder>` / role:"system"
 //     provenance note (see pipelineRowNoteText), so Hank IS aware of it.

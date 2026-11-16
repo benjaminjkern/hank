@@ -15,8 +15,8 @@
 
 import "dotenv/config";
 
-import { detectAts } from "../../src/server/scrape/ats";
-import { probeGenericBoard } from "../../src/server/scrape/generic/genericProbe";
+import { detectAts } from "../../src/server/platform/scrape/ats";
+import { probeGenericBoard } from "../../src/server/platform/scrape/generic/genericProbe";
 
 // `expect` is the baseline this row asserts:
 //   jobs        — the probe should read this board

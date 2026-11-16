@@ -10,7 +10,7 @@
 // against THEM, not generic priors. Pairs with the main-agent thinking (the
 // model now has both the signal and the room to reason over it).
 
-import { readMemory } from "@/server/memory/store";
+import { readMemory } from "@/server/entities/memory/store";
 
 // Generous per-slot cap — these are the core signal, so this should never
 // truncate in practice; it only guards against a pathologically large note

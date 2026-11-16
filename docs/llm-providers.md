@@ -34,7 +34,7 @@ Whichever one serves the model the call site named — a lookup in [`MODELS`](..
 2. else the **server** key — only if `hasServerKeyAccess(user.canUseServerKey)` is true, i.e. the per-user grant OR the instance-wide `SERVER_KEY_BY_DEFAULT` (**one gate covers BOTH** server keys, `DEEPSEEK_API_KEY` + `ANTHROPIC_API_KEY` — no separate per-provider flag);
 3. else throw `NoAnthropicKeyError` / `NoDeepseekKeyError` (code `NO_ANTHROPIC_KEY` / `NO_DEEPSEEK_KEY`).
 
-There is **no DeepSeek→Anthropic provider fallback**: a user missing a DeepSeek key gets a hard `NO_DEEPSEEK_KEY`, not a silent Anthropic call. That code flows through `runUserMessage` → the chat route → `apiKeyBlocker` in [chatStore.ts](../src/lib/chatStore.ts) → the blocker modal.
+There is **no DeepSeek→Anthropic provider fallback**: a user missing a DeepSeek key gets a hard `NO_DEEPSEEK_KEY`, not a silent Anthropic call. That code flows through `runUserMessage` → the chat route → `apiKeyBlocker` in [chatStore.ts](../src/client/chatStore.ts) → the blocker modal.
 
 ### Key-source matrix
 
@@ -53,7 +53,7 @@ There is **no DeepSeek→Anthropic provider fallback**: a user missing a DeepSee
 
 ### The key-blocker modal (six reasons, two providers)
 
-[`ApiKeyBlockerModal`](../src/components/ApiKeyBlockerModal.tsx) is paste-fixable for **both** providers. The six `ApiKeyBlockerReason`s ([chatStore.ts](../src/lib/chatStore.ts)):
+[`ApiKeyBlockerModal`](../src/client/components/ApiKeyBlockerModal.tsx) is paste-fixable for **both** providers. The six `ApiKeyBlockerReason`s ([chatStore.ts](../src/client/chatStore.ts)):
 
 | SSE code (source)                                  | Reason               | Modal saves      |
 | -------------------------------------------------- | -------------------- | ---------------- |

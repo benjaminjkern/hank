@@ -15,10 +15,10 @@
 // handoff.
 
 import { CompanyStatus, JobInteractionStatus } from "@/generated/prisma/client";
-import { formatFocusRefToken } from "@/lib/focusRefToken";
 import type { EntryTarget } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
 import { companyStatusFields } from "@/server/entities/companies/companyStatusFields";
+import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import type { NextCompanyPickerSubmission } from "./parse";
 

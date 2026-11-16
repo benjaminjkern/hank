@@ -20,9 +20,9 @@
 import { JobInteractionStatus } from "@/generated/prisma/client";
 import type { RunContext } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
-import { withTraceSpan } from "@/server/platform/trace/span";
-import { isUserAbortError } from "@/utils/abort";
-import { nowMs } from "@/utils/now";
+import { procedure } from "@/server/procedures/lib/procedure";
+import { isUserAbortError } from "@/shared/utils/abort";
+import { nowMs } from "@/shared/utils/now";
 
 import { loadScanContext } from "./loadContext";
 import { scanPoolWhere } from "./pool";
@@ -53,15 +53,14 @@ type ScanArgs = RunContext & {
   dryRun?: boolean;
 };
 
-export async function runScan(args: ScanArgs): Promise<RunScanResult> {
-  return await withTraceSpan(
-    "scan",
-    args.trace,
-    (trace) => scan({ ...args, trace }),
-    (r) =>
+export const runScan = procedure(
+  "scan",
+  async (args: ScanArgs): Promise<RunScanResult> => await scan(args),
+  {
+    summarize: (r) =>
       `${r.matched} matched, ${r.skipped} skipped, ${r.errors} error${r.errors === 1 ? "" : "s"}${r.rateLimited ? " (rate-limited)" : ""}${r.timedOut ? " (out of run budget)" : ""}`,
-  );
-}
+  },
+);
 
 // Stop claiming new jobs this long before the run's deadline: enough for the
 // in-flight wave (a worker's enrich + match are two sequential calls) to land

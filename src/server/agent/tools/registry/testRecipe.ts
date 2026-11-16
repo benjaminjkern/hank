@@ -1,6 +1,6 @@
 // Run a candidate BoardRecipe against the live board and report what came back.
 //
-// Sub-agent-only — not in `hankToolsFor`. This is what makes recon safe, the
+// SUB-AGENT ONLY — deliberately absent from `hankTools` (agent/hank/toolset.ts); Hank never sees it. This is what makes recon safe, the
 // same way `test_scrape` makes the URL hunter safe: the model doesn't get to
 // ASSERT that a plan works, it has to watch the runner execute it and read the
 // postings that came out. A recipe that survives this has been checked by
@@ -11,12 +11,12 @@
 
 import { z } from "zod";
 
-import { runBoardRecipe } from "@/server/scrape/recipe/runRecipe";
-import { withScrapeSignal } from "@/server/scrape/scrapeSignal";
+import { runBoardRecipe } from "@/server/platform/scrape/recipe/runRecipe";
+import type { BoardRecipe } from "@/server/platform/scrape/recipe/types";
+import { withScrapeSignal } from "@/server/platform/scrape/scrapeSignal";
 
 import { toolError } from "../lib/toolError";
 
-import type { BoardRecipe } from "@/server/scrape/recipe/types";
 import type { ToolDef } from "../lib/types";
 
 // Loose on purpose: the runner and validate.ts are the real gate, and a zod
@@ -24,30 +24,25 @@ import type { ToolDef } from "../lib/types";
 // sync. A malformed recipe comes back as a structured error the model can fix,
 // which is more useful than a parse rejection.
 const parser = z.object({
-  recipe: z.unknown(),
-  boardUrl: z.string().optional(),
+  recipe: z
+    .unknown()
+    // Shown to the model as an object; validated by the runner, not zod.
+    .meta({ type: "object" })
+    .describe(
+      "The candidate BoardRecipe object, exactly as you would store it.",
+    ),
+  boardUrl: z
+    .string()
+    .optional()
+    .describe(
+      "The board's own URL. Used to resolve relative links and to check that posting URLs stay on the board's domain. Defaults to the recipe's list URL.",
+    ),
 });
 
 export const testRecipeTool: ToolDef<{ recipe: unknown; boardUrl?: string }> = {
   name: "test_recipe",
   description:
     "Run a candidate board recipe against the live board and report what it produced: job count, sample titles, sample URLs, whether the board came back partial, and any validation errors. Free (no LLM) and writes nothing. It SAMPLES — a small number of postings is a pass, not a truncated board. This is how you CHECK a recipe — never report one you haven't run through here. Expect to iterate: a wrong itemsPath returns 0 postings, a wrong title locator returns identical titles, a wrong URL locator returns duplicate or cross-domain URLs. Each error names what failed so you can fix that one field and re-run.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      recipe: {
-        type: "object",
-        description:
-          "The candidate BoardRecipe object, exactly as you would store it.",
-      },
-      boardUrl: {
-        type: "string",
-        description:
-          "The board's own URL. Used to resolve relative links and to check that posting URLs stay on the board's domain. Defaults to the recipe's list URL.",
-      },
-    },
-    required: ["recipe"],
-  },
   parser,
   async handle({ recipe, boardUrl }, ctx) {
     const result = await withScrapeSignal(ctx.signal, () =>

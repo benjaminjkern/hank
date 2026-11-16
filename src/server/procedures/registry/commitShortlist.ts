@@ -28,6 +28,7 @@ import {
 } from "@/server/entities/companies/commitShortlist";
 import { roundStartedAt } from "@/server/entities/jobs/boardStance";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
+import { procedure } from "@/server/procedures/lib/procedure";
 
 const STANCE_WORDS: Record<ProposedVerdict, string> = {
   [ProposedVerdict.PICK]: "pick",
@@ -115,49 +116,54 @@ async function loadRevivals(
   );
 }
 
-export async function runCommitShortlist(
-  args: RunContext & {
-    sessionId: string;
-    companyId: string;
-    companyName: string;
-    confirmed?: boolean;
-  },
-): Promise<CommitShortlistResult> {
-  // Both reads happen BEFORE the commit clears the stances and re-anchors the
-  // round; afterwards neither is recoverable.
-  const [overrides, revivals] = await Promise.all([
-    loadUserOverrides(args.userId, args.companyId),
-    roundStartedAt(args.userId, args.companyId).then((since) =>
-      loadRevivals(args.userId, args.companyId, since),
-    ),
-  ]);
-  const result = await commitShortlist({
-    userId: args.userId,
-    companyId: args.companyId,
-    confirmed: args.confirmed,
-  });
-  if (!result.ok) return result;
+export const runCommitShortlist = procedure(
+  "commit_shortlist",
+  async (
+    args: RunContext & {
+      sessionId: string;
+      companyId: string;
+      companyName: string;
+      confirmed?: boolean;
+    },
+  ): Promise<CommitShortlistResult> => {
+    // Both reads happen BEFORE the commit clears the stances and re-anchors the
+    // round; afterwards neither is recoverable.
+    const [overrides, revivals] = await Promise.all([
+      loadUserOverrides(args.userId, args.companyId),
+      roundStartedAt(args.userId, args.companyId).then((since) =>
+        loadRevivals(args.userId, args.companyId, since),
+      ),
+    ]);
+    const result = await commitShortlist({
+      userId: args.userId,
+      companyId: args.companyId,
+      confirmed: args.confirmed,
+    });
+    if (!result.ok) return result;
 
-  if (overrides.length > 0 || revivals.length > 0) {
-    // Hank-only channel: the user already knows what they clicked, and this is
-    // here so the wrap's consolidation pass has the corrections stated plainly
-    // (its quote-grounding rule needs something in the transcript to cite).
-    await appendPipelineActivity(
-      args.sessionId,
-      [
-        overrides.length > 0 ? overrideNote(args.companyName, overrides) : null,
-        revivals.length > 0
-          ? [
-              `The user also pulled ${revivals.length} role${revivals.length === 1 ? "" : "s"} back that the automatic filtering had closed at ${args.companyName}:`,
-              ...revivals,
-              "A close REASON showing up repeatedly here is the filter being miscalibrated, which is worth more than any one role.",
-            ].join("\n")
-          : null,
-      ]
-        .filter(Boolean)
-        .join("\n\n"),
-      { runId: args.runId },
-    );
-  }
-  return result;
-}
+    if (overrides.length > 0 || revivals.length > 0) {
+      // Hank-only channel: the user already knows what they clicked, and this is
+      // here so the wrap's consolidation pass has the corrections stated plainly
+      // (its quote-grounding rule needs something in the transcript to cite).
+      await appendPipelineActivity(
+        args.sessionId,
+        [
+          overrides.length > 0
+            ? overrideNote(args.companyName, overrides)
+            : null,
+          revivals.length > 0
+            ? [
+                `The user also pulled ${revivals.length} role${revivals.length === 1 ? "" : "s"} back that the automatic filtering had closed at ${args.companyName}:`,
+                ...revivals,
+                "A close REASON showing up repeatedly here is the filter being miscalibrated, which is worth more than any one role.",
+              ].join("\n")
+            : null,
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+        { runId: args.runId },
+      );
+    }
+    return result;
+  },
+);

@@ -14,8 +14,8 @@
 // touched, so editing and undoing reported two live objections as answered.
 
 import type { Prisma } from "@/generated/prisma/client";
-import { fnv1a } from "@/utils/hash";
-import { normalizeForCompare } from "@/utils/text";
+import { fnv1a } from "@/shared/utils/hash";
+import { normalizeForCompare } from "@/shared/utils/text";
 
 export type ReviewFinding = {
   // COVER_LETTER_ID or a questionId — the same ids the panel and the agent's

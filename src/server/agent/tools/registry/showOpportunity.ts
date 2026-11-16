@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-import { formatFocusRefToken } from "@/lib/focusRefToken";
 import { resolveOpportunityBySlug } from "@/server/entities/resolveBySlug";
 import { buildShowEvents } from "@/server/views/showEvents";
+import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import { slugLookupError } from "../lib/slugLookupError";
 import { toolError } from "../lib/toolError";
@@ -16,14 +16,7 @@ export const showOpportunityTool: ToolDef<{ opportunity: string }> = {
   affectsViewedState: false,
   description:
     "Put an inbound lead's page on the user's screen (right panel) and drop a clickable chip in the chat — a pure display action that starts no work and changes nothing. Use it when you're referring to a recruiter lead / inbound opportunity and want the user to see it. `opportunity` is the lead's slug.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      opportunity: { type: "string", description: "The lead's slug." },
-    },
-    required: ["opportunity"],
-  },
-  parser: z.object({ opportunity: z.string() }),
+  parser: z.object({ opportunity: z.string().describe("The lead's slug.") }),
   async handle(input, ctx) {
     const r = await resolveOpportunityBySlug(ctx.userId, input.opportunity);
     if (!r.ok) return slugLookupError(r, { source: "show_opportunity" });

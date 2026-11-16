@@ -35,6 +35,7 @@ import {
   type TraceMap,
 } from "@/server/agent/runTree/traceAccumulator";
 import { toolAffectsViewedState } from "@/server/agent/tools/lib";
+import { toolInputSchema } from "@/server/agent/tools/lib/inputSchema";
 import { toolErrorContent } from "@/server/agent/tools/lib/toolError";
 import type {
   AnyToolDef,
@@ -44,7 +45,7 @@ import type {
 import type { Reasoning } from "@/server/platform/llm/reasoning";
 import type { TraceEvent } from "@/server/platform/trace/types";
 import { withCaptureContext } from "@/server/platform/usage/captureContext";
-import { isUserAbortError } from "@/utils/abort";
+import { isUserAbortError } from "@/shared/utils/abort";
 
 import type Anthropic from "@anthropic-ai/sdk";
 
@@ -152,8 +153,8 @@ export async function* runAgentTurn(
   const toolDefs = args.tools.map((t) => ({
     name: t.name,
     description: t.description,
-    input_schema: t.inputSchema,
-  })) as unknown as Anthropic.ToolUnion[];
+    input_schema: toolInputSchema(t),
+  })) as Anthropic.ToolUnion[];
 
   // Pre-mint the ids of every ChatMessage row this turn will produce. Two
   // separate needs, one mint: sub-agents spawned mid-turn record the assistant id

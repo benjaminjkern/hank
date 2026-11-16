@@ -2,8 +2,8 @@ import { z } from "zod";
 
 import { JobInteractionStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
-import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { caughtUpCompany } from "@/server/entities/companies/setCompanyAside";
+import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 
 import { resolveCompanyArg } from "../lib/resolveEntityArg";
 
@@ -30,23 +30,17 @@ export const caughtUpCompanyTool: ToolDef<{
   affectsViewedState: true,
   description:
     "Mark a company as caught-up: the user has seen its current roles and nothing's actionable right now, but it STAYS on their list and you keep watching for new postings. This is NOT skip (not pursuing at all) and NOT defer (no revisit timer) — it's the open-ended 'keep it, check back later' state. Use it when the user says 'mark as caught up' / 'I'm caught up here' / 'nothing for me now, keep watching' / 'done with this one for now but keep it.' Wraps the company up and brings what's next up on its own — don't call show_whats_next after it. **`company` is the company's slug — pass the one the user means.** If the company still has roles the user hasn't dealt with, the tool will ask you to confirm first; once the user is OK with it, call again with confirmed:true.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      company: {
-        type: "string",
-        description: "The company's slug — the company the user means.",
-      },
-      confirmed: {
-        type: "boolean",
-        description:
-          "Pass true only AFTER the user has confirmed they want to mark it caught-up despite still having open roles (the tool told you to ask). Leave unset/false on the first call.",
-      },
-    },
-  },
   parser: z.object({
-    company: z.string().optional(),
-    confirmed: z.boolean().optional(),
+    company: z
+      .string()
+      .optional()
+      .describe("The company's slug — the company the user means."),
+    confirmed: z
+      .boolean()
+      .optional()
+      .describe(
+        "Pass true only AFTER the user has confirmed they want to mark it caught-up despite still having open roles (the tool told you to ask). Leave unset/false on the first call.",
+      ),
   }),
   async handle(input, ctx) {
     const resolved = await resolveCompanyArg(ctx, input.company, {

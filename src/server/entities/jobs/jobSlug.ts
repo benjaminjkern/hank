@@ -9,7 +9,7 @@
 import { bulkUpdate } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
 import { mintSlug, slugCandidateAt } from "@/server/platform/slug/mintSlug";
-import { capSlug, slugify } from "@/server/platform/slug/slugify";
+import { capSlug, slugify } from "@/shared/utils/slugify";
 
 // Named candidates in priority order: `{company}-{title}`, then `…-{location}`
 // and `…-{department}` for duplicate-title disambiguation. mintSlug appends

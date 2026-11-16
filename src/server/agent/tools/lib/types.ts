@@ -29,7 +29,7 @@ export type { ContactView } from "@/server/views/contactView";
 export type {
   ApplicationQuestion,
   ApplicationQuestionsEnvelope,
-} from "@/server/scrape/types";
+} from "@/server/platform/scrape/types";
 
 // A tool handler's context IS the ambient RunContext — a tool dispatch is just
 // one more place deterministic work runs for a user. `runAgentTurn` assembles it
@@ -88,7 +88,9 @@ export type ToolResult = {
 export interface ToolDef<TInput> {
   name: string;
   description: string;
-  inputSchema: Record<string, unknown>;
+  // The tool's one schema: it validates the model's input AND is what the model
+  // sees (toolInputSchema derives the JSON schema from it). Field prose goes on
+  // each zod node via `.describe(…)`.
   parser: z.ZodType<TInput>;
   handle: (input: TInput, ctx: ToolContext) => Promise<ToolResult>;
   // Whether completing this tool may have changed entities the user is

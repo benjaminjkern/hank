@@ -3,13 +3,13 @@
 // the deterministic layer emits these too — views/showEvents.ts and the
 // widget dispatchers produce UiEvents without being tools.
 
-import type { PanelMode } from "@/lib/panelMode";
 import type { ApplicationView } from "@/server/views/application";
 import type { DiscoveryListView } from "@/server/views/discoveryList";
 import type { FocusedCompanyView } from "@/server/views/getFocusedCompany";
 import type { FocusedJobView } from "@/server/views/getFocusedJob";
 import type { FocusedOpportunityView } from "@/server/views/getFocusedOpportunity";
 import type { ShortlistBoardView } from "@/server/views/shortlistBoard";
+import type { PanelMode } from "@/shared/panelMode";
 
 export type UiEvent =
   // Presentational "put this entity on the user's screen" event — the show_*

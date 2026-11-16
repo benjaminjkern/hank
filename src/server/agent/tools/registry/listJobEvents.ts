@@ -4,7 +4,7 @@ import {
   loadJobEventHeader,
   jobEventsQuery,
 } from "@/server/entities/jobs/listJobEvents";
-import { formatEventStamp } from "@/server/platform/time/localTime";
+import { formatEventStamp } from "@/shared/utils/localTime";
 
 import {
   paginate,
@@ -28,24 +28,19 @@ export const listJobEventsTool: ToolDef<{ job?: string; page?: number }> = {
   name: "list_job_events",
   description:
     "List the event timeline for a single role — every logged event (SURFACED / SCANNED / SHORTLISTED / APPLIED / interview / OFFERED / REJECTED / WITHDRAWN / CLOSED / NOTE …) with its id, date, and note, newest first, plus the role's current status. `job` (the role's slug) — pass the role the user means. Each row includes the event's `id` — pass that id to edit_job_event / delete_job_event to change or remove that exact event. Results are paginated, 30 per page; pass `page` (1-indexed) for more. Cheaper than read_job_description (no full posting text) and side-effect-free (no SCANNED promotion). Use whenever the user asks about a role's history, or when you need an event id to edit/delete an event.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: {
-        type: "string",
-        description: "The role's slug — the role the user means.",
-      },
-      page: {
-        type: "number",
-        description:
-          "1-indexed page number (default 1). 30 events per page, newest first. If the footer says more pages exist, pass page:N+1 for the next.",
-      },
-    },
-    required: [],
-  },
   parser: z.object({
-    job: z.string().optional(),
-    page: z.number().int().positive().optional(),
+    job: z
+      .string()
+      .optional()
+      .describe("The role's slug — the role the user means."),
+    page: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(
+        "1-indexed page number (default 1). 30 events per page, newest first. If the footer says more pages exist, pass page:N+1 for the next.",
+      ),
   }),
   async handle({ job: jobSlug, page }, ctx) {
     const jobResolved = await resolveJobArg(ctx, jobSlug, {

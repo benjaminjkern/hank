@@ -8,8 +8,8 @@
 
 import { getActiveRun } from "@/server/agent/runtime/stopRegistry";
 import { getOrCreateActiveSession } from "@/server/agent/session";
-import { getCurrentUser } from "@/server/auth/currentUser";
-import { rejectImpersonatedWrite } from "@/server/auth/viewerScope";
+import { rejectImpersonatedWrite } from "@/server/platform/admin/viewerScope";
+import { getCurrentUser } from "@/server/platform/auth/currentUser";
 
 export const dynamic = "force-dynamic";
 

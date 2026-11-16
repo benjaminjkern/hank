@@ -5,7 +5,7 @@ import {
   opportunityEventsQuery,
 } from "@/server/entities/opportunities/listOpportunityEvents";
 import { resolveOpportunityBySlug } from "@/server/entities/resolveBySlug";
-import { formatEventStamp } from "@/server/platform/time/localTime";
+import { formatEventStamp } from "@/shared/utils/localTime";
 
 import {
   paginate,
@@ -29,21 +29,16 @@ export const listOpportunityEventsTool: ToolDef<{
   name: "list_opportunity_events",
   description:
     "List the event timeline for a single lead — every logged event (INBOUND_RECEIVED / CALL_SCHEDULED / CALL_HAPPENED / NEXT_STEP_RECEIVED / CLOSED / NOTE …) with its id, date, and note, newest first, plus the lead's current status. `opportunity` (the lead's slug) is required. Each row includes the event's `id` — pass that id to edit_opportunity_event / delete_opportunity_event to change or remove that exact event. Results are paginated, 30 per page; pass `page` (1-indexed) for more.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      opportunity: { type: "string", description: "The lead's slug." },
-      page: {
-        type: "number",
-        description:
-          "1-indexed page number (default 1). 30 events per page, newest first. If the footer says more pages exist, pass page:N+1 for the next.",
-      },
-    },
-    required: ["opportunity"],
-  },
   parser: z.object({
-    opportunity: z.string(),
-    page: z.number().int().positive().optional(),
+    opportunity: z.string().describe("The lead's slug."),
+    page: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(
+        "1-indexed page number (default 1). 30 events per page, newest first. If the footer says more pages exist, pass page:N+1 for the next.",
+      ),
   }),
   async handle({ opportunity: oppSlug, page }, ctx) {
     const r = await resolveOpportunityBySlug(ctx.userId, oppSlug);

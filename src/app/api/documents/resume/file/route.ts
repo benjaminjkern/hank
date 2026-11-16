@@ -1,9 +1,9 @@
-import { getCurrentUser } from "@/server/auth/currentUser";
+import { prisma } from "@/server/db/prisma";
 import {
   rejectImpersonatedWrite,
   resolveViewedUser,
-} from "@/server/auth/viewerScope";
-import { prisma } from "@/server/db/prisma";
+} from "@/server/platform/admin/viewerScope";
+import { getCurrentUser } from "@/server/platform/auth/currentUser";
 import { fileDownloadResponse } from "@/server/platform/storage/download";
 
 export const runtime = "nodejs";

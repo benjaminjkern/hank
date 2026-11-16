@@ -29,16 +29,16 @@
 // of existing history. "Pipeline" survives as a storage name only — there is no
 // pipeline layer in the code anymore.
 
-import type { WidgetKind } from "@/lib/widgetKinds";
+import type { WidgetKind } from "@/shared/widgetKinds";
 
 import type { EntryTarget } from "./entryTarget";
 import type { RunContext } from "./runContext";
 import type { UiEvent } from "./uiEvent";
 
 // Widget kinds the deterministic layer can render. The union is owned by
-// src/lib/widgetKinds.ts — single source of truth shared with the client. Add a
+// src/shared/widgetKinds.ts — single source of truth shared with the client. Add a
 // new kind there, then add its payload schema in
-// src/components/Chat/widgets/types.ts in the same commit.
+// src/client/components/Chat/widgets/types.ts in the same commit.
 
 export type { WidgetKind };
 

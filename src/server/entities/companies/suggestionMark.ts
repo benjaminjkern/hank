@@ -29,7 +29,7 @@ import {
   type CompanySuggestionVerdict,
 } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
-import { nowDate } from "@/utils/now";
+import { nowDate } from "@/shared/utils/now";
 
 import { currentBatch, suggestionKey } from "./companySuggestions";
 

@@ -31,43 +31,32 @@ export const updateOpportunityTool: ToolDef<{
   affectsViewedState: true,
   description:
     "Update the **lead-level** fields of an Opportunity (identified by its slug) — label, conversation status, primary contact, nextStepAt, notes, closedReason, source link. Role-level edits (title, company, status) go through update_job / log_job_events on the linked role. Status changes that correspond to an event (call scheduled, next step received, closed) should go through log_opportunity_events so the timeline reflects them. Pass null to clear `primaryContact`, `nextStepAt`, or `sourceJob`. `primaryContact` takes a contact slug; `sourceJob` takes the slug of the role that triggered the inbound.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      opportunity: { type: "string", description: "The lead's slug." },
-      label: { type: "string" },
-      status: {
-        type: "string",
-        enum: ALL_LEAD_STATUSES as readonly string[] as string[],
-        description:
-          "Direct status overwrite. Prefer log_opportunity_events for state transitions so the timeline records why.",
-      },
-      primaryContact: {
-        type: ["string", "null"],
-        description: "Contact slug, or null to clear.",
-      },
-      nextStepAt: {
-        type: ["string", "null"],
-        description: "ISO datetime, or null to clear.",
-      },
-      notes: { type: "string" },
-      closedReason: { type: "string" },
-      sourceJob: {
-        type: ["string", "null"],
-        description: "Role slug that triggered the inbound, or null to clear.",
-      },
-    },
-    required: ["opportunity"],
-  },
   parser: z.object({
-    opportunity: z.string(),
+    opportunity: z.string().describe("The lead's slug."),
     label: z.string().min(1).optional(),
-    status: z.enum(ALL_LEAD_STATUSES).optional(),
-    primaryContact: z.string().nullable().optional(),
-    nextStepAt: z.string().nullable().optional(),
+    status: z
+      .enum(ALL_LEAD_STATUSES)
+      .optional()
+      .describe(
+        "Direct status overwrite. Prefer log_opportunity_events for state transitions so the timeline records why.",
+      ),
+    primaryContact: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("Contact slug, or null to clear."),
+    nextStepAt: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("ISO datetime, or null to clear."),
     notes: z.string().optional(),
     closedReason: z.string().optional(),
-    sourceJob: z.string().nullable().optional(),
+    sourceJob: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("Role slug that triggered the inbound, or null to clear."),
   }),
   async handle({ opportunity, ...patch }, ctx) {
     const opportunityResolved = await resolveOpportunityBySlug(

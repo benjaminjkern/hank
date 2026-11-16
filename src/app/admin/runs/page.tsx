@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
-import { requireAdmin } from "@/server/auth/requireAdmin";
 import { prisma } from "@/server/db/prisma";
+import { requireAdmin } from "@/server/platform/auth/requireAdmin";
 import { costOf } from "@/server/platform/usage/pricing";
 
 import { RunsIndexView } from "./RunsIndexView";

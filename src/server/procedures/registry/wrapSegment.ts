@@ -25,19 +25,18 @@
 
 import type { RunContext } from "@/server/agent/contracts";
 import { appendPipelineActivity } from "@/server/agent/session";
-import { withTraceSpan } from "@/server/platform/trace/span";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runCompactSession } from "@/server/procedures/registry/compactSession";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
 
 export type WrapSubject = "company" | "discovery";
 
-export async function runWrapSegment(
-  args: RunContext & { sessionId: string; subject: WrapSubject },
-): Promise<void> {
-  return await withTraceSpan("wrap_segment", args.trace, (trace) =>
-    wrapSegment({ ...args, trace }),
-  );
-}
+export const runWrapSegment = procedure(
+  "wrap_segment",
+  async (
+    args: RunContext & { sessionId: string; subject: WrapSubject },
+  ): Promise<void> => await wrapSegment(args),
+);
 
 const WHAT_ENDED: Record<WrapSubject, string> = {
   company: "the company just finished",

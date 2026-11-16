@@ -20,6 +20,7 @@
 // narration / yieldStateChange).
 
 import type { TurnEvent } from "@/server/agent/contracts";
+import { streamingProcedure } from "@/server/procedures/lib/procedure";
 import { parseWidgetSubmission } from "@/server/widgets/parse";
 
 import { dispatchByEntryTarget } from "./dispatchByEntryTarget";
@@ -27,19 +28,22 @@ import { handleWidgetSubmission } from "./handleWidgetSubmission";
 
 import type { WalkthroughArgs, WalkthroughResult } from "./types";
 
-export async function* runWalkthrough(
-  args: WalkthroughArgs,
-): AsyncGenerator<TurnEvent, WalkthroughResult> {
-  // Handle widget submission first — these are deterministic state
-  // transitions, not free-text chat. parseWidgetSubmission returns null for
-  // regular text messages.
-  const submission = parseWidgetSubmission(args.userMessage);
-  if (submission) {
-    return yield* handleWidgetSubmission(submission, args);
-  }
+export const runWalkthrough = streamingProcedure(
+  "walkthrough",
+  async function* (
+    args: WalkthroughArgs,
+  ): AsyncGenerator<TurnEvent, WalkthroughResult> {
+    // Handle widget submission first — these are deterministic state
+    // transitions, not free-text chat. parseWidgetSubmission returns null for
+    // regular text messages.
+    const submission = parseWidgetSubmission(args.userMessage);
+    if (submission) {
+      return yield* handleWidgetSubmission(submission, args);
+    }
 
-  // No widget submission — dispatch on the entry target. Reaching here means a
-  // handoff, a silent entry, or a deterministic continuation; free-text user
-  // messages are answered by Hank in runChatTurn, not here.
-  return yield* dispatchByEntryTarget(args);
-}
+    // No widget submission — dispatch on the entry target. Reaching here means a
+    // handoff, a silent entry, or a deterministic continuation; free-text user
+    // messages are answered by Hank in runChatTurn, not here.
+    return yield* dispatchByEntryTarget(args);
+  },
+);

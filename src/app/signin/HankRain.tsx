@@ -4,8 +4,8 @@ import { World, Vec2, Box, Polygon, MouseJoint, AABB, type Body } from "planck";
 import { useEffect, useRef, type RefObject } from "react";
 import styled from "styled-components";
 
-import { nowPerfMs } from "@/utils/now";
-import { randRange } from "@/utils/random";
+import { nowPerfMs } from "@/shared/utils/now";
+import { randRange } from "@/shared/utils/random";
 
 const Canvas = styled.canvas`
   position: fixed;

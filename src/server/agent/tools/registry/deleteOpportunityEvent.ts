@@ -5,7 +5,7 @@ import {
   getOpportunityEventById,
   deleteOpportunityEvent,
 } from "@/server/entities/opportunities/opportunityEventEdits";
-import { formatEventStamp } from "@/server/platform/time/localTime";
+import { formatEventStamp } from "@/shared/utils/localTime";
 
 import { toolError } from "../lib/toolError";
 
@@ -21,18 +21,14 @@ export const deleteOpportunityEventTool: ToolDef<{ eventId: string }> = {
   affectsViewedState: true,
   description:
     "Delete ONE lead timeline event you logged — targeted by the event's `id` (from list_opportunity_events) — when it was logged in error and the user wants it gone. Removes only the one event. It does not by itself change the lead's status: if the deleted event was the one that set the current status, the result will tell you, and you should set the correct status explicitly (log_opportunity_events / update_opportunity) after confirming with the user.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      eventId: {
-        type: "string",
-        description:
-          "The id of the event to delete (from list_opportunity_events, shown as `id=…`).",
-      },
-    },
-    required: ["eventId"],
-  },
-  parser: z.object({ eventId: z.string().min(1) }),
+  parser: z.object({
+    eventId: z
+      .string()
+      .min(1)
+      .describe(
+        "The id of the event to delete (from list_opportunity_events, shown as `id=…`).",
+      ),
+  }),
   async handle({ eventId }, ctx) {
     const found = await getOpportunityEventById(ctx.userId, eventId);
     if (found.kind === "not_found") {

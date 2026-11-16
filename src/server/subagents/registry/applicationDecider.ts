@@ -53,7 +53,7 @@ import type { LlmModel } from "@/server/platform/llm/models";
 import {
   isProseQuestion,
   type ApplicationQuestion,
-} from "@/server/scrape/types";
+} from "@/server/platform/scrape/types";
 import type {
   SubAgentDef,
   SubAgentOutputSchema,

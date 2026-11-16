@@ -4,8 +4,8 @@ import { CompanyStatus, type Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { companyInitials } from "@/server/entities/companies/companyInitials";
 import { ALL_COMPANY_STATUSES } from "@/server/entities/companies/companyInteractionInputs";
-import { relativeAge } from "@/utils/date";
-import { looksLikeAcronym } from "@/utils/text";
+import { relativeAge } from "@/shared/utils/date";
+import { looksLikeAcronym } from "@/shared/utils/text";
 
 import {
   paginate,
@@ -24,37 +24,27 @@ export const listCompaniesTool: ToolDef<{
   name: "list_companies",
   description:
     "List the companies the user has on their watchlist, each with its current status. By DEFAULT returns EVERY company the user has an interaction with — CLOSED + BLOCKED included — so a name lookup never misses one; use this to check 'is X on my list?' before telling the user it isn't. Optional filters: `name` (case-insensitive substring on the company name, OR an ARRAY of names to match ANY of them in one call — pass [\"Stripe\",\"Apple\",\"Sigma\"] when the user mentions several companies at once instead of calling the tool once per company; also matches by initials so 'AWS' finds 'Amazon Web Services'), `status` (array of CompanyStatus values to NARROW to — e.g. status:[\"BLOCKED\"] for the companies whose careers page couldn't be read, status:[\"CAUGHT_UP\"] for ones being watched). Results are paginated, 30 per page, most-recently-discussed first; pass `page` (1-indexed) for more. For CAUGHT_UP rows the last-scan age is included so you can judge if it's due for a fresh look; for CLOSED rows the closeReason and for BLOCKED rows the blockReason is included — both mean the company IS on the list, so offer to revive (CLOSED) or re-check (BLOCKED via company_walkthrough) rather than re-adding it. Use for 'what's on my list?' / 'is Reddit on my list?' / 'check Stripe, Apple and Google' / 'show me the closed ones' / 'the ones that couldn't load'.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      name: {
-        anyOf: [
-          { type: "string" },
-          { type: "array", items: { type: "string" }, minItems: 1 },
-        ],
-        description:
-          "Optional case-insensitive substring filter on the company name. Pass a single string, OR an array of strings to match ANY of them (OR search) — use the array form when the user names several companies at once so you make ONE call, not one per company. Also matches by initials ('AWS' → 'Amazon Web Services').",
-      },
-      status: {
-        type: "array",
-        items: {
-          type: "string",
-          enum: ALL_COMPANY_STATUSES as readonly string[] as string[],
-        },
-        description:
-          'Optional array of CompanyStatus values to NARROW the results to. Omit to include every status (the default). status:["BLOCKED"] = the ones whose board couldn\'t be read; status:["CLOSED"] = the closed ones.',
-      },
-      page: {
-        type: "number",
-        description:
-          "1-indexed page number (default 1). 30 companies per page, ordered most-recently-discussed first. If the company you're after isn't on the current page and the footer says more pages exist, request the next page.",
-      },
-    },
-  },
   parser: z.object({
-    name: z.union([z.string(), z.array(z.string())]).optional(),
-    status: z.array(z.enum(ALL_COMPANY_STATUSES)).optional(),
-    page: z.number().int().positive().optional(),
+    name: z
+      .union([z.string(), z.array(z.string()).min(1)])
+      .optional()
+      .describe(
+        "Optional case-insensitive substring filter on the company name. Pass a single string, OR an array of strings to match ANY of them (OR search) — use the array form when the user names several companies at once so you make ONE call, not one per company. Also matches by initials ('AWS' → 'Amazon Web Services').",
+      ),
+    status: z
+      .array(z.enum(ALL_COMPANY_STATUSES))
+      .optional()
+      .describe(
+        'Optional array of CompanyStatus values to NARROW the results to. Omit to include every status (the default). status:["BLOCKED"] = the ones whose board couldn\'t be read; status:["CLOSED"] = the closed ones.',
+      ),
+    page: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(
+        "1-indexed page number (default 1). 30 companies per page, ordered most-recently-discussed first. If the company you're after isn't on the current page and the footer says more pages exist, request the next page.",
+      ),
   }),
   async handle({ name, status, page }, ctx) {
     // Normalize name to a list of non-empty terms. Multiple terms match ANY

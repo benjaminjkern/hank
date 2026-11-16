@@ -2,7 +2,7 @@
 // translate the persona's chosen option back into the exact
 // <!--widget-response:{...}--> marker the server widget handlers accept.
 //
-// Both halves now live in the widget registry (src/components/Chat/widgets/
+// Both halves now live in the widget registry (src/client/components/Chat/widgets/
 // registry/<kind>/def.ts): `def.toText` is the perceived text and `def.harness`
 // is the actionHint + multiSelect + translate. Co-locating them there (with the
 // widget's payload type and component) is what keeps the option ORDERING used
@@ -10,12 +10,12 @@
 // the same file. This module is now just the harness-shaped adapter over those
 // defs; adding a widget needs no edit here.
 
-import { getWidgetDef } from "@/components/Chat/widgets/registry";
+import { getWidgetDef } from "@/client/components/Chat/widgets/registry";
 import type {
   WidgetAction,
   TranslateResult,
-} from "@/components/Chat/widgets/registry/defineWidget";
-import type { WidgetKind } from "@/lib/widgetKinds";
+} from "@/client/components/Chat/widgets/registry/defineWidget";
+import type { WidgetKind } from "@/shared/widgetKinds";
 
 export type PersonaWidgetAction = WidgetAction;
 export type { TranslateResult };

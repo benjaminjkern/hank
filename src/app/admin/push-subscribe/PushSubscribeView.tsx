@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import styled from "styled-components";
 
-import { isStandalonePwa } from "@/utils/browser";
-import { relativeTime } from "@/utils/date";
-import { base64UrlToBytes } from "@/utils/encoding";
-import { truncateStart } from "@/utils/text";
+import { isStandalonePwa } from "@/shared/utils/browser";
+import { relativeTime } from "@/shared/utils/date";
+import { base64UrlToBytes } from "@/shared/utils/encoding";
+import { truncateStart } from "@/shared/utils/text";
 
 type Props = { vapidPublicKey: string };
 

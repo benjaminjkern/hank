@@ -1,6 +1,6 @@
 // Verify a careers URL produces real jobs, WITHOUT writing anything.
 //
-// Sub-agent-only — not in `hankToolsFor`. It's the basic-info hunter's
+// SUB-AGENT ONLY — deliberately absent from `hankTools` (agent/hank/toolset.ts); Hank never sees it. It's the basic-info hunter's
 // verifier: the canonical scan writes (Job upserts, JobInteraction creates,
 // SURFACED events, the lastScrapedJobsAt stamp), and the hunter tests 3-5
 // candidate URLs before finding the right one, so letting it run the real scan
@@ -15,10 +15,10 @@
 
 import { z } from "zod";
 
-import { testScrape } from "@/server/scrape";
-import { resolveBoardFromCareersPage } from "@/server/scrape/resolveBoardFromCareersPage";
-import { withScrapeSignal } from "@/server/scrape/scrapeSignal";
-import { normalizeUrlInput } from "@/utils/url";
+import { testScrape } from "@/server/platform/scrape";
+import { resolveBoardFromCareersPage } from "@/server/platform/scrape/resolveBoardFromCareersPage";
+import { withScrapeSignal } from "@/server/platform/scrape/scrapeSignal";
+import { normalizeUrlInput } from "@/shared/utils/url";
 
 import { toolError } from "../lib/toolError";
 
@@ -28,19 +28,14 @@ export const testScrapeTool: ToolDef<{ url: string }> = {
   name: "test_scrape",
   description:
     "Verify a careers URL produces real jobs, without writing anything to the database. Returns {ok, provider, jobCount, sampleTitles, companyName} on success or {ok:false, error} on failure. Free + fast deterministic JSON fetches, no LLM.\n\nPass EITHER a board URL or a careers page. Recognized boards (greenhouse, lever, ashby, workday, teamtailor, gem, smartrecruiters, workable, icims, eightfold, rippling, oracle, jazzhr, amazon, apple, google, meta, netflix, shopify) are tested directly. If the URL ISN'T a recognized board — a company homepage, `careers.{company}.com`, a 'Life at {Company}' page — this automatically reads the page and tries to resolve the real board behind it, which is the ONLY way to reach an enterprise Workday board (the wd1..wd108+ shard is unguessable) or a branded iCIMS career site. So when slug guesses miss, just point this at the company's careers page. On success it tells you the board URL to report as sourceUrl — use THAT, not the page you passed in.\n\nTreat jobCount<2 as a failure: boards with a single 'open application' template entry pass this gate without being real boards.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      url: {
-        type: "string",
-        description:
-          "A board URL to verify, OR a careers page / homepage to resolve a board from.",
-      },
-    },
-    required: ["url"],
-  },
   parser: z.object({
-    url: z.string().transform(normalizeUrlInput).pipe(z.string().url()),
+    url: z
+      .string()
+      .transform(normalizeUrlInput)
+      .pipe(z.string().url())
+      .describe(
+        "A board URL to verify, OR a careers page / homepage to resolve a board from.",
+      ),
   }),
   async handle({ url }, ctx) {
     const r = await withScrapeSignal(ctx.signal, () => testScrape(url));

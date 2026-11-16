@@ -21,6 +21,7 @@ import { yieldUiEvents } from "@/server/agent/contracts";
 import type { RunContext, TurnEvent } from "@/server/agent/contracts";
 import { appendPipelineActivity } from "@/server/agent/session/appendMessages";
 import { settleSuggestionBatch } from "@/server/entities/companies/suggestionMark";
+import { streamingProcedure } from "@/server/procedures/lib/procedure";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
 import {
   addMoreCompaniesWidget,
@@ -49,78 +50,81 @@ function renderPassRelay(passed: string[], added: string[]): string {
   ].join("\n");
 }
 
-export async function* runCommitDiscovery(
-  args: RunContext & { sessionId: string },
-): AsyncGenerator<TurnEvent, CommitDiscoveryResult> {
-  const { rows } = await loadDiscoveryList(args.userId);
-  if (rows.length === 0) {
-    return { empty: true, added: [], passed: [] };
-  }
-
-  const toAdd = rows.filter((r) => r.checked);
-  const toPass = rows.filter((r) => !r.checked);
-
-  // Verdicts first, so they're on file even if the enrich below fails or the
-  // user hits Stop partway through it.
-  await settleSuggestionBatch({
-    userId: args.userId,
-    decided: [
-      ...toAdd.map((r) => ({
-        id: r.id,
-        verdict: CompanySuggestionVerdict.ADDED,
-      })),
-      ...toPass.map((r) => ({
-        id: r.id,
-        verdict: CompanySuggestionVerdict.DECLINED,
-      })),
-    ],
-  });
-
-  // The list stopped existing on the line above — every row now has a verdict,
-  // so the panel is drawing a negotiation that's over. Move it off HERE rather
-  // than after the work below: the enrichment is a couple of minutes of live
-  // careers-page reads and the consolidation is two LLM calls, and until this
-  // ran at the end of all that, the user watched a settled list the whole time
-  // and kept it forever if anything cut the run short. Same move, same reason,
-  // as the "Looks good to me" path (widgets/dispatchTopLevelSubmission.ts).
-  yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
-
-  const passedNames = toPass.map((r) => r.name);
-  let added: string[] = [];
-  if (toAdd.length > 0) {
-    // Each pick carries the search's own case for it (→ hunter extraContext)
-    // and any captured board URL (→ hunter candidateUrl), not just the bare
-    // name — that's what stops a name collision resolving to the wrong company.
-    const result = yield* runChecklistAdd(
-      toAdd.map((r) => ({
-        name: r.name,
-        context: r.reason,
-        ...(r.url ? { url: r.url } : {}),
-      })),
-      args,
-    );
-    added = result.added;
-    // A disambiguation picker is a genuine wait-for-user question — stop rather
-    // than stacking the add-more card under an unanswered one.
-    if (result.awaitingDisambiguation) {
-      return { empty: false, added, passed: passedNames };
+export const runCommitDiscovery = streamingProcedure(
+  "commit_discovery",
+  async function* (
+    args: RunContext & { sessionId: string },
+  ): AsyncGenerator<TurnEvent, CommitDiscoveryResult> {
+    const { rows } = await loadDiscoveryList(args.userId);
+    if (rows.length === 0) {
+      return { empty: true, added: [], passed: [] };
     }
-  }
 
-  // Only a pass is worth a consolidation pass. Keeping what the search proposed
-  // says nothing new — the added companies are on the watchlist, which the next
-  // search already reads.
-  if (toPass.length > 0) {
-    // Hank-only channel: the user knows what they unchecked, and this is here so
-    // the consolidation pass below has the passes stated plainly.
-    await appendPipelineActivity(
-      args.sessionId,
-      renderPassRelay(passedNames, added),
-      { runId: args.runId },
-    );
-    await runConsolidateSessionMemory(args);
-  }
+    const toAdd = rows.filter((r) => r.checked);
+    const toPass = rows.filter((r) => !r.checked);
 
-  yield addMoreCompaniesWidget(added, toPass.length);
-  return { empty: false, added, passed: passedNames };
-}
+    // Verdicts first, so they're on file even if the enrich below fails or the
+    // user hits Stop partway through it.
+    await settleSuggestionBatch({
+      userId: args.userId,
+      decided: [
+        ...toAdd.map((r) => ({
+          id: r.id,
+          verdict: CompanySuggestionVerdict.ADDED,
+        })),
+        ...toPass.map((r) => ({
+          id: r.id,
+          verdict: CompanySuggestionVerdict.DECLINED,
+        })),
+      ],
+    });
+
+    // The list stopped existing on the line above — every row now has a verdict,
+    // so the panel is drawing a negotiation that's over. Move it off HERE rather
+    // than after the work below: the enrichment is a couple of minutes of live
+    // careers-page reads and the consolidation is two LLM calls, and until this
+    // ran at the end of all that, the user watched a settled list the whole time
+    // and kept it forever if anything cut the run short. Same move, same reason,
+    // as the "Looks good to me" path (widgets/dispatchTopLevelSubmission.ts).
+    yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
+
+    const passedNames = toPass.map((r) => r.name);
+    let added: string[] = [];
+    if (toAdd.length > 0) {
+      // Each pick carries the search's own case for it (→ hunter extraContext)
+      // and any captured board URL (→ hunter candidateUrl), not just the bare
+      // name — that's what stops a name collision resolving to the wrong company.
+      const result = yield* runChecklistAdd({
+        ...args,
+        picks: toAdd.map((r) => ({
+          name: r.name,
+          context: r.reason,
+          ...(r.url ? { url: r.url } : {}),
+        })),
+      });
+      added = result.added;
+      // A disambiguation picker is a genuine wait-for-user question — stop rather
+      // than stacking the add-more card under an unanswered one.
+      if (result.awaitingDisambiguation) {
+        return { empty: false, added, passed: passedNames };
+      }
+    }
+
+    // Only a pass is worth a consolidation pass. Keeping what the search proposed
+    // says nothing new — the added companies are on the watchlist, which the next
+    // search already reads.
+    if (toPass.length > 0) {
+      // Hank-only channel: the user knows what they unchecked, and this is here so
+      // the consolidation pass below has the passes stated plainly.
+      await appendPipelineActivity(
+        args.sessionId,
+        renderPassRelay(passedNames, added),
+        { runId: args.runId },
+      );
+      await runConsolidateSessionMemory(args);
+    }
+
+    yield addMoreCompaniesWidget(added, toPass.length);
+    return { empty: false, added, passed: passedNames };
+  },
+);

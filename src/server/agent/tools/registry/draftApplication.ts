@@ -22,24 +22,17 @@ export const draftApplicationTool: ToolDef<{
   affectsViewedState: true,
   description:
     "Draft this job's whole application through the drafting workflow — it works out which questions it can draft, writes those + the cover letter (if the form wants one), and self-reviews them, all into the side panel. NEVER write application prose in chat yourself; call this instead. `job` (the role's slug) — pass the role the user means. `extraContext` (optional) passes along anything the user just told you to steer the whole application — an angle to emphasize, a fact to include, 'keep it short'. Returns a summary of what it drafted and any items that still need the user's own input. For redrafting or refining ONE specific answer, use draft_application_question.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: {
-        type: "string",
-        description: "The role's slug — the role the user means.",
-      },
-      extraContext: {
-        type: "string",
-        description:
-          "Optional free-text guidance from the user to steer the whole application (an angle, a fact to include, a tone). Omit if they gave none.",
-      },
-    },
-    required: [],
-  },
   parser: z.object({
-    job: z.string().optional(),
-    extraContext: z.string().optional(),
+    job: z
+      .string()
+      .optional()
+      .describe("The role's slug — the role the user means."),
+    extraContext: z
+      .string()
+      .optional()
+      .describe(
+        "Optional free-text guidance from the user to steer the whole application (an angle, a fact to include, a tone). Omit if they gave none.",
+      ),
   }),
   async handle(input, ctx) {
     const jobResolved = await resolveJobArg(ctx, input.job, {

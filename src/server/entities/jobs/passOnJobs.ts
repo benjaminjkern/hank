@@ -20,7 +20,7 @@ import { ProposedVerdict } from "@/generated/prisma/client";
 import type { EliminatedBy, JobCloseReason } from "@/generated/prisma/client";
 import { bulkUpdate, type Database } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
-import { nowDate } from "@/utils/now";
+import { nowDate } from "@/shared/utils/now";
 
 export async function passOnJobs(args: {
   userId: string;

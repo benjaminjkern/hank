@@ -27,8 +27,8 @@ import type { AnyToolDef } from "@/server/agent/tools/lib/types";
 import { fetchUrlTool } from "@/server/agent/tools/registry/fetchUrl";
 import { testRecipeTool } from "@/server/agent/tools/registry/testRecipe";
 import type { LlmModel } from "@/server/platform/llm/models";
-import type { PageEvidence } from "@/server/scrape/generic/pageEvidence";
-import type { BoardRecipe } from "@/server/scrape/recipe/types";
+import type { PageEvidence } from "@/server/platform/scrape/generic/pageEvidence";
+import type { BoardRecipe } from "@/server/platform/scrape/recipe/types";
 import type {
   SubAgentDef,
   SubAgentOutputSchema,

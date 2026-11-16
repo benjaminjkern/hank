@@ -8,7 +8,7 @@ import { z } from "zod";
 import { ApplyChannel } from "@/generated/prisma/client";
 import { markJobApplied } from "@/server/entities/jobs/markJobApplied";
 import { resolveJobBySlug } from "@/server/entities/resolveBySlug";
-import { parseEventDateTime } from "@/server/platform/time/localTime";
+import { parseEventDateTime } from "@/shared/utils/localTime";
 
 import { slugLookupError } from "../lib/slugLookupError";
 
@@ -29,34 +29,26 @@ export const markJobAppliedTool: ToolDef<{
   affectsViewedState: true,
   description:
     "Record that the user applied to a job. Single canonical APPLIED path — both the drafting widget's submit button and historical entry ('I applied to Coinbase in March') route through here. Logs an APPLIED event, advances JobInteraction → APPLIED, stamps applyChannel (RECRUITER if the job is linked to an opportunity, DIRECT otherwise, unless you pass an explicit channel), and clears the role's shortlist stance. Whatever was drafted stays — the user may reuse it elsewhere. This is an ATOMIC RECORD-ONLY action: it does NOT bring up the next role or move the screen. To move on afterward, call a navigation tool — company_walkthrough on this company (brings up its remaining roles), caught_up_company (done with this company), or show_whats_next (top-level). Use this — not log_job_events — for APPLIED.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: { type: "string", description: "The role's slug." },
-      occurredAt: {
-        type: "string",
-        description:
-          "ISO datetime when the application was submitted. Defaults to now. Use this for historical entries.",
-      },
-      applyChannel: {
-        type: "string",
-        enum: ALL_APPLY_CHANNELS as readonly string[] as string[],
-        description:
-          "How the application was submitted: RECRUITER (recruiter mediated), REFERRAL (friend pointed at a direct apply), DIRECT (scan / careers page). Omit to take the opportunity-link default.",
-      },
-      notes: {
-        type: "string",
-        description:
-          "Optional freeform context attached to the APPLIED event (e.g. 'submitted via the recruiter portal').",
-      },
-    },
-    required: ["job"],
-  },
   parser: z.object({
-    job: z.string(),
-    occurredAt: z.string().optional(),
-    applyChannel: z.enum(ALL_APPLY_CHANNELS).optional(),
-    notes: z.string().optional(),
+    job: z.string().describe("The role's slug."),
+    occurredAt: z
+      .string()
+      .optional()
+      .describe(
+        "ISO datetime when the application was submitted. Defaults to now. Use this for historical entries.",
+      ),
+    applyChannel: z
+      .enum(ALL_APPLY_CHANNELS)
+      .optional()
+      .describe(
+        "How the application was submitted: RECRUITER (recruiter mediated), REFERRAL (friend pointed at a direct apply), DIRECT (scan / careers page). Omit to take the opportunity-link default.",
+      ),
+    notes: z
+      .string()
+      .optional()
+      .describe(
+        "Optional freeform context attached to the APPLIED event (e.g. 'submitted via the recruiter portal').",
+      ),
   }),
   async handle({ job, occurredAt, applyChannel, notes }, ctx) {
     const jobResolved = await resolveJobBySlug(ctx.userId, job);

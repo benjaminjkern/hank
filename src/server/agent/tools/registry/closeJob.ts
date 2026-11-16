@@ -17,31 +17,22 @@ export const closeJobTool: ToolDef<{
   affectsViewedState: true,
   description:
     "Pass on a single shortlisted job. Logs a CLOSED event with the structured reason. Use when the user has decided not to apply to one job within an otherwise-active company. This is an ATOMIC RECORD-ONLY action: it does not bring up the next role — call company_walkthrough on its company afterward to bring up the remaining roles if the user is moving on. **`job` is the role's slug — pass the role the user means; don't ask 'which one' when 'this' is clear.**",
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: {
-        type: "string",
-        description: "The role's slug — the role the user means.",
-      },
-      reason: {
-        type: "string",
-        enum: JOB_CLOSE_REASONS as readonly string[] as string[],
-        description:
-          "Why this ONE role is dead. NOT_A_MATCH = the role itself doesn't fit. LOCATION_MISMATCH = its location or work arrangement doesn't work. USER_REJECTED = the user looked at it and said no. OTHER = anything else (put it in the note). These are JOB-level values: NOT_A_MATCH / LOCATION_MISMATCH / OTHER also appear on close_company, where they mean the whole employer — writing off an employer is close_company, not this.",
-      },
-      note: {
-        type: "string",
-        description:
-          "The user's actual reason for passing, in their own words where possible — one sentence. Fill this whenever you have it (ask a short 'why?' first if they didn't say and it isn't clear from context).",
-      },
-    },
-    required: ["reason"],
-  },
   parser: z.object({
-    job: z.string().optional(),
-    reason: z.enum(JOB_CLOSE_REASONS),
-    note: z.string().optional(),
+    job: z
+      .string()
+      .optional()
+      .describe("The role's slug — the role the user means."),
+    reason: z
+      .enum(JOB_CLOSE_REASONS)
+      .describe(
+        "Why this ONE role is dead. NOT_A_MATCH = the role itself doesn't fit. LOCATION_MISMATCH = its location or work arrangement doesn't work. USER_REJECTED = the user looked at it and said no. OTHER = anything else (put it in the note). These are JOB-level values: NOT_A_MATCH / LOCATION_MISMATCH / OTHER also appear on close_company, where they mean the whole employer — writing off an employer is close_company, not this.",
+      ),
+    note: z
+      .string()
+      .optional()
+      .describe(
+        "The user's actual reason for passing, in their own words where possible — one sentence. Fill this whenever you have it (ask a short 'why?' first if they didn't say and it isn't clear from context).",
+      ),
   }),
   async handle(input, ctx) {
     const resolved = await resolveJobArg(ctx, input.job, {

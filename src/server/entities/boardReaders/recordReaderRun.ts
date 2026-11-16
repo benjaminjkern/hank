@@ -7,13 +7,12 @@
 
 import { BoardReaderOrigin, Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
-import { boardMatchKey } from "@/server/scrape/recipe/matchKey";
-import { nowDate } from "@/utils/now";
+import { boardMatchKey } from "@/server/platform/scrape/recipe/matchKey";
+import type { BoardRecipe } from "@/server/platform/scrape/recipe/types";
+import { nowDate } from "@/shared/utils/now";
 
 import { boardIdentifiesCompany } from "./boardIdentity";
 import { nextHealth, type ReaderRunOutcome } from "./readerHealth";
-
-import type { BoardRecipe } from "@/server/scrape/recipe/types";
 
 export type LoadedBoardReader = {
   id: string;

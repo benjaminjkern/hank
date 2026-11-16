@@ -12,7 +12,10 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "../../../src/generated/prisma/client";
 import { serializeTranscript } from "../../../src/server/agent/session/serializeTranscript";
-import { readMemory, listMemories } from "../../../src/server/memory/store";
+import {
+  readMemory,
+  listMemories,
+} from "../../../src/server/entities/memory/store";
 import { resolveAnthropicApiKey } from "../../../src/server/platform/llm/resolveAnthropicKey";
 import { loadMemoryConsolidationInput } from "../../../src/server/procedures/registry/consolidateSessionMemory";
 import { runSubAgent } from "../../../src/server/subagents/lib/runSubAgent";

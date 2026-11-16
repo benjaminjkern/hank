@@ -4,9 +4,9 @@ Pages under `/admin/*` and their backing APIs are for the operator/admin. They s
 
 ## Gate
 
-All admin pages and APIs go through [`requireAdmin()`](../src/server/auth/requireAdmin.ts), which:
+All admin pages and APIs go through [`requireAdmin()`](../src/server/platform/auth/requireAdmin.ts), which:
 
-1. Resolves the current user via [`getCurrentUser()`](../src/server/auth/currentUser.ts) (reads the Auth.js session).
+1. Resolves the current user via [`getCurrentUser()`](../src/server/platform/auth/currentUser.ts) (reads the Auth.js session).
 2. Calls `notFound()` (404, not 403) if `user.isAdmin` is false — the route's existence isn't advertised.
 3. Returns the `User` row otherwise.
 
@@ -24,7 +24,7 @@ Use it directly in any new admin server component or route handler. For mutation
 | [`/admin/runs`](../src/app/admin/runs/page.tsx) | Run-tree inspector — see [Run-tree inspector](#run-tree-inspector-adminruns) below. Read-only. |
 | [`/admin/push-subscribe`](../src/app/admin/push-subscribe/page.tsx) | Per-device Web Push registration (upserts a `PushSubscription` row); lists saved devices with delete + "send test" buttons. See [AGENTS.md → Web Push gotchas](../AGENTS.md#web-push-gotchas). |
 
-The TopBar pill ([TopBar.tsx](../src/components/Layout/TopBar.tsx)) is the only entry point — it links to `/admin` when `user.isAdmin`. If you want "N open admin items" surfaced again, do it as a count on the TopBar pill, not a second chip.
+The TopBar pill ([TopBar.tsx](../src/client/components/Layout/TopBar.tsx)) is the only entry point — it links to `/admin` when `user.isAdmin`. If you want "N open admin items" surfaced again, do it as a count on the TopBar pill, not a second chip.
 
 ## View any user's session (`/admin/session/[sessionId]`)
 
@@ -32,8 +32,8 @@ The admin can load any ChatSession into the main shell at [`/admin/session/[sess
 
 **The two-rule convention for new routes:**
 
-- **Every new GET that scopes by `userId`** must use [`resolveViewedUser(req)`](../src/server/auth/viewerScope.ts) (returns `{viewedUserId, impersonating}`; `?impersonate=<sessionId>`), not `getCurrentUser()`. Skip it and the endpoint silently returns the _admin's_ data when viewed from the session UI — the right panel renders the wrong thing with no error.
-- **Every new write/streaming route** must call [`rejectImpersonatedWrite(req)`](../src/server/auth/viewerScope.ts) at the top and return the result if non-null. The UI hides write affordances in view-session mode; this server guard is what prevents a future UI bug from writing under the wrong identity.
+- **Every new GET that scopes by `userId`** must use [`resolveViewedUser(req)`](../src/server/platform/admin/viewerScope.ts) (returns `{viewedUserId, impersonating}`; `?impersonate=<sessionId>`), not `getCurrentUser()`. Skip it and the endpoint silently returns the _admin's_ data when viewed from the session UI — the right panel renders the wrong thing with no error.
+- **Every new write/streaming route** must call [`rejectImpersonatedWrite(req)`](../src/server/platform/admin/viewerScope.ts) at the top and return the result if non-null. The UI hides write affordances in view-session mode; this server guard is what prevents a future UI bug from writing under the wrong identity.
 
 Routes that don't scope by `userId` at all need neither. There's no automated check — the convention is the only safety net.
 
@@ -45,7 +45,7 @@ A read-only god-view (like `/admin/usage` — no impersonation threading) that r
 
 **What powers it (hybrid capture — most is reconstructable, the gaps are lightly instrumented):**
 
-- **`ChatMessage`** carries the transcript; new nullable `runId` + `turnIndex` group and order a run's rows. The `traces` column holds the sub-agent interior fan-out (reads / reasoning): [`runAgentTurn`](../src/server/agent/runtime/runAgentTurn.ts) feeds a [trace accumulator](../src/server/agent/runTree/traceAccumulator.ts) and persists its snapshot. It accumulates unconditionally rather than only when a live sink is attached — on the chat path there is none, and gating on one is how the column stayed empty (same shape `buildAssistantSegments` in [/api/session](../src/app/api/session/route.ts) already renders).
+- **`ChatMessage`** carries the transcript; new nullable `runId` + `turnIndex` group and order a run's rows. The `traces` column holds the sub-agent interior fan-out (reads / reasoning): [`runAgentTurn`](../src/server/agent/runtime/runAgentTurn.ts) feeds a [trace accumulator](../src/server/agent/runTree/traceAccumulator.ts) and persists its snapshot. It accumulates unconditionally rather than only when a live sink is attached — on the chat path there is none, and gating on one is how the column stayed empty (same shape `buildAssistantSegments` in [/api/session](../src/server/views/chatTranscript.ts) already renders).
 - **`TokenUsage`** is the per-LLM-call spine; new nullable `runId` / `messageId` / `parentToolUseId` / `requestParams` / `systemPromptHash` record the exact model params + which assistant turn (or parent tool_use, for sub-agent calls) the call belongs to.
 - **`SubAgentRun`** gains `runId` / `parentMessageId` / `parentToolUseId` so each sub-agent nests under the exact tool call that spawned it.
 - **`PromptSnapshot`** dedupes the ~70KB system-prompt skeleton (`buildHankSystem` now returns `{ full, staticText, staticHash, volatile }`); the exact prompt = skeleton + the small per-call volatile pieces stored in `requestParams`.
@@ -71,7 +71,7 @@ browser hook → reportClientEvent() → POST /api/client-events → recordClien
 agent turn → loadRecentClientErrors(sessionId) → <recent-client-errors> block in buildHankSystem()
 ```
 
-- **Client helper** [`reportClientEvent`](../src/lib/clientEvents.ts) — fire-and-forget POST (`keepalive`, never throws); payload `{ source, severity?, summary, context? }`.
+- **Client helper** [`reportClientEvent`](../src/client/clientEvents.ts) — fire-and-forget POST (`keepalive`, never throws); payload `{ source, severity?, summary, context? }`.
 - **Endpoint** [`/api/client-events`](../src/app/api/client-events/route.ts) — `rejectImpersonatedWrite` + `getCurrentUser`, zod-validated; no active session → ack and drop.
 - **Landing** [`recordClientEvent`](../src/server/platform/clientEvents/record.ts) — writes the `ClientEvent` row and **swallows its own errors** so telemetry can't break a session. (The old AdminNote fan-out here was removed — ClientEvents no longer produce AdminNotes.)
 

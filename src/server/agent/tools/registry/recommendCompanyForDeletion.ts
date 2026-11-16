@@ -17,25 +17,19 @@ export const recommendCompanyForDeletionTool: ToolDef<{
   affectsViewedState: false,
   description:
     "Flag a company for an admin to hard-delete (takes its postings + everyone's tracking with it). Sets a deletion recommendation + reason; the company stays in place and renders normally until an admin reviews it and either approves the delete or clears the flag. This never deletes data itself, and it flags the GLOBAL company for everyone — so reach for the softer options first: close_company keeps the history; untrack_company removes only this user's copy. Only flag when the company itself is junk (added by mistake, a duplicate of another company already on file, a careers URL that turned out to be wrong). Re-calling with a new reason updates the recommendation. `company` is the company's slug — pass the one the user means.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      company: {
-        type: "string",
-        description:
-          "The company's slug (e.g. 'stripe') — the company the user means.",
-      },
-      reason: {
-        type: "string",
-        description:
-          "One-sentence justification (e.g. 'duplicate of the anthropic slug'). Shown to the admin reviewing the flag.",
-      },
-    },
-    required: ["reason"],
-  },
   parser: z.object({
-    company: z.string().optional(),
-    reason: z.string().min(1),
+    company: z
+      .string()
+      .optional()
+      .describe(
+        "The company's slug (e.g. 'stripe') — the company the user means.",
+      ),
+    reason: z
+      .string()
+      .min(1)
+      .describe(
+        "One-sentence justification (e.g. 'duplicate of the anthropic slug'). Shown to the admin reviewing the flag.",
+      ),
   }),
   async handle({ company, reason }, ctx) {
     const resolved = await resolveCompanyArg(ctx, company, {

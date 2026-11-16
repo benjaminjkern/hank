@@ -15,7 +15,6 @@ export const commitProfileTool: ToolDef<Record<string, never>> = {
   // signal stays true, Hank keeps eliciting, and nothing advances.
   description:
     "Close out profile setup. Call this when you judge the profile complete enough for downstream sub-agents (PRE_SCAN / shortlist / drafting) to work well. The user should have just confirmed the synthesis in chat (\"let me make sure I got this correct…\"). It consolidates the conversation into memory, runs a verdict check, and either wraps up (you're done — the what's-next chooser comes up on its own, so don't also call show_whats_next) or comes back with a list of what's still missing so you can re-elicit on the next turn.",
-  inputSchema: { type: "object", properties: {} },
   parser: z.object({}).strict(),
   async handle(_input, ctx) {
     const r = await runCommitProfile(ctx);

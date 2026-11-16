@@ -11,9 +11,10 @@ import {
   JobInteractionStatus,
 } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
-import { WORKABLE_STATUSES } from "./jobInteractionInputs";
 import { refreshCompanyEngagement } from "@/server/entities/companies/engagement";
 import { logJobEvent } from "@/server/entities/jobs/logJobEvents";
+
+import { WORKABLE_STATUSES } from "./jobInteractionInputs";
 
 type MarkJobAppliedArgs = {
   userId: string;

@@ -1,5 +1,5 @@
-// The application page: read it, add a question the form asks for, and write
-// one item's text.
+// The application page: read it, add / reword / remove a question the form asks
+// for, and write one item's text.
 //
 // One item per request, addressed by the same id the agent's tools use
 // (`cover_letter` or a `q_…`), so the panel and `draft_application_question`
@@ -9,43 +9,26 @@
 //
 // Every handler that writes returns the fresh view, so the panel never has to
 // guess what the write did to the rest of the form.
-//
-// Nothing here touches either baseline, and that IS the mechanism: text that
-// no longer matches what Hank wrote is the user's, and text that doesn't match
-// what he's seen is an unsent change. Writing a baseline would erase both facts.
-// It does set the "ok to reuse when drafting" flag on the touched item — working
-// the text is what makes it worth drawing on later — and an explicit `reuse` in
-// the same request (the switch itself) wins.
 
 import { z } from "zod";
 
-import type { Prisma } from "@/generated/prisma/client";
-import { getCurrentUser } from "@/server/auth/currentUser";
-import {
-  rejectImpersonatedWrite,
-  resolveViewedUser,
-} from "@/server/auth/viewerScope";
-import { prisma } from "@/server/db/prisma";
-import {
-  readReuseFlags,
-  readShortAnswers,
-} from "@/server/entities/jobs/applicationDrafts";
-import {
-  COVER_LETTER_ID,
-  questionId,
-} from "@/server/entities/jobs/applicationItemId";
 import {
   addUserQuestion,
   removeUserQuestion,
   renameUserQuestion,
   resolveQuestionId,
 } from "@/server/entities/jobs/applicationQuestions";
+import { editApplicationItem } from "@/server/entities/jobs/editApplicationItem";
+import {
+  rejectImpersonatedWrite,
+  resolveViewedUser,
+} from "@/server/platform/admin/viewerScope";
+import { getCurrentUser } from "@/server/platform/auth/currentUser";
 import { loadApplicationView } from "@/server/views/application";
-import { normalizeForCompare } from "@/utils/text";
 
 export const dynamic = "force-dynamic";
 
-const BodySchema = z.object({
+const EditItemSchema = z.object({
   // "cover_letter" or a questionId from the view.
   itemId: z.string(),
   // The full new text. Empty string clears the item.
@@ -71,22 +54,29 @@ const RenameQuestionSchema = z.object({
 // Remove a question this user added by hand — `itemId` addresses it.
 const RemoveQuestionSchema = z.object({ itemId: z.string() });
 
+// The response every handler ends on: the page as it now stands.
+async function applicationViewResponse(
+  userId: string,
+  jobId: string,
+): Promise<Response> {
+  const view = await loadApplicationView(userId, jobId);
+  if (!view) return Response.json({ error: "not found" }, { status: 404 });
+  return Response.json(view);
+}
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { viewedUserId } = await resolveViewedUser(req);
   const { id: jobId } = await params;
-  const view = await loadApplicationView(viewedUserId, jobId);
-  if (!view) return Response.json({ error: "not found" }, { status: 404 });
-  return Response.json(view);
+  return await applicationViewResponse(viewedUserId, jobId);
 }
 
 // Add a question the scrape missed. The question lands on the JOB (global,
 // shared with every user of the posting) carrying who added it and when, which
 // is what lets the panel badge it as described-by-hand rather than read off the
-// form. `addUserQuestion` also clears this user's cached decision so the new
-// question is included the next time anything drafts.
+// form.
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -112,9 +102,7 @@ export async function POST(
   );
   if (!added.ok) return Response.json({ error: "not found" }, { status: 404 });
 
-  const view = await loadApplicationView(user.id, jobId);
-  if (!view) return Response.json({ error: "not found" }, { status: 404 });
-  return Response.json(view);
+  return await applicationViewResponse(user.id, jobId);
 }
 
 // Reword a hand-added question. Separate from PATCH because it isn't an edit to
@@ -154,9 +142,7 @@ export async function PUT(
     return Response.json({ error: renamed.reason }, { status });
   }
 
-  const view = await loadApplicationView(user.id, jobId);
-  if (!view) return Response.json({ error: "not found" }, { status: 404 });
-  return Response.json(view);
+  return await applicationViewResponse(user.id, jobId);
 }
 
 // Take back a hand-added question. Separate from a PATCH that blanks the text:
@@ -190,11 +176,10 @@ export async function DELETE(
     return Response.json({ error: removed.reason }, { status });
   }
 
-  const view = await loadApplicationView(user.id, jobId);
-  if (!view) return Response.json({ error: "not found" }, { status: 404 });
-  return Response.json(view);
+  return await applicationViewResponse(user.id, jobId);
 }
 
+// Write one item's text and/or its reuse switch.
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -205,91 +190,17 @@ export async function PATCH(
   if (!user) return Response.json({ error: "unauthorized" }, { status: 401 });
   const { id: jobId } = await params;
 
-  const parsed = BodySchema.safeParse(await req.json().catch(() => null));
+  const parsed = EditItemSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return Response.json({ error: "bad body" }, { status: 400 });
   }
-  const { itemId, text, reuse } = parsed.data;
 
-  const existing = await prisma.jobInteraction.findUnique({
-    where: { userId_jobId: { userId: user.id, jobId } },
-    select: {
-      coverLetter: true,
-      shortAnswers: true,
-      shortAnswersReuse: true,
-      applicationReview: true,
-    },
-  });
-  if (!existing) return Response.json({ error: "not found" }, { status: 404 });
-
-  const data: Prisma.JobInteractionUpdateInput = {};
-
-  if (itemId === COVER_LETTER_ID) {
-    if (text !== undefined) {
-      const next = text.trim().length > 0 ? text : null;
-      data.coverLetter = next;
-      // Clearing an item leaves reuse alone — there's nothing to reuse, and the
-      // next edit re-sets it.
-      if (next !== null && next !== existing.coverLetter) {
-        data.coverLetterReuse = true;
-      }
-    }
-    if (reuse !== undefined) data.coverLetterReuse = reuse;
-  } else {
-    // The id resolves through the merged form so a question the panel showed
-    // maps to the exact text the answer is keyed by.
-    const resolved = await resolveQuestionId(jobId, itemId);
-    const answers = readShortAnswers(existing.shortAnswers);
-    const flags = readReuseFlags(existing.shortAnswersReuse);
-    while (flags.length < answers.length) flags.push(null);
-
-    // An id that no longer resolves against the form can still match an answer
-    // already saved under it — the form changed, the answer didn't.
-    const question =
-      resolved?.kind === "question"
-        ? resolved.text
-        : answers.find((a) => questionId(a.question) === itemId)?.question;
-    if (!question) {
-      return Response.json({ error: "unknown item" }, { status: 404 });
-    }
-    const norm = normalizeForCompare(question);
-    const idx = answers.findIndex(
-      (a) => normalizeForCompare(a.question) === norm,
-    );
-
-    if (text !== undefined) {
-      const trimmed = text.trim();
-      if (trimmed.length === 0) {
-        if (idx >= 0) {
-          answers.splice(idx, 1);
-          flags.splice(idx, 1);
-        }
-      } else if (idx >= 0) {
-        if (answers[idx].answer !== text) flags[idx] = true;
-        answers[idx] = { question, answer: text };
-      } else {
-        answers.push({ question, answer: text });
-        flags.push(true);
-      }
-      data.shortAnswers = answers;
-      data.shortAnswersReuse = flags;
-    }
-    if (reuse !== undefined && idx >= 0) {
-      flags[idx] = reuse;
-      data.shortAnswersReuse = flags;
-    }
+  const edited = await editApplicationItem(user.id, jobId, parsed.data);
+  if (!edited.ok) {
+    const error =
+      edited.reason === "unknown_item" ? "unknown item" : "not found";
+    return Response.json({ error }, { status: 404 });
   }
 
-  // proposedDrafts is deliberately NOT touched here: the whole point is that
-  // this write diverges from what Hank last wrote, which is what makes the edit
-  // visible to the relay.
-  await prisma.jobInteraction.update({
-    where: { userId_jobId: { userId: user.id, jobId } },
-    data,
-    select: { id: true },
-  });
-
-  const view = await loadApplicationView(user.id, jobId);
-  if (!view) return Response.json({ error: "not found" }, { status: 404 });
-  return Response.json(view);
+  return await applicationViewResponse(user.id, jobId);
 }

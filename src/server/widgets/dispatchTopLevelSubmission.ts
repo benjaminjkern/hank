@@ -81,10 +81,10 @@ export async function* dispatchTopLevelSubmission(
   const disambiguationSubmission =
     parseCompanyDisambiguationSubmission(userMessage);
   if (disambiguationSubmission) {
-    const added = yield* runDisambiguationResolution(
-      disambiguationSubmission.resolved,
-      args,
-    );
+    const added = yield* runDisambiguationResolution({
+      ...args,
+      resolved: disambiguationSubmission.resolved,
+    });
     yield addMoreCompaniesWidget(added, 0);
     return { kind: "terminal" };
   }

@@ -4,18 +4,26 @@ import { EventSource } from "@/generated/prisma/client";
 import { ALL_EVENT_TYPES } from "@/server/entities/opportunities/leadInputs";
 import { logOpportunityEvents } from "@/server/entities/opportunities/logOpportunityEvent";
 import { resolveOpportunitiesBySlug } from "@/server/entities/resolveBySlug";
-import { parseEventDateTime } from "@/server/platform/time/localTime";
+import { parseEventDateTime } from "@/shared/utils/localTime";
 
 import { slugLookupError } from "../lib/slugLookupError";
 
 import type { ToolDef } from "../lib/types";
 
 const LogOpportunityEventItemSchema = z.object({
-  opportunity: z.string(),
+  opportunity: z.string().describe("The lead's slug."),
   type: z.enum(ALL_EVENT_TYPES),
-  occurredAt: z.string().optional(),
+  occurredAt: z
+    .string()
+    .optional()
+    .describe(
+      "ISO datetime in the user's local time — include the clock time for a scheduled call/meeting (e.g. '2026-06-14T14:00'). Defaults to now.",
+    ),
   notes: z.string().optional(),
-  source: z.enum(["CHAT_EXTRACTED", "USER_LOGGED"]).optional(),
+  source: z
+    .enum(["CHAT_EXTRACTED", "USER_LOGGED"])
+    .optional()
+    .describe("Default CHAT_EXTRACTED."),
 });
 
 type LogOpportunityEventItem = z.infer<typeof LogOpportunityEventItemSchema>;
@@ -27,38 +35,6 @@ export const logOpportunityEventsTool: ToolDef<{
   affectsViewedState: true,
   description:
     "Log one or more timeline events on Opportunities (leads/conversations). Batched — pass an array; one transaction. CALL_SCHEDULED → lead status → SCREENING. CALL_HAPPENED → keeps SCREENING. NEXT_STEP_RECEIVED → lead status → AWAITING. CLOSED → lead status → CLOSED (set `closedReason` via update_opportunity). NOTE = freeform observation. A pitched role's own status lives on the linked JobInteraction's Event timeline, not here. Status auto-cache is denormalized; the event log is truth.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      events: {
-        type: "array",
-        minItems: 1,
-        items: {
-          type: "object",
-          properties: {
-            opportunity: { type: "string", description: "The lead's slug." },
-            type: {
-              type: "string",
-              enum: ALL_EVENT_TYPES as readonly string[] as string[],
-            },
-            occurredAt: {
-              type: "string",
-              description:
-                "ISO datetime in the user's local time — include the clock time for a scheduled call/meeting (e.g. '2026-06-14T14:00'). Defaults to now.",
-            },
-            notes: { type: "string" },
-            source: {
-              type: "string",
-              enum: ["CHAT_EXTRACTED", "USER_LOGGED"],
-              description: "Default CHAT_EXTRACTED.",
-            },
-          },
-          required: ["opportunity", "type"],
-        },
-      },
-    },
-    required: ["events"],
-  },
   parser: z.object({
     events: z.array(LogOpportunityEventItemSchema).min(1),
   }),

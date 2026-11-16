@@ -20,10 +20,10 @@ import {
   type JobCloseReason,
   type CompanyBlockReason,
 } from "@/generated/prisma/client";
-import { formatFocusRefToken } from "@/lib/focusRefToken";
 import { humanCompanyBlockReason } from "@/server/entities/companies/humanCompanyReasonLabels";
 import { humanJobCloseReason } from "@/server/entities/jobs/humanJobReasonLabels";
 import type { CritiqueStop } from "@/server/procedures/registry/draftApplication/critiqueAndRevise";
+import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 // Appended to the company set-asides the machine performs so the user sees one
 // coherent transition instead of [action] + [silent gap] + [next picker]. Same

@@ -35,7 +35,8 @@ import {
   isCoverLetterQuestion,
   isProseQuestion,
   type ApplicationQuestion,
-} from "@/server/scrape/types";
+} from "@/server/platform/scrape/types";
+import { streamingProcedure } from "@/server/procedures/lib/procedure";
 import type {
   ApplicationDecision,
   DraftVerdict,
@@ -119,242 +120,246 @@ function fallbackDecision(
   };
 }
 
-export async function* runDraftApplication(
-  args: DraftApplicationArgs,
-): AsyncGenerator<TurnEvent, DraftApplicationOutcome> {
-  const { jobId } = args;
-  let didWork = false;
-  let review: ApplicationReview | null = null;
-  let note: string | null = null;
-  let reviewStop: CritiqueStop | null = null;
+export const runDraftApplication = streamingProcedure(
+  "draft_application",
+  async function* (
+    args: DraftApplicationArgs,
+  ): AsyncGenerator<TurnEvent, DraftApplicationOutcome> {
+    const { jobId } = args;
+    let didWork = false;
+    let review: ApplicationReview | null = null;
+    let note: string | null = null;
+    let reviewStop: CritiqueStop | null = null;
 
-  // Starting a pass is what separates the role being written from the ones
-  // queued behind it — both read SHORTLISTED otherwise, so nothing could tell
-  // "next up" from "on screen right now". It lives here rather than in
-  // work_on_job so both entries (the walkthrough job arm and draft_application)
-  // get it. Idempotent, and it only ever moves a row forward.
-  await prisma.jobInteraction.updateMany({
-    where: {
-      userId: args.userId,
-      jobId,
-      status: JobInteractionStatus.SHORTLISTED,
-    },
-    data: { status: JobInteractionStatus.APPLYING },
-  });
-
-  // Step 4: ensure the application form is fetched. ensureApplicationForm
-  // persists into Job.applicationQuestions; needsQuestionsRefresh gates it.
-  const beforeMerged = await loadMergedQuestions(jobId);
-  if (needsQuestionsRefresh(beforeMerged.envelope)) {
-    didWork = true;
-    yield status("Fetching application form…");
-    const formRes = await ensureApplicationForm({ jobId });
-    if (formRes.status === "not_found") {
-      yield { type: "text", text: `no job found for "${jobId}".` };
-    }
-  }
-
-  // Merge the scraped form with the per-user user-added overlay.
-  const merged = await loadMergedQuestions(jobId);
-  const nonCoverLetterQuestions = merged.merged.filter(
-    (q) => !isCoverLetterQuestion(q.question),
-  );
-  const hasQuestions = nonCoverLetterQuestions.length > 0;
-  const formWantsCoverLetter = merged.formWantsCoverLetter;
-  // Step 4 already attempted the fetch above, so a still-null envelope here
-  // (formNeverFetched) means it couldn't even try — no application URL on file
-  // (a manually-created job). Treat that like an unreadable form so the caller
-  // points at the manual path instead of reporting "nothing to draft".
-  const formUnavailable = merged.formUnavailable || merged.formNeverFetched;
-
-  const job = await prisma.job.findUnique({
-    where: { id: jobId },
-    select: {
-      companyName: true,
-      company: { select: { name: true } },
-      jobInteractions: {
-        where: { userId: args.userId },
-        select: {
-          coverLetter: true,
-          shortAnswers: true,
-          draftDecision: true,
-        },
-        take: 1,
-      },
-    },
-  });
-  const jobInteraction = job?.jobInteractions[0];
-  const companyDisplay =
-    job?.company?.name ?? job?.companyName ?? "this company";
-
-  // Step 4.5: decide once per job (cached on draftDecision). forceRedecide or
-  // fresh extraContext re-runs it — the user's input can flip verdicts.
-  const cached =
-    args.forceRedecide || args.extraContext?.trim()
-      ? null
-      : ((jobInteraction?.draftDecision as ApplicationDecision | null) ?? null);
-  // A decision that predates a question (hand-added, or turned up by a
-  // re-scrape) can't speak for the whole form, so re-run rather than draft
-  // against a partial verdict set.
-  let decision =
-    cached && decisionCoversForm(cached, merged.merged) ? cached : null;
-  if (!decision && (hasQuestions || formWantsCoverLetter)) {
-    didWork = true;
-    yield status(
-      "Working out which answers I can draft and which need your input…",
-    );
-    const dec = await decideApplicationForm({ ...args, jobId });
-    if (dec.ok) {
-      decision = dec.decision;
-      await prisma.jobInteraction.update({
-        where: { userId_jobId: { userId: args.userId, jobId } },
-        data: { draftDecision: decision },
-      });
-    } else {
-      decision = fallbackDecision(merged.merged, formWantsCoverLetter);
-    }
-    if (decision?.notice) {
-      yield { type: "text", text: decision.notice };
-    }
-  }
-
-  // Step 5: act on verdicts. Agent drafts persist with reuse FALSE — a Hank
-  // draft isn't reuse-eligible until the user opts it in.
-  let answers = (
-    (jobInteraction?.shortAnswers as Array<{
-      question: string;
-      answer: string;
-    }> | null) ?? []
-  ).slice();
-  const answeredSet = new Set(answers.map((q) => q.question));
-  let hasCoverLetter =
-    !!jobInteraction?.coverLetter &&
-    jobInteraction.coverLetter.trim().length > 0;
-  const askUserItems: string[] = [];
-  let draftedSomething = false;
-
-  if (decision?.coverLetter && !hasCoverLetter) {
-    if (decision.coverLetter.verdict === "draft") {
-      didWork = true;
-      yield status("Drafting cover letter…");
-      const drafted = await draftSingleApplicationItem({
-        ...args,
+    // Starting a pass is what separates the role being written from the ones
+    // queued behind it — both read SHORTLISTED otherwise, so nothing could tell
+    // "next up" from "on screen right now". It lives here rather than in
+    // work_on_job so both entries (the walkthrough job arm and draft_application)
+    // get it. Idempotent, and it only ever moves a row forward.
+    await prisma.jobInteraction.updateMany({
+      where: {
+        userId: args.userId,
         jobId,
-        item: { kind: "cover_letter" },
-      });
-      if (drafted.ok) {
-        await persistApplicationAnswer(args.userId, jobId, {
-          coverLetter: drafted.content,
-          author: "hank",
-        });
-        hasCoverLetter = true;
-        draftedSomething = true;
-        yield { type: "refresh_viewed_state" };
-      } else {
-        yield {
-          type: "text",
-          text: `Cover-letter drafting failed: ${drafted.error}`,
-        };
-      }
-    } else if (decision.coverLetter.verdict === "ask_user") {
-      askUserItems.push("your cover letter");
-    }
-  }
+        status: JobInteractionStatus.SHORTLISTED,
+      },
+      data: { status: JobInteractionStatus.APPLYING },
+    });
 
-  for (const qd of decision?.questions ?? []) {
-    if (answeredSet.has(qd.question)) continue;
-    if (qd.verdict === "draft") {
+    // Step 4: ensure the application form is fetched. ensureApplicationForm
+    // persists into Job.applicationQuestions; needsQuestionsRefresh gates it.
+    const beforeMerged = await loadMergedQuestions(jobId);
+    if (needsQuestionsRefresh(beforeMerged.envelope)) {
+      didWork = true;
+      yield status("Fetching application form…");
+      const formRes = await ensureApplicationForm({ jobId });
+      if (formRes.status === "not_found") {
+        yield { type: "text", text: `no job found for "${jobId}".` };
+      }
+    }
+
+    // Merge the scraped form with the per-user user-added overlay.
+    const merged = await loadMergedQuestions(jobId);
+    const nonCoverLetterQuestions = merged.merged.filter(
+      (q) => !isCoverLetterQuestion(q.question),
+    );
+    const hasQuestions = nonCoverLetterQuestions.length > 0;
+    const formWantsCoverLetter = merged.formWantsCoverLetter;
+    // Step 4 already attempted the fetch above, so a still-null envelope here
+    // (formNeverFetched) means it couldn't even try — no application URL on file
+    // (a manually-created job). Treat that like an unreadable form so the caller
+    // points at the manual path instead of reporting "nothing to draft".
+    const formUnavailable = merged.formUnavailable || merged.formNeverFetched;
+
+    const job = await prisma.job.findUnique({
+      where: { id: jobId },
+      select: {
+        companyName: true,
+        company: { select: { name: true } },
+        jobInteractions: {
+          where: { userId: args.userId },
+          select: {
+            coverLetter: true,
+            shortAnswers: true,
+            draftDecision: true,
+          },
+          take: 1,
+        },
+      },
+    });
+    const jobInteraction = job?.jobInteractions[0];
+    const companyDisplay =
+      job?.company?.name ?? job?.companyName ?? "this company";
+
+    // Step 4.5: decide once per job (cached on draftDecision). forceRedecide or
+    // fresh extraContext re-runs it — the user's input can flip verdicts.
+    const cached =
+      args.forceRedecide || args.extraContext?.trim()
+        ? null
+        : ((jobInteraction?.draftDecision as ApplicationDecision | null) ??
+          null);
+    // A decision that predates a question (hand-added, or turned up by a
+    // re-scrape) can't speak for the whole form, so re-run rather than draft
+    // against a partial verdict set.
+    let decision =
+      cached && decisionCoversForm(cached, merged.merged) ? cached : null;
+    if (!decision && (hasQuestions || formWantsCoverLetter)) {
       didWork = true;
       yield status(
-        `Drafting answer to: ${qd.question.slice(0, 80)}${qd.question.length > 80 ? "…" : ""}`,
+        "Working out which answers I can draft and which need your input…",
       );
-      // eslint-disable-next-line no-await-in-loop -- each item is drafted against the form the previous items filled in
-      const drafted = await draftSingleApplicationItem({
-        ...args,
-        jobId,
-        item: { kind: "question", text: qd.question },
-      });
-      if (drafted.ok) {
-        answers = [
-          ...answers,
-          { question: qd.question, answer: drafted.content },
-        ];
-        answeredSet.add(qd.question);
-        draftedSomething = true;
-        // eslint-disable-next-line no-await-in-loop -- persists what the draft above produced
-        await persistApplicationAnswer(args.userId, jobId, {
-          question: qd.question,
-          answer: drafted.content,
-          author: "hank",
+      const dec = await decideApplicationForm({ ...args, jobId });
+      if (dec.ok) {
+        decision = dec.decision;
+        await prisma.jobInteraction.update({
+          where: { userId_jobId: { userId: args.userId, jobId } },
+          data: { draftDecision: decision },
         });
-        yield { type: "refresh_viewed_state" };
       } else {
-        yield {
-          type: "text",
-          text: `Drafting failed for "${qd.question.slice(0, 60)}": ${drafted.error}`,
-        };
+        decision = fallbackDecision(merged.merged, formWantsCoverLetter);
       }
-    } else if (qd.verdict === "ask_user") {
-      askUserItems.push(qd.question);
+      if (decision?.notice) {
+        yield { type: "text", text: decision.notice };
+      }
     }
-    // skip → nothing
-  }
 
-  // Step 5.25: recruiter-lens critique + up-to-2 revision rounds when anything
-  // was drafted this pass. Best-effort; the loop swallows its own errors.
-  if (draftedSomething) {
-    // Pumped by hand rather than `for await`, which discards a generator's
-    // return value — and the return value IS the verdict. Losing it is what let
-    // a draft with a known contradiction ship looking identical to a clean one.
-    const critique = critiqueAndReviseForm({ ...args, jobId });
-    let step = await critique.next();
-    while (!step.done) {
-      yield step.value.type === "progress"
-        ? status(step.value.label)
-        : { type: "refresh_viewed_state" };
-      // eslint-disable-next-line no-await-in-loop -- draining a generator: each step is produced by the previous one
-      step = await critique.next();
-    }
-    review = await persistApplicationReview(args.userId, jobId, step.value);
-    note = step.value.note.trim() || null;
-    reviewStop = step.value.stop;
-
-    const refreshed = await prisma.jobInteraction.findUnique({
-      where: { userId_jobId: { userId: args.userId, jobId } },
-      select: { coverLetter: true, shortAnswers: true },
-    });
-    hasCoverLetter =
-      !!refreshed?.coverLetter && refreshed.coverLetter.trim().length > 0;
-    answers = (
-      (refreshed?.shortAnswers as Array<{
+    // Step 5: act on verdicts. Agent drafts persist with reuse FALSE — a Hank
+    // draft isn't reuse-eligible until the user opts it in.
+    let answers = (
+      (jobInteraction?.shortAnswers as Array<{
         question: string;
         answer: string;
       }> | null) ?? []
     ).slice();
-  }
+    const answeredSet = new Set(answers.map((q) => q.question));
+    let hasCoverLetter =
+      !!jobInteraction?.coverLetter &&
+      jobInteraction.coverLetter.trim().length > 0;
+    const askUserItems: string[] = [];
+    let draftedSomething = false;
 
-  return {
-    didWork,
-    askUserItems,
-    formUnavailable,
-    hasCoverLetter,
-    answersCount: answers.length,
-    companyDisplay,
-    notice: decision?.notice ?? null,
-    note,
-    reviewStop,
-    review,
-  };
-}
+    if (decision?.coverLetter && !hasCoverLetter) {
+      if (decision.coverLetter.verdict === "draft") {
+        didWork = true;
+        yield status("Drafting cover letter…");
+        const drafted = await draftSingleApplicationItem({
+          ...args,
+          jobId,
+          item: { kind: "cover_letter" },
+        });
+        if (drafted.ok) {
+          await persistApplicationAnswer(args.userId, jobId, {
+            coverLetter: drafted.content,
+            author: "hank",
+          });
+          hasCoverLetter = true;
+          draftedSomething = true;
+          yield { type: "refresh_viewed_state" };
+        } else {
+          yield {
+            type: "text",
+            text: `Cover-letter drafting failed: ${drafted.error}`,
+          };
+        }
+      } else if (decision.coverLetter.verdict === "ask_user") {
+        askUserItems.push("your cover letter");
+      }
+    }
+
+    for (const qd of decision?.questions ?? []) {
+      if (answeredSet.has(qd.question)) continue;
+      if (qd.verdict === "draft") {
+        didWork = true;
+        yield status(
+          `Drafting answer to: ${qd.question.slice(0, 80)}${qd.question.length > 80 ? "…" : ""}`,
+        );
+        // eslint-disable-next-line no-await-in-loop -- each item is drafted against the form the previous items filled in
+        const drafted = await draftSingleApplicationItem({
+          ...args,
+          jobId,
+          item: { kind: "question", text: qd.question },
+        });
+        if (drafted.ok) {
+          answers = [
+            ...answers,
+            { question: qd.question, answer: drafted.content },
+          ];
+          answeredSet.add(qd.question);
+          draftedSomething = true;
+          // eslint-disable-next-line no-await-in-loop -- persists what the draft above produced
+          await persistApplicationAnswer(args.userId, jobId, {
+            question: qd.question,
+            answer: drafted.content,
+            author: "hank",
+          });
+          yield { type: "refresh_viewed_state" };
+        } else {
+          yield {
+            type: "text",
+            text: `Drafting failed for "${qd.question.slice(0, 60)}": ${drafted.error}`,
+          };
+        }
+      } else if (qd.verdict === "ask_user") {
+        askUserItems.push(qd.question);
+      }
+      // skip → nothing
+    }
+
+    // Step 5.25: recruiter-lens critique + up-to-2 revision rounds when anything
+    // was drafted this pass. Best-effort; the loop swallows its own errors.
+    if (draftedSomething) {
+      // Pumped by hand rather than `for await`, which discards a generator's
+      // return value — and the return value IS the verdict. Losing it is what let
+      // a draft with a known contradiction ship looking identical to a clean one.
+      const critique = critiqueAndReviseForm({ ...args, jobId });
+      let step = await critique.next();
+      while (!step.done) {
+        yield step.value.type === "progress"
+          ? status(step.value.label)
+          : { type: "refresh_viewed_state" };
+        // eslint-disable-next-line no-await-in-loop -- draining a generator: each step is produced by the previous one
+        step = await critique.next();
+      }
+      review = await persistApplicationReview(args.userId, jobId, step.value);
+      note = step.value.note.trim() || null;
+      reviewStop = step.value.stop;
+
+      const refreshed = await prisma.jobInteraction.findUnique({
+        where: { userId_jobId: { userId: args.userId, jobId } },
+        select: { coverLetter: true, shortAnswers: true },
+      });
+      hasCoverLetter =
+        !!refreshed?.coverLetter && refreshed.coverLetter.trim().length > 0;
+      answers = (
+        (refreshed?.shortAnswers as Array<{
+          question: string;
+          answer: string;
+        }> | null) ?? []
+      ).slice();
+    }
+
+    return {
+      didWork,
+      askUserItems,
+      formUnavailable,
+      hasCoverLetter,
+      answersCount: answers.length,
+      companyDisplay,
+      notice: decision?.notice ?? null,
+      note,
+      reviewStop,
+      review,
+    };
+  },
+);
 
 // Drive runDraftApplication to completion from a NON-generator caller (the
 // draft_application tool): forward status lines via a callback and collect any
 // failure text. Returns the structured outcome + notes. refresh_viewed_state
 // pings are dropped (tools set affectsViewedState for the end-of-turn refresh).
 export async function runDraftApplicationCollect(
-  args: DraftApplicationArgs,
-  onStatus?: (label: string) => void,
+  input: DraftApplicationArgs & { onStatus?: (label: string) => void },
 ): Promise<{ result: DraftApplicationOutcome; notes: string[] }> {
+  const { onStatus, ...args } = input;
   const gen = runDraftApplication(args);
   const notes: string[] = [];
   let next = await gen.next();

@@ -5,7 +5,7 @@ import {
   deleteJobEvent,
 } from "@/server/entities/jobs/jobEventEdits";
 import { statusBackedByEvent } from "@/server/entities/jobs/jobEventStatus";
-import { formatEventStamp } from "@/server/platform/time/localTime";
+import { formatEventStamp } from "@/shared/utils/localTime";
 
 import { toolError } from "../lib/toolError";
 
@@ -26,18 +26,14 @@ export const deleteJobEventTool: ToolDef<{ eventId: string }> = {
   affectsViewedState: true,
   description:
     "Delete ONE job timeline event you logged — targeted by the event's `id` (from list_job_events) — when it was logged in error and the user wants it gone (e.g. 'I never interviewed there', 'drop that applied event'). This removes only the one event, NOT the whole role — to forget a role entirely use untrack_job. It does not by itself change the role's status: if the deleted event was the one that set the current status, the result will tell you, and you should set the correct status explicitly (log_job_events / close_job / mark_job_applied) after confirming with the user.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      eventId: {
-        type: "string",
-        description:
-          "The id of the event to delete (from list_job_events, shown as `id=…`).",
-      },
-    },
-    required: ["eventId"],
-  },
-  parser: z.object({ eventId: z.string().min(1) }),
+  parser: z.object({
+    eventId: z
+      .string()
+      .min(1)
+      .describe(
+        "The id of the event to delete (from list_job_events, shown as `id=…`).",
+      ),
+  }),
   async handle({ eventId }, ctx) {
     const found = await getJobEventById(ctx.userId, eventId);
     if (found.kind === "not_found") {

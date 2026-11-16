@@ -10,19 +10,32 @@ import {
   resolveJobsBySlug,
   type SlugLookup,
 } from "@/server/entities/resolveBySlug";
-import { parseEventDateTime } from "@/server/platform/time/localTime";
+import { parseEventDateTime } from "@/shared/utils/localTime";
 
 import { slugLookupError } from "../lib/slugLookupError";
 
 import type { ToolDef } from "../lib/types";
 
 const LogCompanyEventItemSchema = z.object({
-  company: z.string(),
+  company: z.string().describe("The company's slug."),
   type: z.enum(LOG_COMPANY_EVENT_TYPES),
-  occurredAt: z.string().optional(),
+  occurredAt: z
+    .string()
+    .optional()
+    .describe(
+      "ISO datetime in the user's local time. Include the clock time for a timed event (e.g. '2026-06-14T14:00'). Defaults to now.",
+    ),
   notes: z.string().optional(),
-  source: z.enum(["CHAT_EXTRACTED", "USER_LOGGED"]).optional(),
-  job: z.string().optional(),
+  source: z
+    .enum(["CHAT_EXTRACTED", "USER_LOGGED"])
+    .optional()
+    .describe("Default CHAT_EXTRACTED."),
+  job: z
+    .string()
+    .optional()
+    .describe(
+      "Optional role slug — pass for a per-role milestone (APPLIED / INTERVIEW_* / …) so the feed row shows the role title. Ignored for company-wide types.",
+    ),
 });
 
 type LogCompanyEventItem = z.infer<typeof LogCompanyEventItemSchema>;
@@ -33,43 +46,6 @@ export const logCompanyEventsTool: ToolDef<{ events: LogCompanyEventItem[] }> =
     affectsViewedState: true,
     description:
       "Log one or more timeline events on the company feed (the company page's 'Recent activity'). Batched — pass an array. `company` (the company slug) is required per item. `type` is any CompanyEventType: batch summaries (SCRAPE_FOUND / JOBS_CLOSED / SHORTLIST_RAN), per-role milestones (APPLIED / RESPONDED / INTERVIEW_SCHEDULED / INTERVIEW_HAPPENED / OFFERED / REJECTED / WITHDRAWN), or company status markers (PAUSED / BLOCKED / CLOSED / CAUGHT_UP / REVIVED). NOTE: the per-role milestone types and status markers are normally written automatically when you apply / log an interview on a role or change the company's status — reach for this tool for a standalone feed entry the automatic writers didn't cover (e.g. backfilling history the user tells you about). For a milestone tied to one role, pass its `job` slug so the feed row shows the role title. This only writes the company feed; it does NOT create a paired JobEvent or change any status.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        events: {
-          type: "array",
-          minItems: 1,
-          items: {
-            type: "object",
-            properties: {
-              company: { type: "string", description: "The company's slug." },
-              type: {
-                type: "string",
-                enum: LOG_COMPANY_EVENT_TYPES as readonly string[] as string[],
-              },
-              occurredAt: {
-                type: "string",
-                description:
-                  "ISO datetime in the user's local time. Include the clock time for a timed event (e.g. '2026-06-14T14:00'). Defaults to now.",
-              },
-              notes: { type: "string" },
-              source: {
-                type: "string",
-                enum: ["CHAT_EXTRACTED", "USER_LOGGED"],
-                description: "Default CHAT_EXTRACTED.",
-              },
-              job: {
-                type: "string",
-                description:
-                  "Optional role slug — pass for a per-role milestone (APPLIED / INTERVIEW_* / …) so the feed row shows the role title. Ignored for company-wide types.",
-              },
-            },
-            required: ["company", "type"],
-          },
-        },
-      },
-      required: ["events"],
-    },
     parser: z.object({
       events: z.array(LogCompanyEventItemSchema).min(1),
     }),

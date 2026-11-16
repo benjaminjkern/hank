@@ -16,12 +16,7 @@ export const readJobDescriptionTool: ToolDef<{ job: string }> = {
   affectsViewedState: true,
   description:
     "Return the full posting content (rawContent) for a single role by its slug. The text comes from the DB — don't fetch_url the sourceUrl again, you already have it. Side effects: logs a SCANNED event, and **auto-promotes the JobInteraction NEW → SCANNED (and PITCHED → SCANNED)** — the act of reading the description is what SCANNED means. Don't set the status yourself afterward — it's done for you. Does NOT rescue CLOSED rows: if you mistakenly skipped a job and want to reconsider, log a SHORTLISTED event (log_job_events([{type:'SHORTLISTED'}])) first; that's the intentional path so the skip reversal lands as its own audit event. This tool intentionally does NOT fetch application form questions — that's view_application_questions, called later when you're actually about to draft for a shortlisted job. To read a role's event timeline (applied / interviewed / skipped etc.) WITHOUT loading the whole posting, use list_job_events instead.",
-  inputSchema: {
-    type: "object",
-    properties: { job: { type: "string", description: "The role's slug." } },
-    required: ["job"],
-  },
-  parser: z.object({ job: z.string() }),
+  parser: z.object({ job: z.string().describe("The role's slug.") }),
   async handle(input, ctx) {
     const jobResolved = await resolveJobBySlug(ctx.userId, input.job);
     if (!jobResolved.ok) {

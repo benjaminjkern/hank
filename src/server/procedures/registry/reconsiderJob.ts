@@ -33,6 +33,7 @@ import {
   type BoardStanceMove,
 } from "@/server/entities/jobs/setBoardStance";
 import { isStanceable } from "@/server/entities/jobs/shortlistPool";
+import { procedure } from "@/server/procedures/lib/procedure";
 import {
   runEnrichJobBody,
   type EnrichJobBodyOutcome,
@@ -53,72 +54,75 @@ function wantsARead(verdict: ProposedVerdict | null): boolean {
   );
 }
 
-export async function runReconsiderJob(
-  args: RunContext & {
-    jobId: string;
-    // Null clears the row back to undecided.
-    verdict: ProposedVerdict | null;
-    reason: string | null;
-    by: BoardStanceMove["by"];
-  },
-): Promise<ReconsiderJobResult> {
-  const row = await prisma.jobInteraction.findUnique({
-    where: { userId_jobId: { userId: args.userId, jobId: args.jobId } },
-    select: { status: true, job: { select: { title: true } } },
-  });
-  if (!row) return { kind: "not_reconsiderable", title: null, status: null };
-
-  if (!isStanceable(row.status)) {
-    return {
-      kind: "not_reconsiderable",
-      title: row.job.title,
-      status: row.status,
-    };
-  }
-
-  // A CLOSED row stays closed while it carries the mark, so it isn't in the pool
-  // and there's nothing to pull in yet — the relay's un-close is what promotes
-  // it, and that's where the read gets paid for.
-  const pullingIn =
-    row.status === JobInteractionStatus.NEW && wantsARead(args.verdict);
-  let enrichment: EnrichJobBodyOutcome | null = null;
-  if (pullingIn) {
-    // Give the board and the ranker something to discuss, then promote out of
-    // NEW — being in the pool is what protects the row from the next scan pass.
-    enrichment = await runEnrichJobBody(args);
-    await logJobEvent({
-      userId: args.userId,
-      item: {
-        jobId: args.jobId,
-        type: JobEventType.SCANNED,
-        notes: "Read early for the shortlist board.",
-        jobInteractionUpdate: { status: JobInteractionStatus.SCANNED },
-      },
+export const runReconsiderJob = procedure(
+  "reconsider_job",
+  async (
+    args: RunContext & {
+      jobId: string;
+      // Null clears the row back to undecided.
+      verdict: ProposedVerdict | null;
+      reason: string | null;
+      by: BoardStanceMove["by"];
+    },
+  ): Promise<ReconsiderJobResult> => {
+    const row = await prisma.jobInteraction.findUnique({
+      where: { userId_jobId: { userId: args.userId, jobId: args.jobId } },
+      select: { status: true, job: { select: { title: true } } },
     });
-  }
+    if (!row) return { kind: "not_reconsiderable", title: null, status: null };
 
-  const stance = await setBoardStance({
-    userId: args.userId,
-    jobId: args.jobId,
-    ...(args.by === "agent"
-      ? ({ by: "agent", verdict: args.verdict, reason: args.reason } as const)
-      : ({ by: "user", verdict: args.verdict } as const)),
-    // A role just pulled in wasn't on the board a moment ago, so there's no
-    // "where it was" to hold it in — landing in the chosen group IS the
-    // feedback for the click. Every other mark leaves placement alone.
-    ...(pullingIn ? { place: true } : {}),
-  });
-  if (!stance.ok) {
+    if (!isStanceable(row.status)) {
+      return {
+        kind: "not_reconsiderable",
+        title: row.job.title,
+        status: row.status,
+      };
+    }
+
+    // A CLOSED row stays closed while it carries the mark, so it isn't in the pool
+    // and there's nothing to pull in yet — the relay's un-close is what promotes
+    // it, and that's where the read gets paid for.
+    const pullingIn =
+      row.status === JobInteractionStatus.NEW && wantsARead(args.verdict);
+    let enrichment: EnrichJobBodyOutcome | null = null;
+    if (pullingIn) {
+      // Give the board and the ranker something to discuss, then promote out of
+      // NEW — being in the pool is what protects the row from the next scan pass.
+      enrichment = await runEnrichJobBody(args);
+      await logJobEvent({
+        userId: args.userId,
+        item: {
+          jobId: args.jobId,
+          type: JobEventType.SCANNED,
+          notes: "Read early for the shortlist board.",
+          jobInteractionUpdate: { status: JobInteractionStatus.SCANNED },
+        },
+      });
+    }
+
+    const stance = await setBoardStance({
+      userId: args.userId,
+      jobId: args.jobId,
+      ...(args.by === "agent"
+        ? ({ by: "agent", verdict: args.verdict, reason: args.reason } as const)
+        : ({ by: "user", verdict: args.verdict } as const)),
+      // A role just pulled in wasn't on the board a moment ago, so there's no
+      // "where it was" to hold it in — landing in the chosen group IS the
+      // feedback for the click. Every other mark leaves placement alone.
+      ...(pullingIn ? { place: true } : {}),
+    });
+    if (!stance.ok) {
+      return {
+        kind: "not_reconsiderable",
+        title: row.job.title,
+        status: stance.status,
+      };
+    }
     return {
-      kind: "not_reconsiderable",
-      title: row.job.title,
-      status: stance.status,
+      kind: "stanced",
+      title: stance.title,
+      enriched: enrichment === "enriched",
+      noBody: enrichment === "no_body",
     };
-  }
-  return {
-    kind: "stanced",
-    title: stance.title,
-    enriched: enrichment === "enriched",
-    noBody: enrichment === "no_body",
-  };
-}
+  },
+);

@@ -28,40 +28,26 @@ export const listJobsTool: ToolDef<{
   name: "list_jobs",
   description:
     "List the user's roles for a single company, optionally filtered by job title substring and current status. `company` (the company slug) is required — list_jobs is intentionally per-company so output stays compact; for a watchlist-wide view, use list_companies and pick one. Status filter is an array; defaults to EVERY status (CLOSED + DELISTED included) — pass e.g. [\"SHORTLISTED\"] or [\"APPLIED\"] to narrow. Returns each role's slug, title, and status. Results are paginated, 30 per page; pass `page` (1-indexed) for more. Use for 'what's open at Stripe?' / 'what did I shortlist here?' / 'show me the applied ones'.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      company: {
-        type: "string",
-        description: "Company slug (e.g. 'stripe').",
-      },
-      name: {
-        type: "string",
-        description:
-          "Optional case-insensitive substring filter on the job title.",
-      },
-      status: {
-        type: "array",
-        items: {
-          type: "string",
-          enum: ALL_JOB_INTERACTION_STATUSES as readonly string[] as string[],
-        },
-        description:
-          "Optional array of JobInteractionStatus values to NARROW to. Omit to include every status (the default).",
-      },
-      page: {
-        type: "number",
-        description:
-          "1-indexed page number (default 1). 30 roles per page, most-recently-updated first. If the footer says more pages exist, pass page:N+1 for the next.",
-      },
-    },
-    required: ["company"],
-  },
   parser: z.object({
-    company: z.string(),
-    name: z.string().optional(),
-    status: z.array(z.enum(ALL_JOB_INTERACTION_STATUSES)).optional(),
-    page: z.number().int().positive().optional(),
+    company: z.string().describe("Company slug (e.g. 'stripe')."),
+    name: z
+      .string()
+      .optional()
+      .describe("Optional case-insensitive substring filter on the job title."),
+    status: z
+      .array(z.enum(ALL_JOB_INTERACTION_STATUSES))
+      .optional()
+      .describe(
+        "Optional array of JobInteractionStatus values to NARROW to. Omit to include every status (the default).",
+      ),
+    page: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(
+        "1-indexed page number (default 1). 30 roles per page, most-recently-updated first. If the footer says more pages exist, pass page:N+1 for the next.",
+      ),
   }),
   async handle({ company: companySlug, name, status, page }, ctx) {
     const companyResolved = await resolveCompanyBySlug(ctx.userId, companySlug);

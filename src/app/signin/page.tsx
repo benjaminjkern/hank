@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
-import { signIn, auth } from "@/server/auth/config";
-import { signInLocally } from "@/server/auth/localSignIn";
+import { signIn, auth } from "@/server/platform/auth/config";
+import { signInLocally } from "@/server/platform/auth/localSignIn";
 import {
   allowUserApiKeys,
   authMode,

@@ -51,8 +51,8 @@ import {
 // "runtime/ is the one part of agent/ that may not know what a company is".
 // eslint-disable-next-line boundaries/dependencies -- documented handoff exception
 import { runChat } from "@/server/procedures/registry/chat";
-import { isUserAbortError } from "@/utils/abort";
-import { nowMs } from "@/utils/now";
+import { isUserAbortError } from "@/shared/utils/abort";
+import { nowMs } from "@/shared/utils/now";
 
 type RunUserMessageArgs = {
   userId: string;
