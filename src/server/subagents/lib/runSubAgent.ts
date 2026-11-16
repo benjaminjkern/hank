@@ -121,6 +121,8 @@ export async function runSubAgent<TInput, TOutput, TResult>(
       : undefined,
     error: result.ok ? null : result.error,
     turns: result.turns,
+    runId: ctx.runId,
+    traceParentId: ctx.trace?.parentToolUseId,
   });
 
   if (!result.ok) return result;
@@ -379,6 +381,7 @@ async function runSubAgentLoop<TOutput>(
       model: resolved.model,
       usage: resp.usage,
       sessionId: ctx.sessionId,
+      runId: ctx.runId,
       notes: call.usageNote(turn),
       // Only a genuinely dispatched read tool earns a toolName. A turn that
       // committed to an output schema has no tool call to attribute, so this is

@@ -14,8 +14,9 @@
 // leaves the column permanently empty.
 
 import type { TraceEvent } from "@/server/platform/trace/types";
+import { nowMs } from "@/shared/utils/now";
 
-type TraceStep =
+export type TraceStep =
   | { kind: "text"; text: string }
   | {
       kind: "tool";
@@ -34,6 +35,10 @@ type TraceStep =
       kind: "span";
       id: string;
       name: string;
+      // Epoch ms, stamped as the events arrive. `endedAt` is absent on a span
+      // the run never closed (it threw past it, or was cut off at the cap).
+      startedAt: number;
+      endedAt?: number;
       summary?: string;
       error?: boolean;
       children?: { steps: TraceStep[] };
@@ -99,12 +104,14 @@ export function createTraceAccumulator(): TraceAccumulator {
           kind: "span",
           id: ev.spanId,
           name: ev.name,
+          startedAt: nowMs(),
         };
         containerFor(ev.parentToolUseId).steps.push(step);
         stepById.set(ev.spanId, step);
       } else if (ev.type === "trace_span_complete") {
         const step = stepById.get(ev.spanId);
         if (step && step.kind === "span") {
+          step.endedAt = nowMs();
           if (ev.summary) step.summary = ev.summary;
           if (ev.error) step.error = true;
         }

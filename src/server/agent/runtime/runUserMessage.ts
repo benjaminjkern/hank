@@ -35,6 +35,7 @@ import {
   registerActiveRun,
 } from "@/server/agent/runtime/stopRegistry";
 import { newRunTreeId } from "@/server/agent/runTree/ids";
+import { openRunTrace } from "@/server/agent/runTree/runTrace";
 import {
   appendRunError,
   getOrCreateActiveSession,
@@ -124,6 +125,9 @@ export async function* runUserMessage(
   // call. Stamped on every ChatMessage / TokenUsage / SubAgentRun row it (and
   // everything it drives) produces so the inspector groups the run.
   const runId = newRunTreeId();
+  // The run is the root of its own trace: every procedure span below gets a
+  // parent, even the ones no tool call opened.
+  const runTrace = openRunTrace({ runId, userId: args.userId, sessionId });
 
   try {
     // recordTranscript is the ONE writer of streamed chat content — wrapping the
@@ -138,6 +142,7 @@ export async function* runUserMessage(
         timeZone: args.timeZone,
         signal: runController.signal,
         runId,
+        trace: runTrace.trace,
         // The route's cap and the stale-run reclaim share the same age bound,
         // so this is when the cap will abort the run. Long fan-outs read it to
         // stand down cleanly first.
@@ -202,5 +207,6 @@ export async function* runUserMessage(
     }
   } finally {
     clearActiveRun(sessionId);
+    await runTrace.save();
   }
 }

@@ -2,6 +2,10 @@
 // ChatMessage / TokenUsage / SubAgentRun) and the client RunTreeView (renders a
 // raw collapsible tree). Everything here must be JSON-serializable — no Dates.
 
+import type { TraceStep } from "@/server/agent/runTree/traceAccumulator";
+
+export type { TraceStep };
+
 export type LlmCallInfo = {
   model: string;
   // { maxTokens, thinkingBudget, toolChoice, toolNames, systemPrompt: {hash, volatile} }
@@ -43,10 +47,11 @@ export type ToolCallNode = {
   input: unknown;
   result: string | null;
   isError: boolean;
-  // Sub-agent interior trace (raw { steps } for this tool_use), or null.
-  trace: unknown | null;
-  // Sub-agent runs whose parentToolUseId is this tool_use.
-  subAgents: SubAgentNode[];
+  // What ran inside this tool call: procedure spans, read tools, trace text.
+  // Empty when nothing was traced.
+  steps: TraceStep[];
+  // Sub-agent runs anywhere in this call's tree (the badge count).
+  subAgentCount: number;
 };
 
 // One item in the run's ordered timeline.
@@ -86,9 +91,15 @@ export type RunTree = {
   cost: number;
   turnCount: number;
   items: RunItem[];
-  // Sub-agent runs with no parent tool_use (deterministic-path sub-agents, e.g.
-  // the state machine's drafting/shortlist) — attached at run level.
-  orphanSubAgents: SubAgentNode[];
+  // The procedure spans the run opened outside any tool call (its RunTrace row),
+  // nested under the run root. Empty for runs captured before the root existed.
+  rootSteps: TraceStep[];
+  // Every sub-agent run, keyed by the trace node it ran under: a span id, a
+  // tool_use id, or the runId (the run root). The tree hangs each one there.
+  subAgentsByTraceParent: Record<string, SubAgentNode[]>;
+  // Sub-agent runs whose node isn't in any loaded tree (legacy runs, or a
+  // trace that failed to save) — listed at run level so nothing goes missing.
+  unplacedSubAgents: SubAgentNode[];
 };
 
 export type RunSummary = {

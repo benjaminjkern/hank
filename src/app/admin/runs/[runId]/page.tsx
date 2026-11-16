@@ -13,9 +13,26 @@ import type {
   RunTree,
   SubAgentNode,
   ToolCallNode,
+  TraceStep,
 } from "../types";
 
 export const dynamic = "force-dynamic";
+
+// A persisted tool trace is `{ steps }`; a RunTrace row's `steps` is the array.
+function toolTraceSteps(value: unknown): TraceStep[] {
+  return isRecord(value) && Array.isArray(value.steps)
+    ? (value.steps as TraceStep[])
+    : [];
+}
+
+// Every node id in a step tree a sub-agent could have run under.
+function collectNodeIds(steps: TraceStep[], into: Set<string>): void {
+  for (const step of steps) {
+    if (step.kind === "text") continue;
+    into.add(step.id);
+    if (step.children) collectNodeIds(step.children.steps, into);
+  }
+}
 
 // Collect the user-visible text from a USER row's content blocks (drop the
 // <attachments> manifest + inlined file blocks, mirroring the chat replay).
@@ -117,18 +134,18 @@ export default async function AdminRunTreePage({
     turns: r.turns,
     createdAt: r.createdAt.toISOString(),
   });
-  const subsByTool = new Map<string, SubAgentNode[]>();
-  const orphanSubAgents: SubAgentNode[] = [];
-  for (const r of subAgentRows) {
-    const node = toSubNode(r);
-    if (r.parentToolUseId) {
-      const arr = subsByTool.get(r.parentToolUseId) ?? [];
-      arr.push(node);
-      subsByTool.set(r.parentToolUseId, arr);
-    } else {
-      orphanSubAgents.push(node);
-    }
-  }
+
+  // 3b. The run's own trace — the procedure spans it opened outside any tool
+  // call. Absent for runs captured before the run root existed.
+  const runTraceRow = legacy
+    ? null
+    : await prisma.runTrace.findUnique({
+        where: { runId },
+        select: { steps: true },
+      });
+  const rootSteps = Array.isArray(runTraceRow?.steps)
+    ? (runTraceRow.steps as TraceStep[])
+    : [];
 
   // 4. PromptSnapshot skeletons for the hashes referenced.
   const hashes = [
@@ -289,8 +306,8 @@ export default async function AdminRunTreePage({
         input: b.input,
         result: res?.content ?? null,
         isError: res?.isError ?? false,
-        trace: id && traceMap ? (traceMap[id] ?? null) : null,
-        subAgents: id ? (subsByTool.get(id) ?? []) : [],
+        steps: id && traceMap ? toolTraceSteps(traceMap[id]) : [],
+        subAgentCount: 0, // filled once sub-agents are placed, below
       });
     }
     items.push({
@@ -305,6 +322,37 @@ export default async function AdminRunTreePage({
     });
   }
 
+  // 8. Hang every sub-agent run on the trace node it ran under. The nodes it can
+  // name: the run root (its id is the runId), each tool call, and every span or
+  // read tool inside either kind of tree.
+  const nodeIds = new Set<string>([runId]);
+  collectNodeIds(rootSteps, nodeIds);
+  const toolCallNodes = items.flatMap((i) =>
+    i.kind === "turn" ? i.toolCalls : [],
+  );
+  for (const t of toolCallNodes) {
+    if (t.toolUseId) nodeIds.add(t.toolUseId);
+    collectNodeIds(t.steps, nodeIds);
+  }
+  const subAgentsByTraceParent: Record<string, SubAgentNode[]> = {};
+  const unplacedSubAgents: SubAgentNode[] = [];
+  for (const r of subAgentRows) {
+    const node = toSubNode(r);
+    if (r.traceParentId && nodeIds.has(r.traceParentId)) {
+      (subAgentsByTraceParent[r.traceParentId] ??= []).push(node);
+    } else {
+      unplacedSubAgents.push(node);
+    }
+  }
+  for (const t of toolCallNodes) {
+    const inCall = new Set<string>([t.toolUseId]);
+    collectNodeIds(t.steps, inCall);
+    t.subAgentCount = [...inCall].reduce(
+      (n, id) => n + (subAgentsByTraceParent[id]?.length ?? 0),
+      0,
+    );
+  }
+
   const tree: RunTree = {
     runId,
     legacy,
@@ -315,7 +363,9 @@ export default async function AdminRunTreePage({
     cost: runCost,
     turnCount: items.filter((i) => i.kind === "turn").length,
     items,
-    orphanSubAgents,
+    rootSteps,
+    subAgentsByTraceParent,
+    unplacedSubAgents,
   };
 
   return <RunTreeView tree={tree} />;
