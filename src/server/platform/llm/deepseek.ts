@@ -11,7 +11,10 @@ import Anthropic from "@anthropic-ai/sdk";
 //   - text + thinking blocks: supported
 //   - server_tool_use + web_search_tool_result (web search): supported
 //   - image + document content blocks: NOT supported → resume-parse and
-//     logo-verify name a Claude model for exactly this reason.
+//     logo-verify name a Claude model for exactly this reason. As of 2026-11 a
+//     base64 document source is a hard 400 (it used to be swapped for an
+//     "[Unsupported Document]" placeholder), so no DeepSeek request may carry
+//     one — Hank's replay drops them in agent/session/loadTranscript.ts.
 //   - cache_control: silently ignored (DeepSeek auto-caches by prefix). Our
 //     sub-agent cache markers therefore no-op — harmless, but see the
 //     usage-tracking note in src/server/platform/usage/pricing.ts.

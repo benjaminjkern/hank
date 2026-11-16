@@ -60,24 +60,15 @@ export async function loadSessionMessages(
   }
   const rows = rawRows.slice(startIdx);
 
-  // Index of the most recent user message — its document/image blocks are
-  // kept verbatim so Claude sees the file. Older user messages have their
-  // file blocks swapped for short text placeholders so we don't re-pay the
-  // token cost of re-uploading bytes on every loop iteration.
-  let lastUserIdx = -1;
-  for (let i = rows.length - 1; i >= 0; i--) {
-    if (rows[i].role === Role.USER) {
-      lastUserIdx = i;
-      break;
-    }
-  }
-
-  const historicalUserMessageIds = rows
-    .filter((r, i) => r.role === Role.USER && i !== lastUserIdx)
+  // Every user turn's document/image blocks — the newest included — are swapped
+  // for a short `[attached: name]` placeholder. Hank's model can't take a file
+  // block (DeepSeek 400s on a base64 document source), and doesn't need one: he
+  // reads the `<attachments>` manifest and hands the id to a tool that loads the
+  // bytes itself (`attach_resume_to_profile`).
+  const userMessageIds = rows
+    .filter((r) => r.role === Role.USER)
     .map((r) => r.id);
-  const attachmentRows = await listAttachmentsForMessages(
-    historicalUserMessageIds,
-  );
+  const attachmentRows = await listAttachmentsForMessages(userMessageIds);
   const filenameByMessage = new Map<string, string[]>();
   for (const a of attachmentRows) {
     if (!a.messageId) continue;
@@ -100,7 +91,7 @@ export async function loadSessionMessages(
   // the ORIGINAL Prisma role, before provenance re-roling, so the terminal guard
   // below reads the raw rows rather than the re-roled history — see endsAwaitingUser.
   let tailIsAssistantNoTool = false;
-  rows.forEach((r, i) => {
+  rows.forEach((r) => {
     const rawBlocks = r.content as unknown as Anthropic.ContentBlockParam[];
 
     // Pipeline-internal blocks (status narration + widget payloads the
@@ -181,7 +172,7 @@ export async function loadSessionMessages(
     resumeNotePending = r.role === Role.ASSISTANT && r.stoppedByUser === true;
     tailIsAssistantNoTool =
       r.role === Role.ASSISTANT && !blocks.some((b) => b.type === "tool_use");
-    if (r.role === Role.USER && i !== lastUserIdx) {
+    if (r.role === Role.USER) {
       const filenames = filenameByMessage.get(r.id) ?? [];
       let nameIdx = 0;
       const stripped = blocks.map((b) => {
