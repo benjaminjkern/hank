@@ -19,6 +19,7 @@
 // nothing is lost by waiting for the wrap.
 
 import { appendPipelineActivity } from "@/server/agent/session";
+import { statusEvent, type StatusSay } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import {
   commitShortlist,
@@ -126,7 +127,7 @@ export const runCommitShortlist = procedure(
       sessionId: string;
       companyId: string;
       companyName: string;
-      confirmed?: boolean;
+      say: StatusSay;
     },
   ): Promise<CommitShortlistResult> => {
     // Both reads happen BEFORE the commit clears the stances and re-anchors the
@@ -140,9 +141,19 @@ export const runCommitShortlist = procedure(
     const result = await commitShortlist({
       userId: args.userId,
       companyId: args.companyId,
-      confirmed: args.confirmed,
     });
     if (!result.ok) return result;
+
+    // Said here rather than by either caller: the tool is a handoff, so Hank
+    // gets no turn after it to say this himself.
+    if (result.keptStarted.length > 0) {
+      const titles = result.keptStarted.map((t) => `“${t}”`).join(", ");
+      await args.say(
+        statusEvent(
+          `Set aside ${titles} instead of closing ${result.keptStarted.length === 1 ? "it" : "them"}, since you’d started applying.`,
+        ),
+      );
+    }
 
     if (overrides.length > 0 || revivals.length > 0) {
       // Hank-only channel: the user already knows what they clicked, and this is

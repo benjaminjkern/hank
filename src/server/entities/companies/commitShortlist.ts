@@ -2,7 +2,10 @@
 // and statuses actually change. Every row carrying a stance is decided:
 //   PICK       → SHORTLISTED
 //   BORDERLINE → DEFERRED (OUTRANKED), deferNote ← the stance reason
-//   PASS       → CLOSED (NOT_A_MATCH), closeNote ← the stance reason
+//   PASS       → CLOSED (NOT_A_MATCH), closeNote ← the stance reason — except
+//                on a role whose application the user had started, which is
+//                set aside like a BORDERLINE instead. The commit never closes
+//                work in progress; closing one is an explicit close_job.
 // A row the user cleared to undecided decides nothing but still comes off the
 // board; rows never on it are untouched, and the next seed covers them.
 // Anything picked bumps the company to APPLYING; the whole decision collapses
@@ -34,19 +37,20 @@ import { logCompanyEvent } from "./logCompanyEvent";
 
 export type CommitShortlistResult =
   | { ok: false; code: "NO_OPEN_BOARD" }
-  // The board would close a role whose application the user had already started
-  // writing. Reported rather than done: everything else a commit does is
-  // reversible in a sentence, and this one throws away work in progress, so it
-  // asks first. Hank re-calls with `confirmed` once the user says go.
-  | { ok: false; code: "CONFIRM_CLOSING_STARTED"; startedTitles: string[] }
-  | { ok: true; picked: number; setAside: number; closed: number };
+  | {
+      ok: true;
+      picked: number;
+      // Includes keptStarted.
+      setAside: number;
+      closed: number;
+      // Titles of roles under a pass that were set aside instead of closed,
+      // because the user had started applying to them.
+      keptStarted: string[];
+    };
 
 export async function commitShortlist(args: {
   userId: string;
   companyId: string;
-  // Set only after the user has agreed to close a role they'd started applying
-  // to. Leave unset on the first call.
-  confirmed?: boolean;
 }): Promise<CommitShortlistResult> {
   const { userId, companyId } = args;
   // Every row on the board, including ones the user cleared to undecided —
@@ -66,24 +70,6 @@ export async function commitShortlist(args: {
     },
   });
   if (rows.length === 0) return { ok: false, code: "NO_OPEN_BOARD" };
-
-  // Ask before throwing away a draft. A started application is the one thing on
-  // a board that can't be restored by re-marking a row: the text survives on the
-  // record, but the role is closed and out of every pool that would surface it.
-  // Deferring one is fine unasked — it stays in the pool and the draft is
-  // untouched.
-  const closingStarted = rows.filter(
-    (r) =>
-      r.status === JobInteractionStatus.APPLYING &&
-      (r.userVerdict ?? r.agentVerdict) === ProposedVerdict.PASS,
-  );
-  if (closingStarted.length > 0 && !args.confirmed) {
-    return {
-      ok: false,
-      code: "CONFIRM_CLOSING_STARTED",
-      startedTitles: closingStarted.map((r) => r.job.title),
-    };
-  }
 
   const now = new Date();
   const eventItems: LogJobEventInput[] = [];
@@ -108,6 +94,7 @@ export async function commitShortlist(args: {
   let picked = 0;
   let setAside = 0;
   let closed = 0;
+  const keptStarted: string[] = [];
   for (const row of rows) {
     // The role moved past the board while the round was open — applied to,
     // answered, interviewed, delisted. The stance was a proposal about a
@@ -122,7 +109,15 @@ export async function commitShortlist(args: {
     }
     // The user's override when they made one, otherwise Hank's proposal.
     const reason = row.agentReason;
-    switch (row.userVerdict ?? row.agentVerdict) {
+    const stance = row.userVerdict ?? row.agentVerdict;
+    // A started application is the one thing on a board that re-marking a row
+    // can't restore: closed, the role leaves every pool that would surface it.
+    // Set aside, it stays revivable and the draft is untouched.
+    const keepStarted =
+      stance === ProposedVerdict.PASS &&
+      row.status === JobInteractionStatus.APPLYING;
+    if (keepStarted) keptStarted.push(row.job.title);
+    switch (keepStarted ? ProposedVerdict.BORDERLINE : stance) {
       case ProposedVerdict.PICK: {
         picked++;
         // APPLYING as well as SHORTLISTED: picking a role whose application is
@@ -262,5 +257,5 @@ export async function commitShortlist(args: {
     notes: `Shortlisted ${picked}, set aside ${setAside}, closed ${closed}`,
   });
 
-  return { ok: true, picked, setAside, closed };
+  return { ok: true, picked, setAside, closed, keptStarted };
 }

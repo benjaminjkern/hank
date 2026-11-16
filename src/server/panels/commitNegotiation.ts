@@ -74,14 +74,6 @@ async function settle(
     ...ctx,
     companyId: board.companyId,
     companyName: board.companySlug ?? board.companyName,
-    // The footer asks about closing a started application itself (a two-tap
-    // confirm naming the roles) and sends `confirmed` only after the user said
-    // go — the same meaning as Hank's confirmed:true re-call. An UNconfirmed
-    // press that still hits the gate (the payload was stale) falls through to
-    // Hank as ordinary text; he hits the same refusal on the tool and asks.
-    // Same shape as a stale button: the cost is the round trip this was
-    // saving, never a close the user didn't agree to.
-    confirmed: submission.confirmed,
   });
   if (!result.ok) return null;
   // The board closes with the commit. A continuation: the commit's tail

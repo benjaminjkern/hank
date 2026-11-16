@@ -4,10 +4,6 @@ import styled from "styled-components";
 import type { MessageView } from "@/client/chatStore";
 
 import {
-  ShortlistCommitCard,
-  tryParseShortlistCommit,
-} from "../ShortlistCommitCard";
-import {
   WidgetResponseCard,
   tryParseWidgetResponse,
 } from "../widgets/WidgetResponseCard";
@@ -81,11 +77,9 @@ export const MessageBubble = memo(function MessageBubble({
   message: MessageView;
   streamingPlaceholder: boolean;
 }) {
-  // Single-text-segment user messages may be a widget submission (the
-  // <!--widget-response:…--> marker) or the legacy <!--shortlist-commit:…-->
-  // recap. Both render as a standalone card replacing the bubble, so the raw
-  // marker never paints. widget-response is the live path; shortlist-commit is
-  // replay-only for pre-2026-06-12 history.
+  // A single-text-segment user message may be a widget submission (the
+  // <!--widget-response:…--> marker), which renders as a standalone card
+  // replacing the bubble, so the raw marker never paints.
   const singleUserText = useMemo(
     () =>
       message.role === "user" &&
@@ -97,10 +91,6 @@ export const MessageBubble = memo(function MessageBubble({
   );
   const widgetResponseParsed = useMemo(
     () => (singleUserText ? tryParseWidgetResponse(singleUserText) : null),
-    [singleUserText],
-  );
-  const commitParsed = useMemo(
-    () => (singleUserText ? tryParseShortlistCommit(singleUserText) : null),
     [singleUserText],
   );
 
@@ -134,19 +124,6 @@ export const MessageBubble = memo(function MessageBubble({
 
   if (widgetResponseParsed) {
     return <WidgetResponseCard parsed={widgetResponseParsed} />;
-  }
-
-  if (commitParsed) {
-    return (
-      <>
-        <ShortlistCommitCard payload={commitParsed} />
-        {commitParsed.reason && (
-          <Bubble $role="user">
-            <UserText>Reason: {commitParsed.reason}</UserText>
-          </Bubble>
-        )}
-      </>
-    );
   }
 
   return (

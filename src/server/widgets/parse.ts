@@ -19,10 +19,7 @@ import { extractWidgetMarker } from "@/shared/widgetMarker";
 // ---------------------------------------------------------------------------
 
 export type CommitNegotiationSubmission =
-  | { panel: "discovery" }
-  // `confirmed` = the footer already asked about closing a started application
-  // (its own two-tap confirm), so the deterministic commit may pass that gate.
-  | { panel: "shortlist-board"; companyId: string; confirmed?: boolean };
+  { panel: "discovery" } | { panel: "shortlist-board"; companyId: string };
 
 export function parseCommitNegotiationSubmission(
   userMessage: string,
@@ -31,11 +28,7 @@ export function parseCommitNegotiationSubmission(
   if (!obj || obj.kind !== "commit_negotiation") return null;
   if (obj.panel === "discovery") return { panel: "discovery" };
   if (obj.panel === "shortlist-board" && typeof obj.companyId === "string") {
-    return {
-      panel: "shortlist-board",
-      companyId: obj.companyId,
-      confirmed: obj.confirmed === true,
-    };
+    return { panel: "shortlist-board", companyId: obj.companyId };
   }
   return null;
 }
