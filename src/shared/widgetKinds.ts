@@ -8,20 +8,16 @@
 // that says "only PIPELINE_WIDGET_KINDS may be yielded as pipeline_widget."
 // The subsets are descriptive, not prescriptive.
 
+// A kind that's no longer here can still turn up in old persisted history.
+// Everything that reads a kind off a stored block treats one it doesn't know as
+// retired — the client shows a short "older question" note, Hank's replay a
+// line saying so — rather than failing on it.
 export type WidgetKind =
-  // REPLAY-ONLY (docs/INCOMPLETE_MIGRATIONS.md): nothing emits it — the
-  // shortlist board panel replaced the widget. The kind survives because
-  // persisted `pipeline_widget` blocks in old sessions carry it verbatim.
-  | "shortlist_proposal"
-  // REPLAY-ONLY (docs/INCOMPLETE_MIGRATIONS.md): nothing emits it — the
-  // discovery panel replaced the checklist. The kind survives because persisted
-  // `pipeline_widget` blocks in old sessions carry it verbatim.
-  | "company_checklist"
-  // Emitted once a checklist add has finished: names what landed and asks
-  // whether to keep hunting. "yes" re-enters the search, "no" falls through to
-  // the what's-next picker.
+  // Emitted once a discovery commit has finished: names what landed and asks
+  // whether to keep hunting. "yes" hands Hank the turn to ask what to look for,
+  // "no" brings up what's next.
   | "add_more_companies"
-  // Emitted during a checklist add when the URL hunter couldn't tell which of
+  // Emitted during a discovery add when the URL hunter couldn't tell which of
   // several real companies a name meant. The user picks which company
   // each ambiguous name refers to; the pick commits the chosen board.
   | "company_disambiguation"
@@ -38,9 +34,4 @@ export type WidgetKind =
   // SCANNED jobs have been triaged. Replaces the silent auto-focus onto the
   // stalest SHORTLISTED job — the user picks which to work on next (incl.
   // DEFERRED rows that get revived on pick).
-  | "next_job_picker"
-  // REPLAY-ONLY, same as shortlist_proposal: the board's "not read yet" tier
-  // (scan gate) and its re-show/re-seed behavior (regen gate) replaced both
-  // questions. Kinds survive for persisted blocks in old sessions.
-  | "shortlist_scan_gate"
-  | "shortlist_regen_gate";
+  | "next_job_picker";

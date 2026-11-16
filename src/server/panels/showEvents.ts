@@ -11,9 +11,9 @@ import type { ApplicationView } from "@/shared/views/application";
 import type { DiscoveryListView } from "@/shared/views/discoveryList";
 import type { ShortlistBoardView } from "@/shared/views/shortlistBoard";
 
-import { loadApplicationView } from "./application";
-import { loadDiscoveryList } from "./discoveryList";
-import { loadShortlistBoard } from "./shortlistBoard";
+import { loadApplicationView } from "../views/application";
+import { loadDiscoveryList } from "../views/discoveryList";
+import { loadShortlistBoard } from "../views/shortlistBoard";
 
 // Which entity to put on screen. An empty target ({}) is the dashboard.
 export type ShowTarget = {

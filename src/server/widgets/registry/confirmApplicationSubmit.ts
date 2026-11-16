@@ -7,9 +7,9 @@
 import { sayUiEvents, statusEvent } from "@/server/contracts";
 import type { StepOutcome } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
+import { buildShowEvents } from "@/server/panels/showEvents";
 import { runCommitApplication } from "@/server/procedures/registry/commitApplication";
 import { narrateJobApplied } from "@/server/procedures/registry/companyWalkthrough/narration";
-import { buildShowEvents } from "@/server/views/showEvents";
 
 import { parseWidgetSubmission } from "../parse";
 

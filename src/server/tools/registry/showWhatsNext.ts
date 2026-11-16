@@ -7,7 +7,7 @@
 // can, so he says so by calling this instead of typing the question.
 //
 // It queues the show_whats_next entry rather than emitting the widget here: one
-// renderer (procedures/registry/whatsNext.ts), so the chooser can't drift
+// renderer (procedures/registry/whatsNext/index.ts), so the chooser can't drift
 // between the ways of reaching it — this tool, a finished walkthrough, an empty
 // send.
 

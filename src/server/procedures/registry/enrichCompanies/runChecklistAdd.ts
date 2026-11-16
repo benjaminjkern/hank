@@ -1,4 +1,4 @@
-// The company_checklist submission: create stubs for the picked names, then
+// The discovery commit's add: create stubs for the kept names, then
 // enrich them.
 //
 // "Enrich" here is identity only — careers URL, canonical name, description,

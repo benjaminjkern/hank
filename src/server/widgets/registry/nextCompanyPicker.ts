@@ -10,14 +10,14 @@
 // Typed equivalents: company_walkthrough, work_on_job, find_companies.
 
 import { sayUiEvents, statusEvent } from "@/server/contracts";
-import type { Entry, StepArgs, StepOutcome } from "@/server/contracts";
+import type { Entry } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { companyStatusFields } from "@/server/entities/companies/companyStatusFields";
 import {
   CompanyStatus,
   JobInteractionStatus,
 } from "@/server/generated/prisma/client";
-import { buildShowEvents, showTargetFor } from "@/server/views/showEvents";
+import { buildShowEvents, showTargetFor } from "@/server/panels/showEvents";
 import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import {

@@ -4,7 +4,7 @@ import { sayUiEvents } from "@/server/contracts";
 import { COMPANY_CLOSE_REASONS } from "@/server/entities/companies/companyInteractionInputs";
 import { closeCompany } from "@/server/entities/companies/setCompanyAside";
 import type { CompanyCloseReason } from "@/server/generated/prisma/client";
-import { buildShowEvents } from "@/server/views/showEvents";
+import { buildShowEvents } from "@/server/panels/showEvents";
 
 import { resolveCompanyArg } from "../lib/resolveEntityArg";
 

@@ -5,7 +5,7 @@ import { prisma } from "@/server/db/prisma";
 import { caughtUpCompany } from "@/server/entities/companies/setCompanyAside";
 import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { JobInteractionStatus } from "@/server/generated/prisma/client";
-import { buildShowEvents } from "@/server/views/showEvents";
+import { buildShowEvents } from "@/server/panels/showEvents";
 
 import { resolveCompanyArg } from "../lib/resolveEntityArg";
 

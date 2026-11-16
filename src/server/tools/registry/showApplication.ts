@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 import { sayUiEvents, statusEvent } from "@/server/contracts";
+import { buildApplicationEvents } from "@/server/panels/showEvents";
 import { toolError } from "@/server/platform/agent/toolError";
-import { buildApplicationEvents } from "@/server/views/showEvents";
 
 import { resolveJobArg } from "../lib/resolveEntityArg";
 

@@ -10,8 +10,9 @@
 
 import type { StepArgs, StepOutcome } from "@/server/contracts";
 
+import { commitNegotiationAnswer } from "../panels/commitNegotiation";
+
 import { addMoreCompaniesAnswer } from "./registry/addMoreCompanies";
-import { commitNegotiationAnswer } from "./registry/commitNegotiation";
 import { companyDisambiguationAnswer } from "./registry/companyDisambiguation";
 import { confirmApplicationSubmitAnswer } from "./registry/confirmApplicationSubmit";
 import { confirmReviveCompanyAnswer } from "./registry/confirmReviveCompany";

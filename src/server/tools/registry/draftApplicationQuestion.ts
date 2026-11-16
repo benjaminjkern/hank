@@ -5,9 +5,9 @@ import {
   resolveQuestionId,
   persistApplicationAnswer,
 } from "@/server/entities/jobs/applicationQuestions";
+import { buildApplicationEvents } from "@/server/panels/showEvents";
 import { toolError } from "@/server/platform/agent/toolError";
 import { draftSingleApplicationItem } from "@/server/procedures/registry/draftApplication/draftSingleApplicationItem";
-import { buildApplicationEvents } from "@/server/views/showEvents";
 
 import { resolveJobArg } from "../lib/resolveEntityArg";
 

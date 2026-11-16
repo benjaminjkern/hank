@@ -11,13 +11,12 @@ import { statusEvent, sayUiEvents } from "@/server/contracts";
 import type { Say, StepArgs, StepOutcome } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
-import { JobInteractionStatus } from "@/server/generated/prisma/client";
-import { procedure } from "@/server/procedures/lib/procedure";
-import { runDraftApplication } from "@/server/procedures/registry/draftApplication";
 import {
   buildApplicationEvents,
   buildShowEvents,
-} from "@/server/views/showEvents";
+} from "@/server/panels/showEvents";
+import { procedure } from "@/server/procedures/lib/procedure";
+import { runDraftApplication } from "@/server/procedures/registry/draftApplication";
 
 import { narrateApplicationReady } from "../companyWalkthrough/narration";
 

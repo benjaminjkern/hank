@@ -8,13 +8,14 @@
 //
 // A procedure rather than a read model because rung 0 costs an LLM call — the
 // gate is `runProfileEnrichmentGate`. The section loads underneath it are pure
-// and live in views/whatsNextOptions.ts, which is why `show_whats_next` can
+// and live in procedures/registry/whatsNext/options.ts, which is why `show_whats_next` can
 // render the picker mid-flow by calling `computeWhatsNextOptions` directly: it's
 // only offered where the profile is already past the gate, and the gate stays a
 // cold-start / between-flow concern owned by this procedure.
 
 import { sayUiEvents, statusEvent, widgetEvent } from "@/server/contracts";
 import type { StepArgs, StepOutcome } from "@/server/contracts";
+import { buildShowEvents } from "@/server/panels/showEvents";
 import type { RunContext } from "@/server/platform/runContext";
 import { traceText } from "@/server/platform/runs/traceText";
 import { procedure } from "@/server/procedures/lib/procedure";
@@ -22,8 +23,7 @@ import { runProfileEnrichmentGate } from "@/server/procedures/registry/profileEn
 import {
   computeWhatsNextOptions,
   type NextOptionSections,
-} from "@/server/views/whatsNextOptions";
-import { buildShowEvents } from "@/server/views/showEvents";
+} from "@/server/procedures/registry/whatsNext/options";
 
 type WhatsNextResult =
   // Rung 0 failed — profile setup is a precondition. Caller forces the profile

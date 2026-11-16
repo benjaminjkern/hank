@@ -36,7 +36,7 @@ Optional params that default to the focused entity only resolve when present; th
 
 ## What stays a cuid (deliberately)
 
-- Widget payloads (`shortlist_proposal` ids, `next_job_picker` / `next_company_picker`, …) — the LLM never authors these; the widget handlers in [`src/server/widgets/`](../src/server/widgets/) round-trip them deterministically.
+- Widget payloads (`next_job_picker` / `next_company_picker` / `confirm_revive_company`, …) — the LLM never authors these; the widget handlers in [`src/server/widgets/`](../src/server/widgets/) round-trip them deterministically.
 - The `focus` UiEvent client contract, bundled-action internal signatures, and sub-agent I/O. The wire events stay cuid-keyed; what changed is that the view payloads they carry now also expose `slug`, so the client can write a URL from a pushed payload without a second fetch.
 - **Memory paths `jobs/{slug}.md` / `opportunities/{slug}.md`** — NOW slug-addressed (converted 2026-07-10; migration `20260710130000_memory_paths_to_slugs`). No ids are shown to the agent anywhere. The conversion was atomic across `validatePath`, the store's `resolveFK` (accepts slug-or-cuid so legacy rows still resolve), and every sub-agent writer/reader (decider / drafter / consolidation / opportunity loader build the slug path via `jobNotePath` / `opportunityNotePath` or the loaded row's `.slug`). `companies/{slug}.md` / `contacts/{name-slug}.md` were already slug-based.
 

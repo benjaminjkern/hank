@@ -14,6 +14,7 @@
 import { sayUiEvents } from "@/server/contracts";
 import type { StepArgs, StepOutcome } from "@/server/contracts";
 import { recordSuggestions } from "@/server/entities/companies/companySuggestions";
+import { buildDiscoveryEvents } from "@/server/panels/showEvents";
 import type { RunContext } from "@/server/platform/runContext";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
@@ -21,7 +22,6 @@ import {
   findCompaniesSubAgent,
   type FindCompaniesCandidate,
 } from "@/server/subagents/registry/findCompanies";
-import { buildDiscoveryEvents } from "@/server/views/showEvents";
 import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import { loadFindCompaniesInput } from "./loadFindCompaniesInput";

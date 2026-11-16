@@ -2,8 +2,8 @@ import { z } from "zod";
 
 import { sayUiEvents, statusEvent } from "@/server/contracts";
 import { resolveJobBySlug } from "@/server/entities/resolveBySlug";
+import { buildShowEvents } from "@/server/panels/showEvents";
 import { toolError } from "@/server/platform/agent/toolError";
-import { buildShowEvents } from "@/server/views/showEvents";
 import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import { slugLookupError } from "../lib/slugLookupError";

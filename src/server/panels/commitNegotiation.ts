@@ -23,18 +23,18 @@
 
 import { sayUiEvents } from "@/server/contracts";
 import type { StepArgs, StepOutcome } from "@/server/contracts";
+import { buildShowEvents } from "@/server/panels/showEvents";
 import { runCommitShortlist } from "@/server/procedures/registry/commitShortlist";
 import { loadDiscoveryList } from "@/server/views/discoveryList";
-import { buildShowEvents } from "@/server/views/showEvents";
 import { loadShortlistBoard } from "@/server/views/shortlistBoard";
 import type { NegotiationState } from "@/shared/views/negotiationPanel";
 
 import {
   parseCommitNegotiationSubmission,
   type CommitNegotiationSubmission,
-} from "../parse";
+} from "../widgets/parse";
 
-import type { WidgetAnswerDef } from "./types";
+import type { WidgetAnswerDef } from "../widgets/registry/types";
 
 export const commitNegotiationAnswer: WidgetAnswerDef<CommitNegotiationSubmission> =
   {

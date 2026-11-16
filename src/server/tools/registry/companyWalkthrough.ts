@@ -5,8 +5,8 @@ import { prisma } from "@/server/db/prisma";
 import { switchToCompany } from "@/server/entities/companies/resumeCompany";
 import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
 import { CompanyStatus } from "@/server/generated/prisma/client";
+import { buildShowEvents } from "@/server/panels/showEvents";
 import { toolError } from "@/server/platform/agent/toolError";
-import { buildShowEvents } from "@/server/views/showEvents";
 
 import { slugLookupError } from "../lib/slugLookupError";
 

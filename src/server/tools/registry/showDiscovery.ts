@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 import { sayUiEvents, statusEvent } from "@/server/contracts";
+import { buildDiscoveryEvents } from "@/server/panels/showEvents";
 import { toolError } from "@/server/platform/agent/toolError";
-import { buildDiscoveryEvents } from "@/server/views/showEvents";
 import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import type { ToolDef } from "../lib/types";

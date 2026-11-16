@@ -15,7 +15,7 @@ import { extractWidgetMarker } from "@/shared/widgetMarker";
 // ---------------------------------------------------------------------------
 // Top-level: settling a negotiation panel. Emitted by the panel's own
 // "looks good to me" pill when nothing is left to argue about; answered by
-// widgets/registry/commitNegotiation.ts, which re-derives that claim first.
+// panels/commitNegotiation.ts, which re-derives that claim first.
 // ---------------------------------------------------------------------------
 
 export type CommitNegotiationSubmission =

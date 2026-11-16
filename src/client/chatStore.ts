@@ -1599,7 +1599,7 @@ function appendAssistantStatus(
   ]);
 }
 
-// Append a pipeline widget segment (shortlist_proposal etc.). One widget per
+// Append a pipeline widget segment (next_job_picker etc.). One widget per
 // segment; PipelineWidgetSlot reads the latest widget out of message history.
 function appendAssistantWidget(
   set: (fn: (s: State) => Partial<State>) => void,

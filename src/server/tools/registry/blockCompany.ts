@@ -4,7 +4,7 @@ import { sayUiEvents } from "@/server/contracts";
 import { COMPANY_BLOCK_REASONS } from "@/server/entities/companies/companyInteractionInputs";
 import { blockCompany } from "@/server/entities/companies/setCompanyAside";
 import type { CompanyBlockReason } from "@/server/generated/prisma/client";
-import { buildShowEvents } from "@/server/views/showEvents";
+import { buildShowEvents } from "@/server/panels/showEvents";
 
 import { resolveCompanyArg } from "../lib/resolveEntityArg";
 

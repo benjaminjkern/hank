@@ -71,9 +71,9 @@ Deterministic work runs only when something explicitly names it: a click, a hand
 
 ## What's next (between things)
 
-[`runWhatsNext`](../src/server/procedures/registry/whatsNext.ts) is the rung walker deciding what happens between pieces of work. Only rung 0 — the profile prerequisite — fires an LLM ([`profileEnrichmentCheckSubAgent`](../src/server/subagents/registry/profileEnrichmentCheck.ts), gated by a deterministic pre-check, so an enriched user pays one Postgres round-trip and zero LLM). Full rung semantics + option tiers: [flows.md → What's next](flows.md#whats-next--the-between-things-picker).
+[`runWhatsNext`](../src/server/procedures/registry/whatsNext/index.ts) is the rung walker deciding what happens between pieces of work. Only rung 0 — the profile prerequisite — fires an LLM ([`profileEnrichmentCheckSubAgent`](../src/server/subagents/registry/profileEnrichmentCheck.ts), gated by a deterministic pre-check, so an enriched user pays one Postgres round-trip and zero LLM). Full rung semantics + option tiers: [flows.md → What's next](flows.md#whats-next--the-between-things-picker).
 
-The `show_whats_next` entry, [`runShowWhatsNext`](../src/server/procedures/registry/whatsNext.ts), is the chooser's **one renderer**, reached from Hank's tool, a finished walkthrough, a declined revive, and an empty send. Rung 0 open → it hands to Hank with the gaps (`next: {kind: "hank", nudge, profileGaps}`), so he opens on the specifics; otherwise it emits the `next_company_picker` and waits. `computeWhatsNextOptions` is the options-only half.
+The `show_whats_next` entry, [`runShowWhatsNext`](../src/server/procedures/registry/whatsNext/index.ts), is the chooser's **one renderer**, reached from Hank's tool, a finished walkthrough, a declined revive, and an empty send. Rung 0 open → it hands to Hank with the gaps (`next: {kind: "hank", nudge, profileGaps}`), so he opens on the specifics; otherwise it emits the `next_company_picker` and waits. `computeWhatsNextOptions` is the options-only half.
 
 ## Hank's prompt + tools
 
@@ -114,14 +114,12 @@ They are a **mutation layer, not a step-chaining procedure**: a coherent set of 
 
 ## Widget event protocol
 
-Widgets stream as `{type:"pipeline_widget", toolUseId, kind, payload}` — built by [`widgetEvent`](../src/server/contracts/events.ts), so a producer says one event and is done. [`recordTranscript`](../src/server/agent/session/recordTranscript.ts) writes the matching block to its assistant row before passing it on, the chat route's `say` marshals it to SSE, and client-side [`chatStore`](../src/client/chatStore.ts) `applyEvent` appends a `WidgetSegment` to that row's bubble. [`PipelineWidgetSlot`](../src/client/components/Chat/widgets/index.tsx) renders the newest such segment above the composer and dispatches on `kind` — the same lookup live and after a refresh, so there is **one** widget channel, not a transient one racing a persisted one. The kind union is single-sourced in [widgetKinds.ts](../src/shared/widgetKinds.ts); each widget is a folder under [widgets/registry/](../src/client/components/Chat/widgets/registry/) holding `def.ts` + `Widget.tsx`.
+Widgets stream as `{type:"pipeline_widget", toolUseId, kind, payload}` — built by [`widgetEvent`](../src/server/contracts/events.ts), so a producer says one event and is done. [`recordTranscript`](../src/server/agent/session/recordTranscript.ts) writes the matching block to its assistant row before passing it on, the chat route's `say` marshals it to SSE, and client-side [`chatStore`](../src/client/chatStore.ts) `applyEvent` appends a `WidgetSegment` to that row's bubble. [`PipelineWidgetSlot`](../src/client/components/Chat/widgets/index.tsx) renders the newest such segment above the composer and dispatches on `kind` — the same lookup live and after a refresh, so there is **one** widget channel, not a transient one racing a persisted one. The kind union is single-sourced in [widgetKinds.ts](../src/shared/widgetKinds.ts); each widget is a folder under [widgets/registry/](../src/client/components/Chat/widgets/registry/) holding `def.ts` + `Widget.tsx`. A kind that's been removed can still sit in old history; the slot shows a short "older question" note for it ([RetiredWidget.tsx](../src/client/components/Chat/widgets/RetiredWidget.tsx)) instead of failing, and Hank's replay says the same.
 
 | `kind` | Submission shape |
 | --- | --- |
-| `company_checklist` | REPLAY-ONLY ([INCOMPLETE_MIGRATIONS.md](INCOMPLETE_MIGRATIONS.md)) — the discovery panel replaced it. Picking companies is panel marks relayed as `panel_edits`, settled by Hank's `commit_discovery`. |
 | `company_disambiguation` | `{resolved: Array<{companyId, chosenUrl, canonicalName, shortDescription}>}` — emitted mid-add when the URL hunter returned `ambiguous`; the answer commits the chosen boards, then asks `add_more_companies`. |
 | `add_more_companies` | `{answer: "yes" \| "no", settled: number}` — emitted once an add finishes. "Find more" (`yes`) → `next: hank` with a nudge to ask what this round should look for; "Done adding" (`no`) → `next: show_whats_next`, reporting `ended: "discovery"` when `settled > 0`. |
-| `shortlist_scan_gate` / `shortlist_regen_gate` / `shortlist_proposal` | REPLAY-ONLY ([INCOMPLETE_MIGRATIONS.md](INCOMPLETE_MIGRATIONS.md)) — nothing emits or submits them; the shortlist board replaced the widget family. Kinds survive because persisted blocks in old sessions carry them verbatim. |
 | `confirm_revive_company` | `{companyId, answer: "yes" \| "no"}` — asked by the company walkthrough when entered on a CLOSED or BLOCKED company; yes → `company_walkthrough` with `revive`, no → `show_whats_next`. |
 | `confirm_application_submit` | `{jobId}` |
 | `next_company_picker` | `{choice:"company", companyId}` \| `{choice:"opportunity", opportunityId}` \| `{choice:"job", jobId}` (a DEFERRED job revives to SHORTLISTED) \| `{choice:"add_companies"}` |
@@ -162,7 +160,7 @@ A **procedure** ([procedures/registry/](../src/server/procedures/registry/), one
 | Procedure | What it chains | Tool entry | Runner entry |
 | --- | --- | --- | --- |
 | `chat/` | The loop itself: `runChat` (the message) → `runEntry` (the one router) → each step; `runHankTurns` is the `hank` step | — | `runUserMessage` |
-| `companyWalkthrough/` | The company ladder: revive → enrich (`companyEnrichStep`) → board scrape (`boardScrape`) → prescan + scan → shortlist board → role picker → caught up | `company_walkthrough`, `scrape_jobs_for_company`, `commit_shortlist` (queue it) | picker picks, revive answers, commits, submitted applications |
+| `companyWalkthrough/` | The company ladder: revive → enrich (`ensureEnriched`) → board refresh (`refreshBoard`) → prescan + scan → shortlist board → role picker → caught up | `company_walkthrough`, `scrape_jobs_for_company`, `commit_shortlist` (queue it) | picker picks, revive answers, commits, submitted applications |
 | `workOnJob/` | One role: `runDraftApplication` → co-write hand-off or wait-for-submit | `work_on_job` (queues it) | `next_job_picker` picks |
 | `scan/` | per NEW job (`scanOneJob`): `enrichJob` → `scanJob` (→ SCANNED/CLOSED), bounded fan-out in `runScan`; `runEnrichJobBody` is the enrich-only second entry the reconsider path uses | — | company walkthrough |
 | `preScan/` | metadata-only bucketing of NEW jobs, chunked | — | company walkthrough; batch add |

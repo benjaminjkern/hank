@@ -29,21 +29,21 @@ import {
   JobEventType,
   JobInteractionStatus,
 } from "@/server/generated/prisma/client";
+import { buildShowEvents } from "@/server/panels/showEvents";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runPreScan } from "@/server/procedures/registry/preScan";
 import { preScanPoolWhere } from "@/server/procedures/registry/preScan/pool";
 import { runScan } from "@/server/procedures/registry/scan";
 import { scanPoolWhere } from "@/server/procedures/registry/scan/pool";
 import { runShortlist } from "@/server/procedures/registry/shortlist";
-import { buildShowEvents } from "@/server/views/showEvents";
 
-import { isScrapeStale, runBoardScrape } from "./boardScrape";
-import { runCompanyEnrichStep } from "./companyEnrichStep";
+import { ensureEnriched } from "./ensureEnriched";
 import {
   narrateCompanyCaughtUp,
   narrateCompanyRevive,
   narrateCompanySettled,
 } from "./narration";
+import { isScrapeStale, refreshBoard } from "./refreshBoard";
 import { sayStateChange } from "./sayStateChange";
 import { summarizeCloseRationales } from "./summarizeCloseRationales";
 
@@ -131,7 +131,7 @@ export const runCompanyWalkthrough = procedure(
     // once. AWAITED rather than fired off: per the "nothing runs behind Hank's
     // back" invariant, a detached promise that lands writes after the user moved
     // on — and ignores a Stop — is the hidden work we're removing.
-    const enriched = await runCompanyEnrichStep({ ...args, companyId });
+    const enriched = await ensureEnriched({ ...args, companyId });
     if (enriched.wrapped) {
       return await afterSetAside(args, enriched.endedCompanyId);
     }
@@ -169,7 +169,7 @@ export const runCompanyWalkthrough = procedure(
         ci0?.company.sourceUrl &&
         (userJobCount === 0 || isScrapeStale(ci0.lastScrapedJobsAt))
       ) {
-        const scraped = await runBoardScrape({
+        const scraped = await refreshBoard({
           ...args,
           companyId,
           sourceUrl: ci0.company.sourceUrl,

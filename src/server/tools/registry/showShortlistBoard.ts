@@ -2,9 +2,9 @@ import { z } from "zod";
 
 import { sayUiEvents, statusEvent } from "@/server/contracts";
 import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
+import { buildShortlistBoardEvents } from "@/server/panels/showEvents";
 import { toolError } from "@/server/platform/agent/toolError";
 import { renderShortlistBoardText } from "@/server/views/shortlistBoard";
-import { buildShortlistBoardEvents } from "@/server/views/showEvents";
 
 import { slugLookupError } from "../lib/slugLookupError";
 

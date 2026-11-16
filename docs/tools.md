@@ -150,21 +150,15 @@ Every field is optional on `RunContext` and the sub-agent runner null-checks, so
 
 **Traces are informational, not replayed.** The model never sees `ChatMessage.traces` — `loadSessionMessages` reads from `content`, not `traces`. Don't smuggle logic-bearing signal through a trace; if the agent needs to remember something, put it in the assistant message content or `MemoryNote`. The tree is recursive `{ steps: TraceStep[] }` keyed by root toolUseId, serialized to the `traces` JSONB column (skipped when empty) and re-attached as `Segment[]` children on load. Builder in [traceAccumulator.ts](../src/server/platform/runs/traceAccumulator.ts).
 
-## JSON-envelope tool results (interactive widgets)
+## Tools never emit widgets
 
-**One tool still emits a widget: `enrich_companies`**, which returns the next-company picker in `ToolResult.widgets` after an untargeted enrich (the loop says each as a `pipeline_widget` event and persists it on its own row). Everything else that waits on the user is drawn by the deterministic layer — reach for that instead of adding a widget-emitting tool. The mechanism below is how a widget is wired. Three pieces:
+A widget is a question, and asking the user is a procedure's job — so no tool emits one, and `ctx.say` is typed so a tool can't. A tool that wants the user to choose something hands off (`ctx.queue`) to the procedure that asks: `show_whats_next` for the chooser, `company_walkthrough` for a company's roles. How a widget streams, persists, and gets answered is in [runtime.md → Widget event protocol](runtime.md#widget-event-protocol); the client rules for building one:
 
-1. **The tool returns JSON with a discriminator** (`{ kind: "shortlist_proposal", … }`). Keep field names stable — the widget zod-parses on every render, and the same string is what the model sees on replay. Version the discriminator (`_v2`) for breaking changes.
-2. **A `tryParse<Kind>` helper** next to the widget: `JSON.parse` in try/catch, zod-validate, return `null` on failure.
-3. **A scan in [ChatPanel/MessageList.tsx](../src/client/components/Chat/ChatPanel/MessageList.tsx)** finds the most-recent matching tool segment and mounts the widget once above the Composer; in scrollback the same segment renders as a compact chip.
-
-Companion rules for interactive widgets:
-
-- **Lock-state from live DB, not the immutable tool result** — the widget GETs a state endpoint keyed by `tool_use_id` and unmounts (returns `null`) when the underlying entities leave their interactive status. Re-probe on chat activity (gate on `messages.length` increase, not array identity; mirror `locked` into a ref).
-- **Commit via marker, not a custom endpoint** — the widget builds a `<!--widget-response:{kind,…}-->` marker via [`buildWidgetSubmissionMessage`](../src/client/components/Chat/widgets/types.ts) and calls `send(marker)`; it arrives as an ordinary user message that a widget handler ([`src/server/widgets/`](../src/server/widgets/) — parsed by `parse.ts`, answered by [`answerWidget`](../src/server/widgets/answerWidget.ts) or, for the walkthrough's own widgets, inside its state machine) applies deterministically before any LLM routing.
+- **Commit via marker, not a custom endpoint** — the widget builds a `<!--widget-response:{kind,…}-->` marker via [`buildWidgetSubmissionMessage`](../src/client/components/Chat/widgets/types.ts) and calls `send(marker)`; it arrives as an ordinary user message, which [`answerWidget`](../src/server/widgets/answerWidget.ts) answers deterministically (one file per kind under [widgets/registry/](../src/server/widgets/registry/)) before any LLM routing.
+- **Every answer has a tool.** Typing instead of clicking dismisses the widget and goes to Hank, so whatever a click does, a tool must be able to do too.
 - **Own action button, not the Composer's Send** — the widget renders its own primary button; Send is never routed into a widget.
 - **Mid-stream clicks queue, they don't drop** — widget buttons are not gated on `streaming`; a click during a streaming turn is captured into `chatStore.queuedSend` and auto-fires on the turn's `done` (same path handles the `ALREADY_STREAMING` refusal). Don't reintroduce a `streaming`-conditional early-return in a widget action handler.
-- **System-prompt cue:** tell the agent to stop after emitting the widget so the user reaches the decision point without competing UI noise.
+- **A retired kind degrades, it doesn't break.** Old history can carry a kind that's since been removed from [widgetKinds.ts](../src/shared/widgetKinds.ts): the client shows a short "older question" note ([RetiredWidget.tsx](../src/client/components/Chat/widgets/RetiredWidget.tsx)) and Hank's replay a line saying so. So removing a kind is deleting it — no replay stub to keep.
 
 ## Cross-references
 

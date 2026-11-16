@@ -12,9 +12,9 @@ import type { Say, StepOutcome } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { caughtUpCompany } from "@/server/entities/companies/setCompanyAside";
 import { promoteJobForWork } from "@/server/entities/jobs/setJobAside";
+import { buildShowEvents } from "@/server/panels/showEvents";
 import { narrateCompanyCaughtUp } from "@/server/procedures/registry/companyWalkthrough/narration";
 import { sayStateChange } from "@/server/procedures/registry/companyWalkthrough/sayStateChange";
-import { buildShowEvents } from "@/server/views/showEvents";
 import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import { parseWidgetSubmission } from "../parse";

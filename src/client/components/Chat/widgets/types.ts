@@ -5,29 +5,7 @@
 
 // ---- payload shapes (server → client) ---------------------------------
 
-export type CompanyChecklistSuggestion = {
-  name: string;
-  reasoning: string;
-  // Canonical careers/ATS board URL find_companies surfaced for this company,
-  // when it's confident. Round-tripped back through the submission so
-  // the URL hunter verifies it first instead of re-guessing a slug — the
-  // collision guard for generic names. Absent when it worked from knowledge
-  // (no board URL to trust).
-  url?: string;
-};
-
-// Emitted by the find_companies tool. The user prunes the checklist; picks
-// commit to the watchlist via the top-level company_checklist dispatcher.
-export type CompanyChecklistPayload = {
-  suggestions: CompanyChecklistSuggestion[];
-  // One line on how this batch was found — searched the web vs. worked from
-  // what the model already knows about the user's thesis. Distilled from the
-  // search's own scratchpad, so a bad run is diagnosable ("it didn't search")
-  // instead of a black box. Absent on batches from before it was captured.
-  provenance?: string;
-};
-
-// add_more_companies — emitted once a checklist add has finished. Names what
+// add_more_companies — emitted once a discovery add has finished. Names what
 // landed and asks the only question left: keep hunting, or move on.
 export type AddMoreCompaniesPayload = {
   addedThisBatch: string[];
@@ -74,33 +52,6 @@ export type ConfirmApplicationSubmitPayload = {
   jobId: string;
   jobTitle?: string;
   companyName?: string;
-};
-
-// shortlist_scan_gate — REPLAY-ONLY (docs/INCOMPLETE_MIGRATIONS.md): nothing
-// emits it anymore; the shape survives so persisted blocks in old sessions
-// still validate. The board's "not read yet" tier replaced the question.
-export type ShortlistScanGatePayload = {
-  companyId: string;
-  companyName: string;
-  newCount: number;
-  scannedCount: number;
-  // Round-tripped back in the submission marker so a steer that was in flight
-  // when this gate interrupted still applies to the round after it.
-  direction?: string;
-};
-
-// shortlist_regen_gate — REPLAY-ONLY (docs/INCOMPLETE_MIGRATIONS.md): nothing
-// emits it anymore; the shape survives so persisted blocks in old sessions
-// still validate. An open board re-shows and a `direction` re-seeds instead.
-export type ShortlistRegenGatePayload = {
-  companyId: string;
-  companyName: string;
-  shortlistedCount: number;
-  deferredCount: number;
-  // Carried through from the scan gate: when true, a regenerate keeps the
-  // "scanned-only" scoping so the eventual commit skips the no-NEW-siblings
-  // gate. Absent for the normal (no un-scanned roles) case.
-  scannedOnly?: boolean;
 };
 
 // next_job_picker — emitted by the company walkthrough once SCANNED jobs have
@@ -194,18 +145,6 @@ export type NextCompanyPickerPayload = {
 
 // ---- submission shapes (client → server, embedded in chat marker) -----
 
-// A company the user kept on the checklist, carrying the disambiguating context
-// find_companies produced. `context` (the suggestion's reasoning) and
-// `url` (the captured board URL) ride back through the submission marker so the
-// URL hunter resolves the right company instead of a name collision. Both
-// optional — a knowledge-only suggestion carries just context.
-export type PickedCompany = { name: string; context?: string; url?: string };
-
-// A candidate the user unchecked. The name is the whole payload — the checklist
-// captures WHICH names were wrong, and the user says WHY in chat, where one
-// sentence covers the batch and reaches the next search as its direction.
-export type DeclinedCompany = { name: string };
-
 // One resolved branch of a flagged name collision: the user picked
 // which real company the ambiguous name maps to. Companies the user skipped are
 // simply absent from `resolved`.
@@ -217,11 +156,6 @@ export type DisambiguationResolution = {
 };
 
 export type WidgetSubmission =
-  | {
-      kind: "company_checklist";
-      picked: PickedCompany[];
-      declined: DeclinedCompany[];
-    }
   | { kind: "company_disambiguation"; resolved: DisambiguationResolution[] }
   // Keep hunting after an add landed ("yes" re-runs the search) or move on
   // ("no" hands off to what's next). `settled` is how many companies this round
@@ -276,10 +210,6 @@ export type WidgetSubmission =
       companyId: string;
       choice: "caught_up";
     };
-// (The shortlist widget family — shortlist_proposal + its two gates — no
-// longer submits: the shortlist board on the right panel replaced it. Old
-// markers in scrollback render via WidgetResponseCard's own guards, not this
-// union.)
 
 // ---- response-card display data (client → marker → client) ------------
 //
@@ -292,8 +222,8 @@ export type WidgetSubmission =
 // widget payload with titles/names is gone after dismissal).
 //
 // Only fields NOT already present in the submission go here; the card render
-// model merges submission fields + `_view`. add_more_companies and
-// company_checklist carry everything in the submission and pass no `_view`.
+// model merges submission fields + `_view`. add_more_companies carries
+// everything in the submission and passes no `_view`.
 type WidgetResponseView =
   | { kind: "confirm_revive_company"; companyName: string }
   | {

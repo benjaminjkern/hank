@@ -9,7 +9,7 @@
 // thesis can be answered from knowledge; a fresh/narrow direction wants a search.
 //
 // Surface-level only: it does NOT validate fit beyond "the name plausibly
-// matches." The main agent shows the candidates in a company_checklist; approved
+// matches." The candidates go on the discovery panel; kept
 // names feed the add-to-watchlist enrich pipeline (URL hunt → scrape → PRE_SCAN
 // → scan → shortlist), which is where the real per-company filtering happens.
 //

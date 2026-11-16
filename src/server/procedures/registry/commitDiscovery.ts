@@ -22,6 +22,7 @@ import { sayUiEvents } from "@/server/contracts";
 import type { StepArgs, StepOutcome } from "@/server/contracts";
 import { settleSuggestionBatch } from "@/server/entities/companies/suggestionMark";
 import { CompanySuggestionVerdict } from "@/server/generated/prisma/client";
+import { buildShowEvents } from "@/server/panels/showEvents";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
 import {
@@ -29,7 +30,6 @@ import {
   runChecklistAdd,
 } from "@/server/procedures/registry/enrichCompanies";
 import { loadDiscoveryList } from "@/server/views/discoveryList";
-import { buildShowEvents } from "@/server/views/showEvents";
 
 function renderPassRelay(passed: string[], added: string[]): string {
   const kept = added.length
@@ -80,7 +80,7 @@ export const runCommitDiscovery = procedure(
     // careers-page reads and the consolidation is two LLM calls, and until this
     // ran at the end of all that, the user watched a settled list the whole time
     // and kept it forever if anything cut the run short. Same move, same reason,
-    // as the "Looks good to me" path (widgets/registry/commitNegotiation.ts).
+    // as the "Looks good to me" path (panels/commitNegotiation.ts).
     await sayUiEvents(args.say, (await buildShowEvents(args.userId)).events);
 
     const passedNames = toPass.map((r) => r.name);

@@ -105,8 +105,7 @@ export const MessageBubble = memo(function MessageBubble({
   );
 
   // Skip rendering bubbles whose only content is widget segments — widgets
-  // render via PipelineWidgetSlot / ShortlistProposalWidget above the
-  // composer, not inline. Without this, the bubble shows up as an empty
+  // render via PipelineWidgetSlot above the composer, not inline. Without this, the bubble shows up as an empty
   // box on refresh. The segment is still in `message.segments` (so
   // PipelineWidgetSlot can find it); we just don't paint the chat row.
   const isWidgetOnly =
