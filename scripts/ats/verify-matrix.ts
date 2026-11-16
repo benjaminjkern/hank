@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { browserCapability } from "../../src/server/platform/browser/browserCapability";
-import { closeHeadless } from "../../src/server/platform/browser/headless";
+import { browserCapability } from "../../src/server/platform/scrape/browser/browserCapability";
+import { closeHeadless } from "../../src/server/platform/scrape/browser/headless";
 import { scrapeUrl } from "../../src/server/platform/scrape";
 import {
   extractGreenhouseSlugFromBoardUrl,

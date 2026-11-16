@@ -188,7 +188,7 @@ Most inconsistency in this app came from the same concept re-implemented per sur
 | `JobInteraction.shortAnswers[]` | **Short answers** | editor on job page |
 | `Attachment.fileBytes` | **Uploaded files** | download only |
 
-Narrative docs edit in place via `InlineEditableDoc` (always-live textarea, autosave on blur). Memory writes go through `PUT /api/documents/memory` `{doc, content}` where `doc` is a **kind** (`profile`/`frequent_questions`/`resume`), mapped to a path by `saveUserDoc` — arbitrary paths unreachable.
+Editable docs edit in place via `InlineEditableDoc` (always-live textarea, autosave on blur). Memory writes go through `PUT /api/documents/memory` `{doc, content}` where `doc` is a **kind** (`profile`/`frequent_questions`/`resume`), mapped to a path by `saveEditableDoc` — arbitrary paths unreachable.
 
 **The Resume sub-page is one editable note plus a file list.** `resume.md` holds the user's whole background in full detail; each upload is parsed and *merged* into it (see [memory.md](memory.md)), so the page offers **Add another** rather than Replace, and every uploaded file stays downloadable at `/api/documents/resume/file?id=…`. There is no separate summary panel and no separate framing-notes box — framing lives in **Profile**.
 

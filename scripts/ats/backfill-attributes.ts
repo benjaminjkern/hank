@@ -2,7 +2,7 @@ import "dotenv/config";
 import { prisma } from "../../src/server/db/prisma";
 import { roleAttrColumns } from "../../src/server/entities/jobs/roleAttrs";
 import { Prisma } from "../../src/server/generated/prisma/client";
-import { closeHeadless } from "../../src/server/platform/browser/headless";
+import { closeHeadless } from "../../src/server/platform/scrape/browser/headless";
 import { scrapeUrl } from "../../src/server/platform/scrape";
 import { detectAts } from "../../src/server/platform/scrape/ats";
 

@@ -9,7 +9,7 @@
 //
 //   pnpm ats:jobshape
 
-import { boardIdentifiesCompany } from "../../src/server/entities/boardReaders/boardIdentity";
+import { boardIdentifiesCompany } from "../../src/server/platform/scrape/recipe/boardIdentity";
 import { harvestBlobs } from "../../src/server/platform/scrape/generic/blobs";
 import { parseFeedItems } from "../../src/server/platform/scrape/generic/feed";
 import {

@@ -11,7 +11,7 @@ import {
   listSuggestionHistory,
 } from "@/server/entities/companies/companySuggestions";
 import { readMemory } from "@/server/entities/memory/store";
-import { readResumeBackground } from "@/server/entities/resume/store";
+import { readResumeBackground } from "@/server/entities/profile/resume";
 import { CompanyStatus } from "@/server/generated/prisma/client";
 import type {
   FindCompaniesInput,

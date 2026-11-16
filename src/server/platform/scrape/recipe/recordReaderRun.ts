@@ -23,12 +23,14 @@ export type LoadedBoardReader = {
   origin: BoardReaderOrigin;
 };
 
-// Save a plan against its board and point the company at it. Upserts on
-// matchKey, so the second company on the same board software reuses the row
+// Save a plan against its board. Upserts on matchKey, so the second company on the same board software reuses the row
 // rather than minting a parallel one — which is what makes the cost of learning
 // a board a one-time cost per BOARD rather than per company.
 export async function saveBoardReader(args: {
-  companyId: string;
+  // Whose board the caller believes this is — checked against the board before
+  // a recipe is stored (boardIdentity.ts). Pointing a company at the saved
+  // reader is the caller's write: entities/companies/saveCompanyBoardReader.ts.
+  companyName: string;
   sourceUrl: string;
   recipe: BoardRecipe | null;
   origin: BoardReaderOrigin;
@@ -49,12 +51,8 @@ export async function saveBoardReader(args: {
   // path, recon, and the operator backfill) and a reader that reads someone
   // else's board is not a thing any of them may store.
   if (args.recipe) {
-    const company = await prisma.company.findUnique({
-      where: { id: args.companyId },
-      select: { name: true },
-    });
     const identity = boardIdentifiesCompany({
-      companyName: company?.name ?? "",
+      companyName: args.companyName,
       boardUrl: args.sourceUrl,
       ...(args.sampleJobUrls ? { sampleJobUrls: args.sampleJobUrls } : {}),
     });
@@ -70,7 +68,6 @@ export async function saveBoardReader(args: {
         origin: args.origin,
         needsBrowser: false,
         reconNote: `rejected: ${identity.reason}`,
-        companyId: args.companyId,
         stampRecon: true,
       });
     }
@@ -84,7 +81,6 @@ export async function saveBoardReader(args: {
     origin: args.origin,
     needsBrowser: args.needsBrowser ?? false,
     reconNote: args.reconNote ?? null,
-    companyId: args.companyId,
     // A recon attempt is stamped whether or not it produced a plan — the
     // cooldown has to remember the failures, which are exactly the expensive
     // case.
@@ -102,7 +98,6 @@ async function writeReader(args: {
   origin: BoardReaderOrigin;
   needsBrowser: boolean;
   reconNote: string | null;
-  companyId: string;
   stampRecon: boolean;
 }): Promise<string> {
   const recipeJson = (args.recipe ?? Prisma.DbNull) as Prisma.InputJsonValue;
@@ -128,11 +123,6 @@ async function writeReader(args: {
       consecutiveFailures: 0,
     },
     select: { id: true },
-  });
-
-  await prisma.company.update({
-    where: { id: args.companyId },
-    data: { boardReaderId: reader.id },
   });
   return reader.id;
 }

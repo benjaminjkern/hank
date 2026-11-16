@@ -11,7 +11,7 @@
 
 import type { RunContext } from "@/server/contracts";
 import { readMemory } from "@/server/entities/memory/store";
-import { RESUME_PATH, saveResume } from "@/server/entities/resume/store";
+import { RESUME_PATH, saveResume } from "@/server/entities/profile/resume";
 import { getAttachment } from "@/server/platform/storage/attachments";
 import { DOCX_MIME } from "@/server/platform/storage/docx";
 import { procedure } from "@/server/procedures/lib/procedure";

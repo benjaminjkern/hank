@@ -11,7 +11,7 @@ import {
   ROLE_ATTR_SELECT,
   toRoleAttrs,
 } from "@/server/entities/jobs/roleAttrs";
-import { readResumeBackground } from "@/server/entities/resume/store";
+import { readResumeBackground } from "@/server/entities/profile/resume";
 import { JobEventType } from "@/server/generated/prisma/client";
 import type {
   ApplicationCriticInput,

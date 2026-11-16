@@ -12,14 +12,14 @@ The main Hank agent addresses companies / jobs / opportunities / contacts by **h
 
 All three are nullable in the schema; the id-fallback resolvers keep any un-slugged legacy row working. The URL follows the same rule — it writes `slug ?? id`, so a role from the un-backfilled majority of `Job.slug` (**A1** in [INCOMPLETE_MIGRATIONS.md](INCOMPLETE_MIGRATIONS.md)) is addressable by its cuid and gets a readable URL the moment that backfill lands.
 
-## The modules — [platform/slug/](../src/server/platform/slug/) + [entities/resolveBySlug.ts](../src/server/entities/resolveBySlug.ts)
+## The modules — [slugify.ts](../src/shared/utils/slugify.ts) + [mintSlug.ts](../src/server/db/mintSlug.ts) + [entities/resolveBySlug.ts](../src/server/entities/resolveBySlug.ts)
 
-Deliberately split: `platform/slug/` is the domain-blind half (a string slugifier and a
-retry-on-collision minter that takes a `write` callback and knows no tables), while the
+Deliberately split: the slugifier is a pure string helper (`shared/utils/`), the
+retry-on-collision minter takes a `write` callback and knows no tables (`db/`), while the
 resolvers query all four entity tables and so live with the domain.
 
 - `slugify(input, {stripUrl?, maxLength?})` — the ONE canonical slugifier (the re-export in `memory/paths.ts` delegates here).
-- `mintSlug(fallbackId, candidates, write)` — the generic minter ([mintSlug.ts](../src/server/platform/slug/mintSlug.ts)): write a candidate, catch the P2002 unique violation, fall through to the next (numeric suffixes after the named candidates; the row's cuid as a last resort). Race-safe. The per-entity minters that build the candidates + supply the `write` live in each entity folder — [`mintJobSlug`](../src/server/entities/jobs/jobSlug.ts) / [`mintOpportunitySlug`](../src/server/entities/opportunities/opportunitySlug.ts) / [`mintContactSlug`](../src/server/entities/contacts/contactSlug.ts) (mirrors [`companySlug`](../src/server/entities/companies/companySlug.ts)). **Must run OUTSIDE any enclosing `$transaction`** — mint after it commits. (The parallel scrape upsert in [upsertScrapedJobs.ts](../src/server/entities/jobs/upsertScrapedJobs.ts) mints per-job, lazily backfilling any null-slug row it touches.)
+- `mintSlug(fallbackId, candidates, write)` — the generic minter ([mintSlug.ts](../src/server/db/mintSlug.ts)): write a candidate, catch the P2002 unique violation, fall through to the next (numeric suffixes after the named candidates; the row's cuid as a last resort). Race-safe. The per-entity minters that build the candidates + supply the `write` live in each entity folder — [`mintJobSlug`](../src/server/entities/jobs/jobSlug.ts) / [`mintOpportunitySlug`](../src/server/entities/opportunities/opportunitySlug.ts) / [`mintContactSlug`](../src/server/entities/contacts/contactSlug.ts) (mirrors [`companySlug`](../src/server/entities/companies/companySlug.ts)). **Must run OUTSIDE any enclosing `$transaction`** — mint after it commits. (The parallel scrape upsert in [upsertScrapedJobs.ts](../src/server/entities/jobs/upsertScrapedJobs.ts) mints per-job, lazily backfilling any null-slug row it touches.)
 - `resolveCompanyBySlug / resolveJobBySlug / resolveJobsBySlug / resolveOpportunityBySlug / resolveContactBySlug / resolveJobInteractionFromJobSlug` — each accepts a **slug OR a raw cuid** (slug first, id fallback). Failure returns `{ok:false, message, dedupHint}` the handler turns into `toolError("ENTITY_NOT_FOUND", …)`; the message lists a few valid slugs so the model self-corrects in-turn.
 
 ## The tool-boundary convention (follow for every new agent tool)

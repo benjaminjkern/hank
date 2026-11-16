@@ -21,8 +21,8 @@ import "dotenv/config";
 import {
   browserCapability,
   withBrowser,
-} from "../../src/server/platform/browser/browserCapability";
-import { closeHeadless } from "../../src/server/platform/browser/headless";
+} from "../../src/server/platform/scrape/browser/browserCapability";
+import { closeHeadless } from "../../src/server/platform/scrape/browser/headless";
 import {
   buildRecipe,
   planSourceUrl,

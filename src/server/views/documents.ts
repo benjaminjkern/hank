@@ -1,13 +1,13 @@
 // The Documents page payload — the table-less read model behind /documents:
 // the editable narrative notes, every uploaded résumé, the drafting artifacts
 // sitting on JobInteractions, and the raw attachments. The write half (which
-// notes are editable, and saving one) is entities/narrativeDocs.ts.
+// notes are editable, and saving one) is entities/profile/editableDocs.ts.
 
 import { prisma } from "@/server/db/prisma";
 import type { ShortAnswer } from "@/server/entities/jobs/types";
 import { readMemory } from "@/server/entities/memory/store";
-import { NARRATIVE_DOC_PATHS } from "@/server/entities/narrativeDocs";
-import { RESUME_PATH } from "@/server/entities/resume/store";
+import { EDITABLE_DOC_PATHS } from "@/server/entities/profile/editableDocs";
+import { RESUME_PATH } from "@/server/entities/profile/resume";
 
 export type DocumentArtifact = {
   jobId: string;
@@ -54,8 +54,8 @@ export async function loadUserDocuments(
     jobInteractions,
     attachments,
   ] = await Promise.all([
-    readMemory(userId, NARRATIVE_DOC_PATHS.profile),
-    readMemory(userId, NARRATIVE_DOC_PATHS.frequent_questions),
+    readMemory(userId, EDITABLE_DOC_PATHS.profile),
+    readMemory(userId, EDITABLE_DOC_PATHS.frequent_questions),
     readMemory(userId, RESUME_PATH),
     prisma.resume.findMany({
       where: { userId },

@@ -25,7 +25,7 @@ import {
   shortlistPoolStatusWhere,
 } from "@/server/entities/jobs/shortlistPool";
 import { readMemory } from "@/server/entities/memory/store";
-import { readResumeBackground } from "@/server/entities/resume/store";
+import { readResumeBackground } from "@/server/entities/profile/resume";
 import { JobInteractionStatus } from "@/server/generated/prisma/client";
 import type {
   ShortlistJobsInput,

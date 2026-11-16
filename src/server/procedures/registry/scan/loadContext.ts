@@ -1,6 +1,6 @@
 import { prisma } from "@/server/db/prisma";
 import { readMemory } from "@/server/entities/memory/store";
-import { readResumeBackground } from "@/server/entities/resume/store";
+import { readResumeBackground } from "@/server/entities/profile/resume";
 
 // What the match pass weighs every role against. Identical for every job at one
 // company, so the fan-out loads it once rather than once per sub-agent call.

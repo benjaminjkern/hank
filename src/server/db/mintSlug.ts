@@ -16,7 +16,7 @@
 
 import { Prisma } from "@/server/generated/prisma/client";
 
-import { capSlug } from "../../../shared/utils/slugify";
+import { capSlug } from "../../shared/utils/slugify";
 
 function isUniqueViolation(e: unknown): boolean {
   return (

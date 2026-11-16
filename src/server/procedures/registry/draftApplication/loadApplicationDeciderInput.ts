@@ -16,7 +16,7 @@ import {
   toRoleAttrs,
 } from "@/server/entities/jobs/roleAttrs";
 import { readMemory } from "@/server/entities/memory/store";
-import { readResumeBackground } from "@/server/entities/resume/store";
+import { readResumeBackground } from "@/server/entities/profile/resume";
 import {
   isStockFieldType,
   isCoverLetterQuestion,

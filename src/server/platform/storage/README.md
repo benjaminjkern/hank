@@ -14,7 +14,7 @@ it qualifies for `platform/`.
 **The product-aware halves of file handling live elsewhere.** Two things that touch files know
 too much about the product to sit in infra:
 
-- The `Resume` row lives in **[`entities/resume/`](../../entities/resume/)** — a first-class
+- The `Resume` row lives in **[`entities/profile/resume.ts`](../../entities/profile/resume.ts)** — a first-class
   profile object (many per user), read and merged into the `resume.md` memory note; the row
   itself carries only the file, and its store imports the resume-parsing sub-agent. It builds
   *on* `attachments.ts`; it is not just an attachment.

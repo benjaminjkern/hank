@@ -2,8 +2,8 @@
 // derived from the lead label. Single-candidate — mintSlug adds numeric suffixes on
 // collision; a P2002 here means the same user already has that slug.
 
+import { mintSlug } from "@/server/db/mintSlug";
 import { prisma } from "@/server/db/prisma";
-import { mintSlug } from "@/server/platform/slug/mintSlug";
 import { capSlug, slugify } from "@/shared/utils/slugify";
 
 export async function mintOpportunitySlug(

@@ -30,8 +30,8 @@
 import "dotenv/config";
 
 import { prisma } from "../../src/server/db/prisma";
-import { saveBoardReader } from "../../src/server/entities/boardReaders/recordReaderRun";
 import { reviveCompany } from "../../src/server/entities/companies/resumeCompany";
+import { saveCompanyBoardReader } from "../../src/server/entities/companies/saveCompanyBoardReader";
 import {
   BoardReaderOrigin,
   CompanyBlockReason,
@@ -214,7 +214,7 @@ async function tryCompany(args: {
   const probed = await probeGenericBoard(args.url);
   if (probed.ok) {
     if (APPLY) {
-      await saveBoardReader({
+      await saveCompanyBoardReader({
         companyId: args.companyId,
         sourceUrl: args.url,
         recipe: probed.recipe,
