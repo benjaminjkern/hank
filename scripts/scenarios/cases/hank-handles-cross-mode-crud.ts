@@ -1,3 +1,4 @@
+import { sayTo } from "@/server/contracts";
 import { runUserMessage } from "@/server/agent/runtime/runUserMessage";
 import { prisma } from "@/server/db/prisma";
 
@@ -24,15 +25,16 @@ const scenario: Scenario = {
     );
     try {
       const toolNames: string[] = [];
-      for await (const ev of runUserMessage({
+      await runUserMessage({
         userId: USER_ID,
         userMessage:
           "Quick aside before we keep going: a recruiter named McKenley Talent just reached out about a Senior Engineer role at Stripe — said base is around $250k. Can you note that down before we continue with the profile?",
         attachmentIds: [],
         sessionIdOverride: TEST_SESSION_ID,
-      })) {
-        if (ev.type === "tool_use_start") toolNames.push(ev.name);
-      }
+        say: sayTo((ev) => {
+          if (ev.type === "tool_use_start") toolNames.push(ev.name);
+        }),
+      });
       const sawCreateOpportunity = toolNames.includes("create_opportunity");
       const newOpps = await prisma.opportunity.findMany({
         where: { userId: USER_ID, id: { notIn: Array.from(beforeOppIds) } },

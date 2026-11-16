@@ -55,7 +55,7 @@ Implications when adding a handler:
 
 Every tool follows the simple `ToolDef<Input>` contract in [tools/types.ts](../src/server/tools/lib/types.ts) — sync request, single result. There is no streaming tool variant, and a new tool should not introduce one: the drafting / scan / shortlist work that would want phase captions is driven deterministically by the walkthrough state machine, not by a Hank tool.
 
-A tool that runs a long internal pipeline is still a plain `ToolDef` whose `handle()` **drains that pipeline's `async function*` to completion** (live progress dropped, final summary + events returned) — the enrich batch behind `enrich_companies` is the model.
+A tool that runs a long internal procedure is still a plain `ToolDef` whose `handle()` awaits it and returns one result. A narrating procedure gets the tool's own `say` — typically a [`sayTo`](../src/server/contracts/events.ts) collector that keeps what Hank should hear (the `draft_application` tool keeps the failure lines) and drops the rest — and the enrich batch behind `enrich_companies` just omits its `onProgress`.
 
 The thinner shape is a tool that just resolves its slug and `await`s a plain-async **procedure**: [`scrape_jobs_for_company`](../src/server/tools/registry/scrapeJobsForCompany.ts) → [`runScrapeJobsForCompany`](../src/server/procedures/registry/scrapeJobsForCompany.ts), whose scrape→persist core ([`runSyncCompanyBoard`](../src/server/procedures/registry/syncCompanyBoard.ts)) is the same one the walkthrough's on-entry board refresh runs — a thin tool wrapper and a pipeline call both delegating to one shared unit, the convention in [AGENTS.md](../AGENTS.md).
 
@@ -113,7 +113,7 @@ A tool that mutates user-visible state (dashboard buckets, focused company/job/o
 
 Server-side: `runAgentTurn` reads the flag via `toolAffectsViewedState(name)`, tags the `tool_use_complete` SSE event, and the client debounce-refetches `/api/dashboard` + viewed-entity payloads (~300ms trailing; the `done` handler cancels any pending debounce).
 
-**Deterministic pipeline runners** (walkthrough state machine, watchlist enrich loop) mutate state without dispatching a tool, so they instead `yield { type: "refresh_viewed_state" }` **immediately after a persist** (not on a pre-write "Drafting…" status line). It carries no payload, isn't a content block, and the client calls the same debounced refresh. `pipeline_widget` events already refresh for free. Set `affectsViewedState: false` to skip the refetch on read-only tools, chat-text-only tools, and tools that only write `MemoryNote`/`AdminNote`/observation channels. When in doubt, leave it unset — the default refreshes, and a redundant refresh is cheap while a missing one leaves stale data on screen.
+**Deterministic pipeline runners** (walkthrough state machine, watchlist enrich loop) mutate state without dispatching a tool, so they instead say `{ type: "refresh_viewed_state" }` **immediately after a persist** (not on a pre-write "Drafting…" status line). It carries no payload, isn't a content block, and the client calls the same debounced refresh. `pipeline_widget` events already refresh for free. Set `affectsViewedState: false` to skip the refetch on read-only tools, chat-text-only tools, and tools that only write `MemoryNote`/`AdminNote`/observation channels. When in doubt, leave it unset — the default refreshes, and a redundant refresh is cheap while a missing one leaves stale data on screen.
 
 ## Handoff tools stop the agent loop: `handoff`
 
@@ -145,7 +145,7 @@ Every field is optional on `RunContext` and the sub-agent runner null-checks, so
 
 ## JSON-envelope tool results (interactive widgets)
 
-**No tool emits a wait-for-user surface any more** — the deterministic layer owns every widget. `ToolResult.widgets` (`ToolEmittedWidget[]`) still exists and the runner still yields each as a `pipeline_widget` event, but nothing uses it — the shortlist board (a right-panel screen, not a widget) replaced the last widget-shaped shortlist surface. The mechanism below therefore describes how a widget is wired, not a live tool path — reach for the deterministic layer instead of re-adding a widget-emitting tool. Three pieces:
+**No tool emits a wait-for-user surface any more** — the deterministic layer owns every widget. `ToolResult.widgets` (`ToolEmittedWidget[]`) still exists and the runner still says each as a `pipeline_widget` event, but nothing uses it — the shortlist board (a right-panel screen, not a widget) replaced the last widget-shaped shortlist surface. The mechanism below therefore describes how a widget is wired, not a live tool path — reach for the deterministic layer instead of re-adding a widget-emitting tool. Three pieces:
 
 1. **The tool returns JSON with a discriminator** (`{ kind: "shortlist_proposal", … }`). Keep field names stable — the widget zod-parses on every render, and the same string is what the model sees on replay. Version the discriminator (`_v2`) for breaking changes.
 2. **A `tryParse<Kind>` helper** next to the widget: `JSON.parse` in try/catch, zod-validate, return `null` on failure.

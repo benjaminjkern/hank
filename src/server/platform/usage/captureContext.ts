@@ -5,16 +5,17 @@
 // turn that spawned them. Threading runId / parent-message / parent-tool through
 // every sub-agent registry + procedure signature would touch dozens of files.
 //
-// Instead we stash the capture context in an AsyncLocalStorage set ONCE, at the
-// main loop's tool-dispatch boundary (agentRunner wraps each `tool.handle()` in
-// `withCaptureContext`). Because ALS propagates across every await inside that
-// handler — including nested sub-agent LLM calls — `recordUsage` and
-// `recordSubAgentRun` can read the current context with zero call-site plumbing.
+// Instead we stash the capture context in an AsyncLocalStorage, set at two
+// boundaries: runUserMessage sets the runId around the whole run, and the main
+// loop's tool dispatch (runAgentTurn) layers messageId / parentToolUseId over it
+// for each `tool.handle()`. Because ALS propagates across every await inside —
+// including nested sub-agent LLM calls — `recordUsage` and `recordSubAgentRun`
+// can read the current context with zero call-site plumbing.
 //
-// NOTE: only wrap NON-generator async boundaries (a plain `tool.handle()` call).
-// Wrapping a generator body is unreliable — its continuation runs in the
-// consumer's async context, not the one `storage.run` established. The main
-// agent turns are all covered because tool dispatch is a regular async call.
+// NOTE: wrap a plain async call. An async GENERATOR body is unreliable here —
+// its continuation runs in the consumer's async context, not the one
+// `storage.run` established — which is one reason nothing in the run is a
+// generator.
 
 import { AsyncLocalStorage } from "node:async_hooks";
 

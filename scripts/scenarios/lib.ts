@@ -7,6 +7,7 @@
 // expensive. Per-file scenarios = self-contained example + cheap to add.
 
 import "dotenv/config";
+import { sayTo, type Say } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { runChatTurn } from "@/server/procedures/registry/chat";
 import { runWalkthrough } from "@/server/procedures/registry/walkthrough";
@@ -96,22 +97,28 @@ export async function drainStateMachine(): Promise<{
   wrappedUp: boolean;
 }> {
   const events: EventRecord[] = [];
-  const gen = runWalkthrough({
+  const result = await runWalkthrough({
     userId: USER_ID,
     sessionId: SESSION_ID,
     userMessage: "",
+    say: recordInto(events),
   });
-  while (true) {
-    const next = await gen.next();
-    if (next.done) return { events, wrappedUp: next.value.wrappedUp };
-    const ev = next.value;
+  return { events, wrappedUp: result.wrappedUp };
+}
+
+// A `say` that records what a run tells the user, for assertions. Nothing is
+// persisted — the harness calls procedures below recordTranscript.
+export function recordInto(events: EventRecord[]): Say {
+  return sayTo((ev) => {
     if (ev.type === "text") events.push({ type: "text", text: ev.text });
     else if (ev.type === "pipeline_status")
       events.push({ type: "pipeline_status", text: ev.text });
     else if (ev.type === "pipeline_widget")
       events.push({ type: "pipeline_widget", kind: ev.kind });
+    else if (ev.type === "tool_use_start")
+      events.push({ type: "tool_use_start", name: ev.name });
     else events.push({ type: ev.type });
-  }
+  });
 }
 
 // Run the walkthrough pipeline (which can include an LLM agent turn).
@@ -139,22 +146,19 @@ export async function drainPipeline(userMessage: string): Promise<{
     "add_companies_to_watchlist",
   ]);
   let actionToolCalls = 0;
-  for await (const ev of runChatTurn({
+  const record = recordInto(events);
+  await runChatTurn({
     userId: USER_ID,
     sessionId: SESSION_ID,
     userMessage,
-  })) {
-    if (ev.type === "text") events.push({ type: "text", text: ev.text });
-    else if (ev.type === "pipeline_status")
-      events.push({ type: "pipeline_status", text: ev.text });
-    else if (ev.type === "pipeline_widget")
-      events.push({ type: "pipeline_widget", kind: ev.kind });
-    else if (ev.type === "tool_use_start") {
-      toolCalls++;
-      if (ACTION_TOOL_NAMES.has(ev.name)) actionToolCalls++;
-      events.push({ type: "tool_use_start", name: ev.name });
-    } else events.push({ type: ev.type });
-  }
+    say: async (ev) => {
+      if (ev.type === "tool_use_start") {
+        toolCalls++;
+        if (ACTION_TOOL_NAMES.has(ev.name)) actionToolCalls++;
+      }
+      await record(ev);
+    },
+  });
   return { events, toolCalls, actionToolCalls };
 }
 

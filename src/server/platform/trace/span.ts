@@ -10,12 +10,9 @@
 // real tools get tool spans"): the chat's trace renderer flattens spans away, so
 // the user-visible chip is unchanged. It only adds structure for the inspector.
 //
-// Two shapes because procedures come in two shapes, and a wrapper can't stay
-// lazy around a generator:
-//   - `withTraceSpan` for a plain async procedure.
-//   - `openTraceSpan` for a generator — open it, thread `span.trace`, close it
-//     in a `finally`.
-// Both no-op entirely when there's no trace sink or no parent to nest under
+// A procedure ENTRY never calls these itself — procedures/lib/procedure.ts opens
+// its span. `withTraceSpan` is for a STEP inside one procedure that wants its
+// own bracket; `openTraceSpan` is the primitive under both. Both no-op entirely when there's no trace sink or no parent to nest under
 // (background jobs, scripts, the audit harnesses).
 
 import { randomUUID } from "node:crypto";

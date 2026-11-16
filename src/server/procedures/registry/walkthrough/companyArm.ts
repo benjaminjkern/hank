@@ -14,7 +14,6 @@
 // "close these out" turned into a fresh round the user didn't ask for.
 
 import { statusEvent, widgetEvent } from "@/server/contracts";
-import type { TurnEvent } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { markCompanyReady } from "@/server/entities/companies/markCompanyStatus";
 import { caughtUpCompany } from "@/server/entities/companies/setCompanyAside";
@@ -26,7 +25,7 @@ import {
   JobEventType,
   JobInteractionStatus,
 } from "@/server/generated/prisma/client";
-import { streamingProcedure } from "@/server/procedures/lib/procedure";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runPreScan } from "@/server/procedures/registry/preScan";
 import { preScanPoolWhere } from "@/server/procedures/registry/preScan/pool";
 import { runScan } from "@/server/procedures/registry/scan";
@@ -37,13 +36,13 @@ import { isScrapeStale, runBoardScrape } from "./boardScrape";
 import { runCompanyEnrichStep } from "./companyEnrichStep";
 import { narrateCompanyCaughtUp, narrateCompanySettled } from "./narration";
 import { summarizeCloseRationales } from "./summarizeCloseRationales";
-import { yieldStateChange } from "./yieldStateChange";
+import { sayStateChange } from "./sayStateChange";
 
 import type { WalkthroughArgs, WalkthroughResult } from "./types";
 
-export const runCompanyArm = streamingProcedure(
+export const runCompanyArm = procedure(
   "company_arm",
-  async function* (
+  async (
     input: WalkthroughArgs & {
       companyId: string;
       // Free-text steer for the shortlist rung, forwarded from company_walkthrough's
@@ -52,7 +51,7 @@ export const runCompanyArm = streamingProcedure(
       direction?: string;
       continuation?: boolean;
     },
-  ): AsyncGenerator<TurnEvent, WalkthroughResult> {
+  ): Promise<WalkthroughResult> => {
     const {
       companyId: entryCompanyId,
       direction,
@@ -82,14 +81,16 @@ export const runCompanyArm = streamingProcedure(
         revivable.status === CompanyStatus.BLOCKED)
     ) {
       const name = revivable.company.name;
-      yield widgetEvent("confirm_revive_company", {
-        companyId,
-        companyName: name,
-        reasoning:
-          revivable.status === CompanyStatus.BLOCKED
-            ? `${name} was set aside earlier because I couldn't read their careers page. Want me to re-check it now and pull in anything that's posted?`
-            : `${name} was set aside earlier because its open roles didn't line up with what you're looking for. Want me to pull it back up and check for anything new?`,
-      });
+      await args.say(
+        widgetEvent("confirm_revive_company", {
+          companyId,
+          companyName: name,
+          reasoning:
+            revivable.status === CompanyStatus.BLOCKED
+              ? `${name} was set aside earlier because I couldn't read their careers page. Want me to re-check it now and pull in anything that's posted?`
+              : `${name} was set aside earlier because its open roles didn't line up with what you're looking for. Want me to pull it back up and check for anything new?`,
+        }),
+      );
       return { wrappedUp: false };
     }
 
@@ -99,7 +100,7 @@ export const runCompanyArm = streamingProcedure(
     // once. AWAITED rather than fired off: per the "nothing runs behind Hank's
     // back" invariant, a detached promise that lands writes after the user moved
     // on — and ignores a Stop — is the hidden work we're removing.
-    const enriched = yield* runCompanyEnrichStep({ ...args, companyId });
+    const enriched = await runCompanyEnrichStep({ ...args, companyId });
     if (enriched.wrapped) {
       return { wrappedUp: true, endedCompanyId: enriched.endedCompanyId };
     }
@@ -137,7 +138,7 @@ export const runCompanyArm = streamingProcedure(
         ci0?.company.sourceUrl &&
         (userJobCount === 0 || isScrapeStale(ci0.lastScrapedJobsAt))
       ) {
-        const scraped = yield* runBoardScrape({
+        const scraped = await runBoardScrape({
           ...args,
           companyId,
           sourceUrl: ci0.company.sourceUrl,
@@ -187,7 +188,7 @@ export const runCompanyArm = streamingProcedure(
             : scrapeDelta > 0 && backlogCount === 0
               ? `Doing a first pass over ${unjudgedCount} new posting${unjudgedCount === 1 ? "" : "s"}…`
               : `Doing a first pass over ${unjudgedCount} posting${unjudgedCount === 1 ? "" : "s"} I haven't reviewed yet…`;
-        yield statusEvent(firstPassLine);
+        await args.say(statusEvent(firstPassLine));
         await runPreScan({ ...args, companyId });
       }
 
@@ -200,8 +201,10 @@ export const runCompanyArm = streamingProcedure(
         where: { userId: args.userId, job: { companyId }, ...scanPoolWhere() },
       });
       if (survivorCount === 0) {
-        yield statusEvent(
-          `None of the ${unjudgedCount} new posting${unjudgedCount === 1 ? "" : "s"} looked like a fit on a first pass.`,
+        await args.say(
+          statusEvent(
+            `None of the ${unjudgedCount} new posting${unjudgedCount === 1 ? "" : "s"} looked like a fit on a first pass.`,
+          ),
         );
         // Deliberately no company-status write here. PRE_SCAN doesn't land one,
         // and an empty metadata pass mid-walkthrough doesn't mean "caught up" —
@@ -212,8 +215,10 @@ export const runCompanyArm = streamingProcedure(
         // Survivors to read → the company is walkable. READY only overwrites the
         // pre-walkthrough states, so an APPLYING company isn't demoted.
         await markCompanyReady(companyId, args.userId);
-        yield statusEvent(
-          `Reading ${survivorCount} that look promising in full and matching them to your thesis…`,
+        await args.say(
+          statusEvent(
+            `Reading ${survivorCount} that look promising in full and matching them to your thesis…`,
+          ),
         );
         const scan = await runScan({ ...args, companyId });
         if (scan.rateLimited || scan.timedOut) {
@@ -223,18 +228,22 @@ export const runCompanyArm = streamingProcedure(
           // (enrichment is cached on the Job and the pool query only picks up
           // the unjudged leftovers), and finishes the rest.
           const readSoFar = scan.matched + scan.skipped + scan.errors;
-          yield statusEvent(
-            scan.timedOut
-              ? `Big board — I got through ${readSoFar} of ${scan.total} before running out of time. Say the word and I'll pick up the rest.`
-              : "Hit a rate limit partway through — say the word and I'll pick up the rest.",
+          await args.say(
+            statusEvent(
+              scan.timedOut
+                ? `Big board — I got through ${readSoFar} of ${scan.total} before running out of time. Say the word and I'll pick up the rest.`
+                : "Hit a rate limit partway through — say the word and I'll pick up the rest.",
+            ),
           );
           return { wrappedUp: false };
         }
         if (scan.total > 0) {
           const setAside =
             scan.skipped > 0 ? `, set ${scan.skipped} aside as off-thesis` : "";
-          yield statusEvent(
-            `Read ${scan.total} in full — ${scan.matched} look like a fit${setAside}.`,
+          await args.say(
+            statusEvent(
+              `Read ${scan.total} in full — ${scan.matched} look like a fit${setAside}.`,
+            ),
           );
         }
       }
@@ -280,7 +289,7 @@ export const runCompanyArm = streamingProcedure(
     // clears every stance, which is also what stops this re-entering the board it
     // just settled.
     if (scannedCount > 0 || openStanceCount > 0 || rerankable > 0) {
-      yield* runShortlist({ ...args, companyId, direction });
+      await runShortlist({ ...args, companyId, direction });
       return { wrappedUp: false };
     }
 
@@ -296,12 +305,14 @@ export const runCompanyArm = streamingProcedure(
         where: { id: companyId },
         select: { name: true },
       });
-      yield widgetEvent("next_job_picker", {
-        companyId,
-        companyName: company?.name ?? "this company",
-        shortlisted: pickable.shortlisted,
-        deferred: pickable.deferred,
-      });
+      await args.say(
+        widgetEvent("next_job_picker", {
+          companyId,
+          companyName: company?.name ?? "this company",
+          shortlisted: pickable.shortlisted,
+          deferred: pickable.deferred,
+        }),
+      );
       return { wrappedUp: false };
     }
 
@@ -320,7 +331,8 @@ export const runCompanyArm = streamingProcedure(
         where: { id: companyId },
         select: { name: true },
       });
-      yield* yieldStateChange(
+      await sayStateChange(
+        args.say,
         narrateCompanySettled({
           companyId,
           companyName: company?.name ?? null,
@@ -420,7 +432,7 @@ export const runCompanyArm = streamingProcedure(
         detail && closed.length > 0
           ? `I went through ${who}'s ${closed.length} open role${closed.length === 1 ? "" : "s"} and none line up with what you're looking for right now — ${detail}. I'll keep ${who} on your list and check back next time. Just say the word if you want to reopen any of those or close ${who} out.`
           : `I went through ${who}'s open roles, but none line up with what you're looking for right now. I'll keep ${who} on your list and check back next time. Just say the word if you want to reopen any of those or close ${who} out.`;
-      yield { type: "text", text: reasoning };
+      await args.say({ type: "text", text: reasoning });
       // Walkthrough wrap: land the right engagement tail (IN_FLIGHT/IN_PROCESS if
       // apps went out this round, else CAUGHT_UP) instead of forcing CAUGHT_UP.
       await caughtUpCompany({ userId: args.userId, companyId, derive: true });
@@ -438,7 +450,8 @@ export const runCompanyArm = streamingProcedure(
       where: { id: companyId },
       select: { name: true },
     });
-    yield* yieldStateChange(
+    await sayStateChange(
+      args.say,
       narrateCompanyCaughtUp({
         companyId,
         companyName: company?.name ?? null,

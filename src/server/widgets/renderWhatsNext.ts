@@ -11,7 +11,7 @@
 // show_whats_next handoff) — they all land on this function.
 
 import { statusEvent, widgetEvent } from "@/server/contracts";
-import type { RunContext, TurnEvent } from "@/server/contracts";
+import type { RunContext, Say } from "@/server/contracts";
 import { runWhatsNext } from "@/server/procedures/registry/whatsNext";
 
 // The profile gatekeeper's read of what's thin — the weakest slots plus probe
@@ -27,15 +27,16 @@ export type WhatsNextRender =
   // opens on.
   | { kind: "profile_gate_open"; gaps: ProfileGaps };
 
-export async function* renderWhatsNext(
+export async function renderWhatsNext(
   args: RunContext & {
     sessionId: string;
+    say: Say;
     // A wrap just happened, so the user is owed a transition cue before the
     // gate's elicitation starts. Off on a cold start, where there's nothing to
     // transition FROM.
     narrateProfileSwitch: boolean;
   },
-): AsyncGenerator<TurnEvent, WhatsNextRender> {
+): Promise<WhatsNextRender> {
   const result = await runWhatsNext(args);
   if (result.kind === "profile") {
     if (args.narrateProfileSwitch) {
@@ -45,8 +46,10 @@ export async function* renderWhatsNext(
       // it sounded like being pulled away from their goal. Frame it as a
       // brief step toward matching them instead. The enrich-profile agent
       // greets right after, so this stays terse.
-      yield statusEvent(
-        "One sec — grabbing a couple quick details so I can match you well.",
+      await args.say(
+        statusEvent(
+          "One sec — grabbing a couple quick details so I can match you well.",
+        ),
       );
     }
     return {
@@ -58,11 +61,13 @@ export async function* renderWhatsNext(
     };
   }
 
-  yield widgetEvent("next_company_picker", {
-    immediate: result.options.immediate,
-    deferred: result.options.deferred,
-    backlog: result.options.backlog,
-    empty: result.empty,
-  });
+  await args.say(
+    widgetEvent("next_company_picker", {
+      immediate: result.options.immediate,
+      deferred: result.options.deferred,
+      backlog: result.options.backlog,
+      empty: result.empty,
+    }),
+  );
   return { kind: "rendered" };
 }

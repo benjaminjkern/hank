@@ -107,19 +107,12 @@ const scenario: Scenario = {
             focusedOpportunityId: null,
           },
           async () => {
-            const gen = runWalkthrough({
+            const { wrappedUp } = await runWalkthrough({
               userId: USER_ID,
               sessionId: SESSION_ID,
               userMessage,
+              say: async () => {},
             });
-            let wrappedUp = false;
-            while (true) {
-              const next = await gen.next();
-              if (next.done) {
-                wrappedUp = next.value.wrappedUp;
-                break;
-              }
-            }
             const post = await prisma.companyInteraction.findUnique({
               where: {
                 userId_companyId: {

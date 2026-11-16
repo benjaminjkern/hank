@@ -41,7 +41,7 @@ import { testScrape } from "../../src/server/platform/scrape";
 import { detectAts } from "../../src/server/platform/scrape/ats";
 import { MIN_REAL_JOBS } from "../../src/server/platform/scrape/ats/shared";
 import { probeGenericBoard } from "../../src/server/platform/scrape/generic/genericProbe";
-import { runEnrichCompaniesCollect } from "../../src/server/procedures/registry/enrichCompanies";
+import { runEnrichCompanies } from "../../src/server/procedures/registry/enrichCompanies";
 import { runReconBoard } from "../../src/server/procedures/registry/reconBoard";
 
 const APPLY = process.argv.includes("--apply");
@@ -303,7 +303,7 @@ async function rehunt(args: {
   });
   if (!session) return { kind: "skipped", why: "no active ChatSession" };
 
-  const result = await runEnrichCompaniesCollect({
+  const result = await runEnrichCompanies({
     userId: args.userId,
     sessionId: session.id,
     force: true,

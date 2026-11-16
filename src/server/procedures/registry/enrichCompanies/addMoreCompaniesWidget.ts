@@ -14,12 +14,12 @@
 // decided anything at all, which is what gates the session wrap on "Done".
 
 import { widgetEvent } from "@/server/contracts";
-import type { TurnEvent } from "@/server/contracts";
+import type { StreamEvent } from "@/server/contracts";
 
 export function addMoreCompaniesWidget(
   added: string[],
   passedCount: number,
-): TurnEvent {
+): StreamEvent {
   return widgetEvent("add_more_companies", {
     addedThisBatch: added,
     passedCount,

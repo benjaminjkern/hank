@@ -1,3 +1,4 @@
+import { sayTo } from "@/server/contracts";
 import { z } from "zod";
 
 import { runUserMessage } from "@/server/agent/runtime/runUserMessage";
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       // Enqueue, but never throw on a closed stream — once the client is gone
-      // we keep consuming runUserMessage (so its work finishes + persists) and
+      // we keep running runUserMessage (so its work finishes + persists) and
       // simply stop writing.
       const safeEnqueue = (s: string): void => {
         if (clientGone) return;
@@ -105,15 +106,16 @@ export async function POST(req: Request) {
         closeStream();
       }, MAX_RUN_MS);
       try {
-        for await (const event of runUserMessage({
+        await runUserMessage({
           userId: user.id,
           userMessage: parsed.data.message,
           attachmentIds: parsed.data.attachmentIds,
           timeZone: parsed.data.clientTimeZone,
           signal: runController.signal,
-        })) {
-          safeEnqueue(`data: ${JSON.stringify(event)}\n\n`);
-        }
+          say: sayTo((event) => {
+            safeEnqueue(`data: ${JSON.stringify(event)}\n\n`);
+          }),
+        });
       } catch (err) {
         const classified = classifyLlmError(err);
         const payload = classified
