@@ -9,8 +9,8 @@
 //
 // This lives in procedures/ rather than agent/runtime/ because it makes product
 // calls: which prompt body to run (profile intake is a derived per-turn switch,
-// not a mode), what's on screen, and that finishing profile setup brings up the
-// chooser. `runtime/` streams and persists a turn and knows none of that.
+// not a mode) and what's on screen. `runtime/` streams and persists a turn and
+// knows none of that.
 
 import { buildHankSystem } from "@/server/agent/hank";
 import { loadHankDiscoveryContext } from "@/server/agent/hank/discoveryContext";
@@ -73,16 +73,6 @@ export const runHankTurns = procedure(
       if (!turn.agentCalledTool) break;
     }
 
-    // Profile setup just finished: intake was on at entry and the memory slots
-    // are now full, which only a passing commit_profile can cause. That ends the
-    // setup sequence, and the chooser is what comes after it.
-    if (
-      !next &&
-      profileIntake &&
-      (await isProfileObviouslyEnriched(args.userId))
-    ) {
-      next = { kind: "show_whats_next" };
-    }
     return { ...(next ? { next } : {}), ...(ended ? { ended } : {}) };
   },
 );

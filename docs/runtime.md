@@ -39,7 +39,7 @@ Every user message enters through [`runUserMessage`](../src/server/agent/runtime
 
 ## The `hank` step
 
-[`runHankTurns`](../src/server/procedures/registry/chat/hankTurns.ts) loops Hank turns up to `MAX_AGENT_LOOPS` (20) so a multi-tool sequence finishes in one message (`create_jobs`, read the ids off the result, then `log_job_events`). The loop ends when Hank stops calling tools **or** a turn queued an Entry — which becomes the step's `next`. One derived read picks his prompt body: `profileIntake = !(await isProfileObviouslyEnriched(userId))`, three memory slots via Postgres, no LLM. If intake was on at entry and the slots are now full (only a passing `commit_profile` causes that), the step's `next` is `show_whats_next` — finishing setup is the end of a sequence.
+[`runHankTurns`](../src/server/procedures/registry/chat/hankTurns.ts) loops Hank turns up to `MAX_AGENT_LOOPS` (20) so a multi-tool sequence finishes in one message (`create_jobs`, read the ids off the result, then `log_job_events`). The loop ends when Hank stops calling tools **or** a turn queued an Entry — which becomes the step's `next`. One derived read picks his prompt body: `profileIntake = !(await isProfileObviouslyEnriched(userId))`, three memory slots via Postgres, no LLM. Finishing setup brings up the chooser only through `commit_profile`, a handoff that queues `show_whats_next` when its verdict passes — the slots filling up is not a signal (Hank's own `write_memory` does that mid-conversation).
 
 Under it sit two runtime helpers that know none of this: [`runHankTurn`](../src/server/agent/runtime/runHankTurn.ts) runs ONE Hank turn (resolve the key → load the transcript → stream → persist → meter) and [`runAgentTurn`](../src/server/platform/agent/runAgentTurn.ts) streams the completion and dispatches its tools. They stay domain-free by inversion: the prompt arrives as a **builder**, and what comes back is every dispatched tool's raw result plus `queued` — the one Entry a handoff tool queued, carried but never read.
 
@@ -210,7 +210,7 @@ Intake is not a runner and not a stored mode — it's the prompt body `runHankTu
 
 1. [`runConsolidateSessionMemory`](../src/server/procedures/registry/consolidateSessionMemory.ts) over the recent transcript, pushing in-chat facts into `profile.md`.
 2. [`profileEnrichmentCheckSubAgent`](../src/server/subagents/registry/profileEnrichmentCheck.ts) as the verdict gate (the pre-gate short-circuits when memory is obviously full).
-3. **Pass** → [`runCompactSession`](../src/server/procedures/registry/compactSession.ts) (step 1 already consolidated). Nothing is cleared — there's no column to clear; `runHankTurns` observes the slots are now full and names `show_whats_next` as its `next`.
+3. **Pass** → [`runCompactSession`](../src/server/procedures/registry/compactSession.ts) (step 1 already consolidated). Nothing is cleared — there's no column to clear; the tool queues `show_whats_next`, which ends Hank's turn and brings up the chooser.
 4. **Fail** → return the `missing` list + `suggestedProbes`. The result also instructs Hank to tell the user first — in one natural sentence, framed as **his own** judgment about getting good matches — that he's almost there and what he still needs, *then* re-elicit. Never "the system/a checkpoint is holding you back": hide the mechanism, not the intent.
 
 Consolidation is deliberately **not** inside `runCompactSession` — it has to run even when the session is too short to compact, and `runCommitProfile` needs post-write memory for the verdict gate that sits between the two.
