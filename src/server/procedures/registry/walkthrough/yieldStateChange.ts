@@ -1,5 +1,6 @@
 import { yieldUiEvents } from "@/server/contracts";
-import type { TurnEvent, UiEvent } from "@/server/contracts";
+import type { TurnEvent } from "@/server/contracts";
+import type { UiEvent } from "@/shared/chatStream";
 
 // Yield a deterministic state change's narration as a `pipeline_status` (so the
 // chat history records the action verbatim) BEFORE any panel events fire.

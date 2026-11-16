@@ -204,7 +204,7 @@ When the decider returns `ask_user`, the job arm hands off to collaborative chat
 
 ### applicationQuestions envelope
 
-Stored on `Job.applicationQuestions` as JSON (full type in [types.ts](../src/server/platform/scrape/types.ts)):
+Stored on `Job.applicationQuestions` as JSON (full type in [applicationQuestions.ts](../src/shared/applicationQuestions.ts)):
 
 ```ts
 | { status: "ok"; questions: ApplicationQuestion[]; coverLetter?: boolean; fetchedAt: string }

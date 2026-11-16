@@ -37,10 +37,7 @@ import { PrismaClient } from "../../../src/server/generated/prisma/client";
 import { resolveAnthropicApiKey } from "../../../src/server/platform/llm/resolveAnthropicKey";
 import { partitionApplicationForm } from "../../../src/server/procedures/registry/draftApplication/loadApplicationDeciderInput";
 import { runSubAgent } from "../../../src/server/subagents/lib/runSubAgent";
-import {
-  applicationDeciderSubAgent,
-  type DraftVerdict,
-} from "../../../src/server/subagents/registry/applicationDecider";
+import { applicationDeciderSubAgent } from "../../../src/server/subagents/registry/applicationDecider";
 
 import { runJudge, judgeCost } from "./lib/judge";
 import {
@@ -55,10 +52,11 @@ import type {
   PastCoverLetterEntry,
   PastShortAnswerEntry,
 } from "../../../src/server/entities/jobs/pastDrafts";
+import type { DraftVerdict } from "../../../src/shared/applicationDrafts";
 import type {
   ApplicationQuestion,
   ApplicationQuestionsEnvelope,
-} from "../../../src/server/platform/scrape/types";
+} from "../../../src/shared/applicationQuestions";
 
 // The two former profile notes (a "search thesis" + an "about me") are one
 // profile.md now. Fixtures still author the halves separately — they're

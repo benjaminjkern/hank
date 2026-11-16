@@ -1,11 +1,11 @@
 import { z } from "zod";
 
 import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
+import { toolError } from "@/server/platform/agent/toolError";
 import { renderShortlistBoardText } from "@/server/views/shortlistBoard";
 import { buildShortlistBoardEvents } from "@/server/views/showEvents";
 
 import { slugLookupError } from "../lib/slugLookupError";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

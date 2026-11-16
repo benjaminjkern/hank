@@ -26,13 +26,13 @@ import {
   listUnrelayedApplicationEdits,
   renderApplicationEditRelayText,
   settleRelayedApplicationEdits,
-  type ApplicationEdit,
 } from "@/server/entities/jobs/applicationDrafts";
 import {
   listUnrelayedBoardEdits,
   renderBoardEditRelayText,
   settleRelayedBoardEdits,
 } from "@/server/entities/jobs/boardStance";
+import type { ApplicationEdit } from "@/shared/applicationDrafts";
 
 import type Anthropic from "@anthropic-ai/sdk";
 

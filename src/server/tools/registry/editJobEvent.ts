@@ -4,9 +4,8 @@ import {
   getJobEventById,
   editJobEvent,
 } from "@/server/entities/jobs/jobEventEdits";
+import { toolError } from "@/server/platform/agent/toolError";
 import { parseEventDateTime, formatEventStamp } from "@/shared/utils/localTime";
-
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

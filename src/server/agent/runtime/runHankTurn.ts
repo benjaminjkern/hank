@@ -20,20 +20,23 @@ import {
   turnCalledHandoffTool,
   type HankSystemPrompt,
 } from "@/server/agent/hank";
-import {
-  runAgentTurn,
-  type DispatchedTool,
-} from "@/server/agent/runtime/runAgentTurn";
-import { applyHistoryCacheMarker } from "@/server/agent/runtime/streamingCore";
-import { captureTurn } from "@/server/agent/runTree/captureTurn";
+import { captureTurn } from "@/server/agent/runtime/captureTurn";
 import {
   appendAssistantMessage,
   appendToolResultMessage,
   loadSessionMessages,
 } from "@/server/agent/session";
-import type { RunContext, StreamEvent } from "@/server/contracts";
+import {
+  runAgentTurn,
+  type DispatchedTool,
+} from "@/server/platform/agent/runAgentTurn";
+import { applyHistoryCacheMarker } from "@/server/platform/agent/streamingCore";
 import { resolveLlmClient } from "@/server/platform/llm/resolveClient";
+import type { RunContext } from "@/server/platform/runContext";
 import { recordUsage } from "@/server/platform/usage/track";
+import type { ToolResult } from "@/server/tools/lib/types";
+import type { StreamEvent, UiEvent } from "@/shared/chatStream";
+import type { WidgetKind } from "@/shared/widgetKinds";
 
 import type Anthropic from "@anthropic-ai/sdk";
 
@@ -74,7 +77,7 @@ export type HankTurnResult = {
   calledHandoffTool: boolean;
   // Every tool this turn ran, in order, with its raw result. The caller reads
   // whatever domain signals it cares about off these.
-  dispatched: DispatchedTool[];
+  dispatched: DispatchedTool<ToolResult>[];
 };
 
 export async function* runHankTurn(
@@ -108,7 +111,7 @@ export async function* runHankTurn(
     hasPriorAssistantTurn: history.some((m) => m.role === "assistant"),
   });
 
-  const turn = yield* runAgentTurn({
+  const turn = yield* runAgentTurn<UiEvent, WidgetKind, ToolResult>({
     ...args,
     client,
     model,

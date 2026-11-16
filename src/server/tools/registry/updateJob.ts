@@ -5,10 +5,10 @@ import {
   resolveCompanyBySlug,
   resolveJobBySlug,
 } from "@/server/entities/resolveBySlug";
+import { toolError } from "@/server/platform/agent/toolError";
 import { normalizeUrlInput } from "@/shared/utils/url";
 
 import { slugLookupError } from "../lib/slugLookupError";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

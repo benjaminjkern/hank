@@ -11,8 +11,8 @@
 // says what came of it — a page that shows a stored verdict has no way to know
 // when it stopped being true.
 
-import type { RunContext } from "@/server/contracts";
 import type { ReviewFinding } from "@/server/entities/jobs/applicationReview";
+import type { RunContext } from "@/server/platform/runContext";
 import { procedure } from "@/server/procedures/lib/procedure";
 
 import { critiqueAndReviseForm, type CritiqueStop } from "./critiqueAndRevise";

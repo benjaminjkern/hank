@@ -22,7 +22,7 @@
 // Hank draft isn't reuse-eligible until the user opts it in) and re-baselines
 // proposedDrafts so a later panel edit diverges from what he actually wrote.
 
-import type { RunContext, TurnEvent } from "@/server/contracts";
+import type { TurnEvent } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import {
   persistApplicationAnswer,
@@ -31,16 +31,15 @@ import {
 import type { ApplicationReview } from "@/server/entities/jobs/applicationReview";
 import { needsQuestionsRefresh } from "@/server/entities/jobs/questionsRefresh";
 import { JobInteractionStatus } from "@/server/generated/prisma/client";
+import type { RunContext } from "@/server/platform/runContext";
 import {
   isCoverLetterQuestion,
   isProseQuestion,
-  type ApplicationQuestion,
 } from "@/server/platform/scrape/types";
 import { streamingProcedure } from "@/server/procedures/lib/procedure";
-import type {
-  ApplicationDecision,
-  DraftVerdict,
-} from "@/server/subagents/registry/applicationDecider";
+import type { ApplicationDecision } from "@/server/subagents/registry/applicationDecider";
+import type { DraftVerdict } from "@/shared/applicationDrafts";
+import type { ApplicationQuestion } from "@/shared/applicationQuestions";
 
 import { critiqueAndReviseForm, type CritiqueStop } from "./critiqueAndRevise";
 import {

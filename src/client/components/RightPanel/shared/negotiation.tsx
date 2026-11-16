@@ -20,11 +20,11 @@ import styled from "styled-components";
 
 import { useChatStore } from "@/client/chatStore";
 import { buildWidgetSubmissionMessage } from "@/client/components/Chat/widgets/types";
-import type { NegotiationState } from "@/server/views/negotiationPanel";
 // Type only — the loader beside it opens a database connection, so a VALUE
 // from that module would follow Prisma into the browser bundle.
-import type { ShortlistBoardView } from "@/server/views/shortlistBoard";
 import { BOARD_GROUP_OF_TIER } from "@/shared/shortlistBoardTiers";
+import type { NegotiationState } from "@/shared/views/negotiationPanel";
+import type { ShortlistBoardView } from "@/shared/views/shortlistBoard";
 
 // The bordered row card the negotiation panels draw.
 //

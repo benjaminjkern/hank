@@ -127,7 +127,7 @@ export const enrichCompaniesTool: ToolDef<z.infer<typeof PARSER>> = {
       next.kind === "pick"
         ? [
             {
-              kind: "next_company_picker",
+              kind: "next_company_picker" as const,
               toolUseId: `enrich_companies_${crypto.randomUUID()}`,
               payload: {
                 immediate: next.options.immediate,

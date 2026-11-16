@@ -11,7 +11,7 @@
 import { prisma } from "@/server/db/prisma";
 import { needsQuestionsRefresh } from "@/server/entities/jobs/questionsRefresh";
 import { fetchApplicationQuestions } from "@/server/platform/scrape/ats";
-import type { ApplicationQuestionsEnvelope } from "@/server/platform/scrape/types";
+import type { ApplicationQuestionsEnvelope } from "@/shared/applicationQuestions";
 
 type EnsureApplicationFormResult =
   | { status: "not_found" }

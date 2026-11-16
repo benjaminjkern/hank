@@ -9,8 +9,8 @@
 
 import { z } from "zod";
 
-import { CompanySuggestionMark } from "@/server/generated/prisma/client";
 import { setSuggestionMark } from "@/server/entities/companies/suggestionMark";
+import { CompanySuggestionMark } from "@/server/generated/prisma/client";
 import { rejectImpersonatedWrite } from "@/server/platform/admin/viewerScope";
 import { getCurrentUser } from "@/server/platform/auth/currentUser";
 import { loadDiscoveryList } from "@/server/views/discoveryList";

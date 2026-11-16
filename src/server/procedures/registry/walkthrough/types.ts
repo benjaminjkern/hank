@@ -2,7 +2,8 @@
 // it reports back. Every file in this folder takes `WalkthroughArgs`; the arms
 // return `WalkthroughResult`.
 
-import type { EntryTarget, RunContext } from "@/server/contracts";
+import type { EntryTarget } from "@/server/contracts";
+import type { RunContext } from "@/server/platform/runContext";
 
 export type WalkthroughArgs = RunContext & {
   sessionId: string;

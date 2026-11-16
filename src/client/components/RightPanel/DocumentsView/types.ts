@@ -1,4 +1,4 @@
-import type { UserDocuments } from "@/server/views/documents";
+import type { UserDocuments } from "@/shared/views/documents";
 
 export type DocumentsPayload = UserDocuments & { readOnly: boolean };
 

@@ -1,5 +1,6 @@
 // The whole right panel, loaded from a URL. Feeds the shell's first paint and
 // the popstate refetch, so a reload and a Back press land on identical state.
+// The payload type is shared/views/panelView.ts.
 //
 // Sibling of showEvents.ts rather than an arm on it: buildShowEvents derives its
 // mode from WHICH ENTITY loaded, which can't express the board or the
@@ -11,36 +12,15 @@ import {
   resolveJobBySlug,
   resolveOpportunityBySlug,
 } from "@/server/entities/resolveBySlug";
-import type { DocumentsSubPage, PanelMode } from "@/shared/panelMode";
 import type { PanelPath } from "@/shared/panelUrl";
+import type { PanelView } from "@/shared/views/panelView";
 
-import { loadApplicationView, type ApplicationView } from "./application";
-import { loadDiscoveryList, type DiscoveryListView } from "./discoveryList";
-import {
-  getFocusedCompanyView,
-  type FocusedCompanyView,
-} from "./getFocusedCompany";
-import { getFocusedJobView, type FocusedJobView } from "./getFocusedJob";
-import {
-  getFocusedOpportunityView,
-  type FocusedOpportunityView,
-} from "./getFocusedOpportunity";
-import { loadShortlistBoard, type ShortlistBoardView } from "./shortlistBoard";
-
-export type PanelView = {
-  panelMode: PanelMode;
-  company: FocusedCompanyView | null;
-  job: FocusedJobView | null;
-  opportunity: FocusedOpportunityView | null;
-  board: ShortlistBoardView | null;
-  application: ApplicationView | null;
-  discovery: DiscoveryListView | null;
-  documentsSubPage: DocumentsSubPage;
-  // Whether this address wants the panel showing. Only the dashboard has both
-  // answers (`/` stows it, `/dashboard` opens it); naming any other view IS
-  // asking to see it, so they're all true.
-  panelOpen: boolean;
-};
+import { loadApplicationView } from "./application";
+import { loadDiscoveryList } from "./discoveryList";
+import { getFocusedCompanyView } from "./getFocusedCompany";
+import { getFocusedJobView } from "./getFocusedJob";
+import { getFocusedOpportunityView } from "./getFocusedOpportunity";
+import { loadShortlistBoard } from "./shortlistBoard";
 
 const EMPTY = {
   company: null,

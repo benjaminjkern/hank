@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-import { Prisma } from "@/server/generated/prisma/client";
-import type { ShortAnswer } from "@/server/entities/jobs/types";
 import { prisma } from "@/server/db/prisma";
 import { updateJobInteraction } from "@/server/entities/jobs/updateJobInteraction";
+import { Prisma } from "@/server/generated/prisma/client";
 import { rejectImpersonatedWrite } from "@/server/platform/admin/viewerScope";
 import { getCurrentUser } from "@/server/platform/auth/currentUser";
 import { getFocusedJobView } from "@/server/views/getFocusedJob";
+import type { ShortAnswer } from "@/shared/applicationDrafts";
 
 export const dynamic = "force-dynamic";
 

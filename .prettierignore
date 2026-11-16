@@ -3,6 +3,7 @@
 out/
 build/
 src/server/generated/
+src/shared/generated/
 next-env.d.ts
 pnpm-lock.yaml
 

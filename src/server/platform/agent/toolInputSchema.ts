@@ -8,13 +8,16 @@
 
 import { z } from "zod";
 
-import type { AnyToolDef } from "./types";
 import type Anthropic from "@anthropic-ai/sdk";
 
-const cache = new WeakMap<AnyToolDef, Anthropic.Tool["input_schema"]>();
+// Just the two fields this reads, so it serves any tool contract (the loop's,
+// and the sub-agent read-tool loop's).
+type SchemaSource = { name: string; parser: z.ZodType };
+
+const cache = new WeakMap<SchemaSource, Anthropic.Tool["input_schema"]>();
 
 export function toolInputSchema(
-  tool: AnyToolDef,
+  tool: SchemaSource,
 ): Anthropic.Tool["input_schema"] {
   const hit = cache.get(tool);
   if (hit) return hit;

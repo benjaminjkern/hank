@@ -5,9 +5,9 @@
 
 import { z } from "zod";
 
-import { ProposedVerdict } from "@/server/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
+import { ProposedVerdict } from "@/server/generated/prisma/client";
 import { rejectImpersonatedWrite } from "@/server/platform/admin/viewerScope";
 import { getCurrentUser } from "@/server/platform/auth/currentUser";
 import { runReconsiderJob } from "@/server/procedures/registry/reconsiderJob";

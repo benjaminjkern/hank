@@ -19,7 +19,8 @@
 // user's row — runChat has already done that (see runChat's step 1).
 
 import { statusEvent, yieldUiEvents } from "@/server/contracts";
-import type { EntryTarget, RunContext, TurnEvent } from "@/server/contracts";
+import type { EntryTarget, TurnEvent } from "@/server/contracts";
+import type { RunContext } from "@/server/platform/runContext";
 import {
   addMoreCompaniesWidget,
   runDisambiguationResolution,

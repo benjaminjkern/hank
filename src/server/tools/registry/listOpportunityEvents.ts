@@ -5,6 +5,7 @@ import {
   opportunityEventsQuery,
 } from "@/server/entities/opportunities/listOpportunityEvents";
 import { resolveOpportunityBySlug } from "@/server/entities/resolveBySlug";
+import { toolError } from "@/server/platform/agent/toolError";
 import { formatEventStamp } from "@/shared/utils/localTime";
 
 import {
@@ -14,7 +15,6 @@ import {
   pageFooter,
 } from "../lib/paginate";
 import { slugLookupError } from "../lib/slugLookupError";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

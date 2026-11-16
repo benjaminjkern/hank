@@ -13,7 +13,7 @@
 // completion that brings up the what's-next chooser.
 
 import { appendPipelineActivity } from "@/server/agent/session";
-import type { RunContext } from "@/server/contracts";
+import type { RunContext } from "@/server/platform/runContext";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runCompactSession } from "@/server/procedures/registry/compactSession";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";

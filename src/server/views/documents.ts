@@ -1,47 +1,15 @@
-// The Documents page payload — the table-less read model behind /documents:
-// the editable narrative notes, every uploaded résumé, the drafting artifacts
-// sitting on JobInteractions, and the raw attachments. The write half (which
-// notes are editable, and saving one) is entities/narrativeDocs.ts.
+// The Documents page loader — the table-less read model behind /documents: the
+// editable narrative notes, every uploaded résumé, the drafting artifacts
+// sitting on JobInteractions, and the raw attachments. The payload types are
+// shared/views/documents.ts; the write half (which notes are editable, and
+// saving one) is entities/narrativeDocs.ts.
 
 import { prisma } from "@/server/db/prisma";
-import type { ShortAnswer } from "@/server/entities/jobs/types";
 import { readMemory } from "@/server/entities/memory/store";
 import { NARRATIVE_DOC_PATHS } from "@/server/entities/narrativeDocs";
 import { RESUME_PATH } from "@/server/entities/resume/store";
-
-export type DocumentArtifact = {
-  jobId: string;
-  jobInteractionId: string;
-  companyName: string;
-  jobTitle: string;
-  status: string;
-  coverLetter: string | null;
-  coverLetterReuse: boolean | null;
-  shortAnswers: ShortAnswer[] | null;
-  shortAnswersReuse: (boolean | null)[] | null;
-  updatedAt: string;
-};
-
-export type UserDocuments = {
-  docs: {
-    profile: string;
-    frequentQuestions: string;
-    // The user's background — the merged contents of every résumé below, plus
-    // whatever they've told Hank. Editable here like any other note.
-    resume: string;
-  };
-  // The uploaded files themselves, newest first. Several is normal: each one was
-  // merged into `docs.resume`, and they stay downloadable.
-  resumes: Array<{ id: string; fileName: string; uploadedAt: string }>;
-  artifacts: DocumentArtifact[];
-  attachments: Array<{
-    id: string;
-    fileName: string;
-    fileSize: number;
-    mediaKind: string;
-    createdAt: string;
-  }>;
-};
+import type { ShortAnswer } from "@/shared/applicationDrafts";
+import type { DocumentArtifact, UserDocuments } from "@/shared/views/documents";
 
 export async function loadUserDocuments(
   userId: string,

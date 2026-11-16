@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 
 import { useChatStore, type ApiKeyBlockerReason } from "@/client/chatStore";
-import type { PanelView } from "@/server/views/panelView";
+import type { PanelView } from "@/shared/views/panelView";
 
 // Module scope = once per document load, which is exactly the lifetime the
 // server-rendered seed is valid for. A real navigation re-imports the module.

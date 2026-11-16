@@ -14,7 +14,7 @@
 // /admin/runs. With no trace parent (a run the chat loop drives itself, scripts)
 // the span is a no-op — see platform/trace/span.ts.
 
-import type { RunContext } from "@/server/contracts";
+import type { RunContext } from "@/server/platform/runContext";
 import { openTraceSpan } from "@/server/platform/trace/span";
 
 type ProcedureOptions<R> = {

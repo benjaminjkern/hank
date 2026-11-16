@@ -1,9 +1,9 @@
 import { z } from "zod";
 
+import { toolError } from "@/server/platform/agent/toolError";
 import { buildApplicationEvents } from "@/server/views/showEvents";
 
 import { resolveJobArg } from "../lib/resolveEntityArg";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

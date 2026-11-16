@@ -11,7 +11,8 @@
 // show_whats_next handoff) — they all land on this function.
 
 import { statusEvent, widgetEvent } from "@/server/contracts";
-import type { RunContext, TurnEvent } from "@/server/contracts";
+import type { TurnEvent } from "@/server/contracts";
+import type { RunContext } from "@/server/platform/runContext";
 import { runWhatsNext } from "@/server/procedures/registry/whatsNext";
 
 // The profile gatekeeper's read of what's thin — the weakest slots plus probe

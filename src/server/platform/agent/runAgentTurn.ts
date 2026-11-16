@@ -23,28 +23,29 @@
 //   - Sub-agent trace fanout (sub-agents called by tool handlers emit their
 //     own traces via ctx.trace; this helper forwards them as-is).
 
+import { newRunTreeId } from "@/server/platform/agent/ids";
 import {
   HIDDEN_TOOLS,
   isTransientStreamError,
   emptyAbortedMessage,
-} from "@/server/agent/runtime/streamingCore";
-import { newRunTreeId } from "@/server/agent/runTree/ids";
+} from "@/server/platform/agent/streamingCore";
+import type {
+  AgentToolDef,
+  AgentToolResult,
+  AgentToolWidget,
+  ToolContext,
+} from "@/server/platform/agent/tool";
+import { toolErrorContent } from "@/server/platform/agent/toolError";
+import { toolInputSchema } from "@/server/platform/agent/toolInputSchema";
+import type { Reasoning } from "@/server/platform/llm/reasoning";
+import type { RunContext } from "@/server/platform/runContext";
 import {
   createTraceAccumulator,
   type TraceMap,
-} from "@/server/agent/runTree/traceAccumulator";
-import type { RunContext, StreamEvent } from "@/server/contracts";
-import type { Reasoning } from "@/server/platform/llm/reasoning";
+} from "@/server/platform/trace/traceAccumulator";
 import type { TraceEvent } from "@/server/platform/trace/types";
 import { withCaptureContext } from "@/server/platform/usage/captureContext";
-import { toolAffectsViewedState } from "@/server/tools/lib";
-import { toolInputSchema } from "@/server/tools/lib/inputSchema";
-import { toolErrorContent } from "@/server/tools/lib/toolError";
-import type {
-  AnyToolDef,
-  ToolContext,
-  ToolResult,
-} from "@/server/tools/lib/types";
+import type { StreamEventOf } from "@/shared/chatStream";
 import { isUserAbortError } from "@/shared/utils/abort";
 
 import type Anthropic from "@anthropic-ai/sdk";
@@ -54,9 +55,9 @@ import type Anthropic from "@anthropic-ai/sdk";
 // entryTarget, a mutation's endedCompanyId — and this file stays ignorant of
 // both. `result` is absent when dispatch never reached the handler (unknown tool
 // / input that failed its parser); the error is already in `toolResults`.
-export type DispatchedTool = { name: string; result?: ToolResult };
+export type DispatchedTool<TResult> = { name: string; result?: TResult };
 
-export type AgentTurnResult = {
+export type AgentTurnResult<TResult> = {
   stopReason: string | null;
   // Assistant content blocks (text + tool_use). Caller persists these as the
   // next assistant ChatMessage row.
@@ -94,7 +95,7 @@ export type AgentTurnResult = {
   // Every tool this turn dispatched, in order, with its raw result. The domain
   // layer folds these into whatever it means (last handoff wins; first company
   // to end wins) — see procedures/registry/chat/runChatTurn.ts.
-  dispatched: DispatchedTool[];
+  dispatched: DispatchedTool<TResult>[];
   // True if the turn was cut off cleanly mid-stream — a user Stop abort or a
   // transient server↔Anthropic socket drop. Caller persists the partial +
   // surfaces the "interrupted" pill, and ends the turn without an error.
@@ -131,25 +132,36 @@ export type AgentTurnResult = {
   traces: TraceMap | null;
 };
 
-type AgentTurnArgs = RunContext & {
-  sessionId: string;
-  client: Anthropic;
-  model: string;
-  maxTokens: number;
-  // Declared by the agent this turn runs (HANK_REASONING). Only "thinking" means
-  // anything here — a turn with tools and an "auto" tool_choice has nowhere to
-  // put a scratchpad.
-  reasoning: Reasoning;
-  system: string | Anthropic.TextBlockParam[];
-  tools: AnyToolDef[];
-  // Conversation messages to send. Caller is responsible for cache markers
-  // (applyHistoryCacheMarker) and for ensuring the final message is USER.
-  history: Anthropic.MessageParam[];
-};
+type AgentTurnArgs<TResult extends AgentToolResult<unknown, string>> =
+  RunContext & {
+    sessionId: string;
+    client: Anthropic;
+    model: string;
+    maxTokens: number;
+    // Declared by the agent this turn runs (HANK_REASONING). Only "thinking" means
+    // anything here — a turn with tools and an "auto" tool_choice has nowhere to
+    // put a scratchpad.
+    reasoning: Reasoning;
+    system: string | Anthropic.TextBlockParam[];
+    tools: AgentToolDef<unknown, TResult>[];
+    // Conversation messages to send. Caller is responsible for cache markers
+    // (applyHistoryCacheMarker) and for ensuring the final message is USER.
+    history: Anthropic.MessageParam[];
+  };
 
-export async function* runAgentTurn(
-  args: AgentTurnArgs,
-): AsyncGenerator<StreamEvent, AgentTurnResult> {
+// Generic over what the loop carries but never reads: the panel events (`TUi`)
+// and widget kinds (`TKind`) a tool emits, and the tools' full result type. The
+// loop reads `content`, `error`, `events`, `widgets` and `statusLines` off a
+// result (AgentToolResult) and hands every result back whole in `dispatched`,
+// so whatever else the product puts on one reaches the caller untouched.
+export async function* runAgentTurn<
+  TUi,
+  TKind extends string,
+  TResult extends AgentToolResult<TUi, TKind>,
+>(
+  args: AgentTurnArgs<TResult>,
+): AsyncGenerator<StreamEventOf<TUi, TKind>, AgentTurnResult<TResult>> {
+  type Event = StreamEventOf<TUi, TKind>;
   const toolDefs = args.tools.map((t) => ({
     name: t.name,
     description: t.description,
@@ -169,7 +181,7 @@ export async function* runAgentTurn(
   // row it's writing into as it moves between them. Deduped: re-announcing the
   // row already open is a no-op, so call it freely before any group of events.
   let openRowId: string | null = null;
-  function* inRow(messageId: string): Generator<StreamEvent> {
+  function* inRow(messageId: string): Generator<Event> {
     if (openRowId === messageId) return;
     openRowId = messageId;
     yield { type: "message_start", messageId };
@@ -188,7 +200,7 @@ export async function* runAgentTurn(
     args.reasoning.mode === "thinking" ? args.reasoning.budget : null;
   // Run-tree capture: the exact params this turn sends. Caller merges the
   // system-prompt hash/volatile in and stores it on the TokenUsage row.
-  const requestParams: AgentTurnResult["requestParams"] = {
+  const requestParams: AgentTurnResult<TResult>["requestParams"] = {
     model: args.model,
     maxTokens: args.maxTokens,
     thinkingBudget,
@@ -313,17 +325,16 @@ export async function* runAgentTurn(
   // when they do, the order matters for the replay invariant (tool_results
   // must match tool_use order).
   const toolByName = new Map(args.tools.map((t) => [t.name, t] as const));
-  const toolResults: AgentTurnResult["toolResults"] = [];
-  const emittedWidgets: AgentTurnResult["emittedWidgets"] = [];
+  const toolResults: AgentTurnResult<TResult>["toolResults"] = [];
+  const emittedWidgets: AgentTurnResult<TResult>["emittedWidgets"] = [];
   const emittedStatusLines: string[] = [];
-  const dispatched: DispatchedTool[] = [];
+  const dispatched: DispatchedTool<TResult>[] = [];
   for (const tu of toolUses) {
     const hidden = HIDDEN_TOOLS.has(tu.name);
     let content = "";
-    // Typed off the tool contract rather than the domain: whatever a handler
-    // put in `events`, relayed untouched.
-    let uiEvents: NonNullable<ToolResult["events"]> = [];
-    let widgets: { kind: string; toolUseId: string; payload: unknown }[] = [];
+    // Whatever a handler put in `events` / `widgets`, relayed untouched.
+    let uiEvents: TUi[] = [];
+    let widgets: AgentToolWidget<TKind>[] = [];
     let statusLines: string[] = [];
     let isError = false;
     // One of the two places a RunContext is assembled (the other is
@@ -426,11 +437,9 @@ export async function* runAgentTurn(
       ...(isError ? { is_error: true } : {}),
     });
     if (!hidden) {
-      // Prefer the pipeline-local tool's flag; fall back to the global
-      // registry for tools shared with non-pipeline code paths (rare).
-      const affectsViewedState =
-        !isError &&
-        (tool?.affectsViewedState ?? toolAffectsViewedState(tu.name));
+      // Unset counts as true (see AgentToolDef.affectsViewedState). A tool that
+      // wasn't found never gets here without isError.
+      const affectsViewedState = !isError && (tool?.affectsViewedState ?? true);
       yield {
         type: "tool_use_complete",
         toolUseId: tu.id,
@@ -450,7 +459,7 @@ export async function* runAgentTurn(
         yield {
           type: "pipeline_widget",
           toolUseId: w.toolUseId,
-          kind: w.kind as never,
+          kind: w.kind,
           payload: w.payload,
         };
       }

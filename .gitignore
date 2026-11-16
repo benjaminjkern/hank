@@ -42,6 +42,7 @@ yarn-error.log*
 next-env.d.ts
 
 /src/server/generated/prisma
+/src/shared/generated
 
 # Claude Code local state (worktrees, plans, settings)
 .claude/

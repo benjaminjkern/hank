@@ -3,11 +3,9 @@ import { z } from "zod";
 import { loadMergedQuestions } from "@/server/entities/jobs/applicationQuestions";
 import { needsQuestionsRefresh } from "@/server/entities/jobs/questionsRefresh";
 import { ensureApplicationForm } from "@/server/procedures/registry/draftApplication/ensureApplicationForm";
-import {
-  loadApplicationView,
-  type ApplicationItemStatus,
-} from "@/server/views/application";
+import { loadApplicationView } from "@/server/views/application";
 import { isStockItem } from "@/shared/applicationItem";
+import type { ApplicationItemStatus } from "@/shared/views/application";
 
 import { resolveJobArg } from "../lib/resolveEntityArg";
 

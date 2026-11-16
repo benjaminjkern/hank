@@ -7,14 +7,14 @@
 // exact request (skeleton + volatile) and see the params the turn actually used.
 
 import type { HankSystemPrompt } from "@/server/agent/hank";
-import type { AgentTurnResult } from "@/server/agent/runtime/runAgentTurn";
 import type { Prisma } from "@/server/generated/prisma/client";
+import type { AgentTurnResult } from "@/server/platform/agent/runAgentTurn";
 import { upsertPromptSnapshot } from "@/server/platform/usage/promptSnapshot";
 
 export async function captureTurn(
   flow: string,
   sys: HankSystemPrompt,
-  turn: AgentTurnResult,
+  turn: AgentTurnResult<unknown>,
 ): Promise<{
   systemPromptHash: string;
   requestParams: Prisma.InputJsonValue;

@@ -1,9 +1,9 @@
 import { z } from "zod";
 
 import { recommendJobForDeletion } from "@/server/entities/jobs/recommendJobForDeletion";
+import { toolError } from "@/server/platform/agent/toolError";
 
 import { resolveJobArg } from "../lib/resolveEntityArg";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

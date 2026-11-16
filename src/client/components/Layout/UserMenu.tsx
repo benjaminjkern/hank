@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 
-import { signOutAction } from "@/server/platform/auth/actions";
+import { signOutAction } from "@/app/actions";
 import { initial } from "@/shared/utils/text";
 
 import type { TopBarUser } from "./TopBar";

@@ -3,7 +3,7 @@
 // ATS form read stays trusted), shared by view_application_questions and the
 // draft-application procedure.
 
-import type { ApplicationQuestionsEnvelope } from "@/server/platform/scrape/types";
+import type { ApplicationQuestionsEnvelope } from "@/shared/applicationQuestions";
 
 // Refetch an ATS questions {status: "error"} envelope after this many ms.
 const QUESTIONS_ERROR_REFRESH_MS = 24 * 60 * 60 * 1000;

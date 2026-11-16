@@ -1,9 +1,8 @@
 import { z } from "zod";
 
+import { toolError } from "@/server/platform/agent/toolError";
 import { buildDiscoveryEvents } from "@/server/views/showEvents";
 import { formatFocusRefToken } from "@/shared/focusRefToken";
-
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

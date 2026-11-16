@@ -2,9 +2,9 @@ import { z } from "zod";
 
 import { prisma } from "@/server/db/prisma";
 import { resolveJobBySlug } from "@/server/entities/resolveBySlug";
+import { toolError } from "@/server/platform/agent/toolError";
 
 import { slugLookupError } from "../lib/slugLookupError";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

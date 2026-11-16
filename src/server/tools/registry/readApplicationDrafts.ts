@@ -1,13 +1,11 @@
 import { z } from "zod";
 
-import {
-  loadApplicationView,
-  type ApplicationItemStatus,
-} from "@/server/views/application";
+import { toolError } from "@/server/platform/agent/toolError";
+import { loadApplicationView } from "@/server/views/application";
 import { isStockItem } from "@/shared/applicationItem";
+import type { ApplicationItemStatus } from "@/shared/views/application";
 
 import { resolveJobArg } from "../lib/resolveEntityArg";
-import { toolError } from "../lib/toolError";
 
 import type { ToolDef } from "../lib/types";
 

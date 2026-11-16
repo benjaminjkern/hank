@@ -7,8 +7,7 @@ import { useChatStore } from "@/client/chatStore";
 import type {
   ApplicationQuestion,
   ApplicationQuestionsEnvelope,
-} from "@/server/platform/scrape/types";
-import type { FocusedJobView } from "@/server/views/getFocusedJob";
+} from "@/shared/applicationQuestions";
 import { formatJobRefToken } from "@/shared/jobRefToken";
 import {
   jobStatusColor,
@@ -17,6 +16,7 @@ import {
 } from "@/shared/statusColors";
 import { relativeTime } from "@/shared/utils/date";
 import { nowMs } from "@/shared/utils/now";
+import type { FocusedJobView } from "@/shared/views/getFocusedJob";
 
 import {
   Section,

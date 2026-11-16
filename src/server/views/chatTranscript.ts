@@ -1,104 +1,28 @@
-// The chat panel's transcript — one page of a session's persisted ChatMessage
-// rows, converted from model-shaped content blocks into the segments the chat
-// renders. Feeds GET /api/session (first load, reconcile, and "load older");
-// the client imports these types and extends them with what only a live stream
-// carries.
+// The chat panel's transcript loader — one page of a session's persisted
+// ChatMessage rows, converted from model-shaped content blocks into the segments
+// the chat renders. Feeds GET /api/session (first load, reconcile, and "load
+// older"). The payload types are shared/views/chatTranscript.ts.
 
 import { prisma } from "@/server/db/prisma";
 import { Role } from "@/server/generated/prisma/client";
 import type { Prisma } from "@/server/generated/prisma/client";
+import { HIDDEN_TOOLS } from "@/server/platform/agent/streamingCore";
 import { listAttachmentsForMessages } from "@/server/platform/storage/attachments";
 import { isRecord } from "@/shared/utils/guards";
-
-export type AttachmentView = {
-  attachmentId: string;
-  fileName: string;
-  mediaKind: string;
-};
-
-export type ToolSegment = {
-  kind: "tool";
-  id: string;
-  name: string;
-  input: unknown;
-  status: "pending" | "done" | "error";
-  result?: string;
-  // Nested sub-agent activity for this tool, populated from the
-  // `ChatMessage.traces` JSON column. Same Segment[] shape (text + tool),
-  // so the renderer recurses naturally. Absent for leaf tools (no
-  // sub-agent activity captured).
-  children?: Segment[];
-};
-
-export type TextSegment = { kind: "text"; text: string };
-
-// UI-only segments emitted by the deterministic pipeline state machine, not
-// by the LLM. Persisted in ChatMessage.content as `pipeline_status` /
-// `pipeline_widget` blocks. On the model side, loadSessionMessages RENDERS
-// these to plain text on replay (Anthropic rejects the raw block types) so
-// Hank remembers what it showed; this UI path renders them distinctly from
-// regular text instead — status lines as a chip/divider, widgets via
-// PipelineWidgetSlot from message history (so they survive refresh without
-// the synthetic-tool_use trick).
-export type StatusSegment = { kind: "status"; text: string };
-export type WidgetSegment = {
-  kind: "widget";
-  toolUseId: string;
-  widgetKind: string;
-  payload: unknown;
-};
-// A run that threw. Persisted as a `run_error` block by runUserMessage; renders
-// as a collapsed "something went wrong" row that expands to `detail`.
-export type ErrorSegment = { kind: "error"; detail: string };
-
-export type Segment =
-  TextSegment | ToolSegment | StatusSegment | WidgetSegment | ErrorSegment;
-
-// One negotiation-panel edit that rode along with a user message (the
-// `panel_edits` snapshot block) — rendered as an attachment-style chip.
-export type PanelEditView = {
-  title: string;
-  companyName: string | null;
-  verdict: string;
-};
-
-export type MessageView = {
-  id: string;
-  role: "user" | "assistant";
-  createdAt: string;
-  segments: Segment[];
-  attachments?: AttachmentView[];
-  panelEdits?: PanelEditView[];
-  // True when this assistant turn was cut off (Stop, a dropped socket, or a
-  // mid-stream fault). Drives the "interrupted" pill in the chat UI. Always
-  // undefined on user rows.
-  stoppedByUser?: boolean;
-};
-
-export type ChatTranscriptPage = {
-  messages: MessageView[];
-  // Older rows exist before the first message on this page.
-  hasMore: boolean;
-  // The request named a valid `before` cursor — a "load older" page rather
-  // than the session's newest rows.
-  isPaging: boolean;
-};
+import type {
+  AttachmentView,
+  ChatTranscriptPage,
+  MessageView,
+  PanelEditView,
+  Segment,
+  ToolSegment,
+} from "@/shared/views/chatTranscript";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
 
 // Tool names whose tool_use/tool_result blocks are filtered out before
 // reaching the UI. They remain in the DB and in the model's replay history.
-// Kept in sync with HIDDEN_TOOLS in src/server/agent/runtime/streamingCore.ts
-// (a view may not import agent runtime code).
-//
-// Currently empty — every tool surface is visible, with sub-agent-bearing
-// tools rendered as expandable chips so the user can see what's happening
-// inside (see docs/sub-agents.md → Surfacing sub-agent activity). The set
-// is kept as a mechanism for a future tool that genuinely warrants
-// suppression; don't delete it, just leave it empty.
-const HIDDEN_TOOLS = new Set<string>();
-
 // `before` (an ISO timestamp) and `limit` are the raw query-string values; an
 // unparseable `before` reads as no cursor, and `limit` clamps to 1…MAX_LIMIT.
 export async function loadChatTranscriptPage(

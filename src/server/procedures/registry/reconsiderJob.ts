@@ -20,7 +20,6 @@
 // Rows closed by an EARLIER round are decided and off the board entirely —
 // undoing one of those is a repair (update_job_interaction), not a board move.
 
-import type { RunContext } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { logJobEvent } from "@/server/entities/jobs/logJobEvents";
 import {
@@ -33,6 +32,7 @@ import {
   JobInteractionStatus,
   ProposedVerdict,
 } from "@/server/generated/prisma/client";
+import type { RunContext } from "@/server/platform/runContext";
 import { procedure } from "@/server/procedures/lib/procedure";
 import {
   runEnrichJobBody,

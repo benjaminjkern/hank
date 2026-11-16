@@ -20,8 +20,6 @@
 
 import { toolErrorMarker, type ToolErrorCode } from "@/shared/toolErrorMarker";
 
-import type { ToolResult } from "./types";
-
 export type ToolError = {
   code: ToolErrorCode;
   // Human-readable, LLM-facing. Keep the docs/tools.md convention: name what was
@@ -47,12 +45,13 @@ export function toolErrorContent(
 
 // The canonical error result. Tool handlers `return toolError(code, msg, hint)`.
 // Rare errors that also need to emit events/widgets can spread:
-// `{ ...toolError(...), events }`.
+// `{ ...toolError(...), events }`. Typed as just the two fields so it fits any
+// product's result type.
 export function toolError(
   code: ToolErrorCode,
   message: string,
   dedupHint: string,
-): ToolResult {
+): { content: string; error: ToolError } {
   return {
     content: toolErrorContent(code, message, dedupHint),
     error: { code, message, ...(dedupHint ? { dedupHint } : {}) },

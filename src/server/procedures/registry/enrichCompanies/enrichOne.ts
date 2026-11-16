@@ -11,8 +11,8 @@
 // (`scrape_jobs_for_company`, or the walkthrough on entry). Folding them
 // together is what made five near-identical enrich paths drift apart.
 
-import type { RunContext } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
+import type { RunContext } from "@/server/platform/runContext";
 import { runReconBoard } from "@/server/procedures/registry/reconBoard";
 import { runVerifyCompanyLogo } from "@/server/procedures/registry/verifyCompanyLogo";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";

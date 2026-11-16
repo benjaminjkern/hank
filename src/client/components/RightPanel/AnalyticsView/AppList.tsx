@@ -2,8 +2,8 @@
 
 import styled from "styled-components";
 
-import type { Application } from "@/server/views/analytics";
 import { statusColor, statusLabel } from "@/shared/statusColors";
+import type { Application } from "@/shared/views/analytics";
 
 import { ShowMoreToggle } from "../shared/ShowMoreToggle";
 import { useExpandable } from "../shared/useExpandable";

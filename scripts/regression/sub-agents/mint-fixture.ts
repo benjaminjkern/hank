@@ -27,11 +27,12 @@ import {
   PrismaClient,
   JobInteractionStatus,
 } from "../../../src/server/generated/prisma/client";
-import {
-  isStockFieldType,
-  type ApplicationQuestion,
-  type ApplicationQuestionsEnvelope,
-} from "../../../src/server/platform/scrape/types";
+import { isStockFieldType } from "../../../src/server/platform/scrape/types";
+
+import type {
+  ApplicationQuestion,
+  ApplicationQuestionsEnvelope,
+} from "../../../src/shared/applicationQuestions";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });

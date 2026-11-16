@@ -1,6 +1,6 @@
 // The collapsed-row summaries for one job's drafted artifacts.
 
-import type { DocumentArtifact } from "@/server/views/documents";
+import type { DocumentArtifact } from "@/shared/views/documents";
 
 import { effectiveReuse } from "../shared/applicationArtifacts";
 

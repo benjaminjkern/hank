@@ -3,9 +3,15 @@
 import { create } from "zustand";
 
 import { reportClientEvent } from "@/client/clientEvents";
-import type { LoopEvent } from "@/server/contracts";
-import type { ShortAnswer } from "@/server/entities/jobs/types";
-import type { ApplicationView } from "@/server/views/application";
+import type { ShortAnswer } from "@/shared/applicationDrafts";
+import type { LoopEvent } from "@/shared/chatStream";
+import { withImpersonate } from "@/shared/impersonation";
+import type {
+  DocumentsSubPage,
+  NegotiationPanel,
+  PanelMode,
+} from "@/shared/panelMode";
+import type { ApplicationView } from "@/shared/views/application";
 import type {
   AttachmentView,
   ErrorSegment,
@@ -15,7 +21,7 @@ import type {
   TextSegment,
   ToolSegment as TranscriptToolSegment,
   WidgetSegment,
-} from "@/server/views/chatTranscript";
+} from "@/shared/views/chatTranscript";
 import type {
   DashboardBlockedCompany,
   DashboardClosedCompany,
@@ -24,27 +30,21 @@ import type {
   DashboardOpportunityJob,
   DashboardPausedCompany,
   DashboardView,
-} from "@/server/views/dashboard";
-import type { DiscoveryListView } from "@/server/views/discoveryList";
+} from "@/shared/views/dashboard";
+import type { DiscoveryListView } from "@/shared/views/discoveryList";
 import type {
   CompanyJobView,
   FocusedCompanyView as ServerFocusedCompanyView,
-} from "@/server/views/getFocusedCompany";
-import type { FocusedJobView as ServerFocusedJobView } from "@/server/views/getFocusedJob";
-import type { FocusedOpportunityView as ServerFocusedOpportunityView } from "@/server/views/getFocusedOpportunity";
-import type { PanelView } from "@/server/views/panelView";
-import type { ShortlistBoardView } from "@/server/views/shortlistBoard";
-import { withImpersonate } from "@/shared/impersonation";
-import type {
-  DocumentsSubPage,
-  NegotiationPanel,
-  PanelMode,
-} from "@/shared/panelMode";
+} from "@/shared/views/getFocusedCompany";
+import type { FocusedJobView as ServerFocusedJobView } from "@/shared/views/getFocusedJob";
+import type { FocusedOpportunityView as ServerFocusedOpportunityView } from "@/shared/views/getFocusedOpportunity";
+import type { PanelView } from "@/shared/views/panelView";
+import type { ShortlistBoardView } from "@/shared/views/shortlistBoard";
 
 export type { CompanyJobView };
 
 // The chat's message shapes are the persisted transcript's
-// (server/views/chatTranscript.ts), widened by what only exists client-side.
+// (shared/views/chatTranscript.ts), widened by what only exists client-side.
 // An `ErrorSegment` is also pushed live off the SSE `error` event, so the
 // reconcile the following `done` triggers finds the same segment instead of
 // replacing it away.
@@ -115,7 +115,7 @@ export type FocusedCompanyView = ServerFocusedCompanyView | null;
 type FocusedJobView = ServerFocusedJobView | null;
 type FocusedOpportunityView = ServerFocusedOpportunityView | null;
 
-// The dashboard payload is server/views/dashboard.ts's, re-exported so panel
+// The dashboard payload is shared/views/dashboard.ts's, re-exported so panel
 // imports keep one source.
 export type {
   DashboardBlockedCompany,

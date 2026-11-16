@@ -8,8 +8,8 @@
 // back to the company-name monogram. Persisting the verdict is the caller's own
 // enrichCompanies/applyLogoVerdict.ts.
 
-import type { RunContext } from "@/server/contracts";
 import { assertPublicUrl } from "@/server/platform/net/assertPublicUrl";
+import type { RunContext } from "@/server/platform/runContext";
 import { traceText } from "@/server/platform/trace/traceText";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";

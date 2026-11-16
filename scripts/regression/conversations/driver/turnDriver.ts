@@ -11,7 +11,7 @@
 // clearActiveRun, so the next turn never trips the ALREADY_STREAMING guard.
 
 import { runUserMessage } from "@/server/agent/runtime/runUserMessage";
-import type { UiEvent } from "@/server/contracts";
+import type { UiEvent } from "@/shared/chatStream";
 import type { WidgetKind } from "@/shared/widgetKinds";
 
 import { resolvePanelHint } from "./panelHint";

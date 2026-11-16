@@ -4,10 +4,6 @@ import { useState } from "react";
 import styled from "styled-components";
 
 import { useChatStore } from "@/client/chatStore";
-import type {
-  FocusedOpportunityView,
-  OpportunityJobView,
-} from "@/server/views/getFocusedOpportunity";
 import {
   statusLabel,
   jobStatusColor,
@@ -16,6 +12,10 @@ import {
 } from "@/shared/statusColors";
 import { relativeTime } from "@/shared/utils/date";
 import { nowMs } from "@/shared/utils/now";
+import type {
+  FocusedOpportunityView,
+  OpportunityJobView,
+} from "@/shared/views/getFocusedOpportunity";
 
 import { ContactCard } from "./shared/ContactCard";
 import {

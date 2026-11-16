@@ -1,15 +1,14 @@
+import type {
+  ApplicationQuestion,
+  ApplicationQuestionsEnvelope,
+} from "@/shared/applicationQuestions";
 import { isRecord } from "@/shared/utils/guards";
 import { decodeEntities, htmlToText } from "@/shared/utils/html";
 import { titleCaseSlug } from "@/shared/utils/text";
 
 import { fetchText, rawAttrs, type AtsProviderModule } from "../shared";
 
-import type {
-  ApplicationQuestion,
-  ApplicationQuestionsEnvelope,
-  ScrapedCompany,
-  ScrapedJob,
-} from "../../types";
+import type { ScrapedCompany, ScrapedJob } from "../../types";
 
 const GREENHOUSE_RE =
   /^https?:\/\/(?:job-boards|boards)\.greenhouse\.io\/([^/?#]+)/i;

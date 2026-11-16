@@ -19,10 +19,10 @@
 // name is deliberately absent — the caller resolved it by slug and already has
 // it.
 
-import type { RunContext, UiEvent } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { markCompanyPostFilter } from "@/server/entities/companies/markCompanyStatus";
 import { CompanyStatus } from "@/server/generated/prisma/client";
+import type { RunContext } from "@/server/platform/runContext";
 import type { ScrapeFailureKind } from "@/server/platform/scrape/types";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runPreScan } from "@/server/procedures/registry/preScan";
@@ -30,6 +30,7 @@ import { runReconBoard } from "@/server/procedures/registry/reconBoard";
 import type { ReconBoardResult } from "@/server/procedures/registry/reconBoard";
 import { runSyncCompanyBoard } from "@/server/procedures/registry/syncCompanyBoard";
 import { buildShowEvents } from "@/server/views/showEvents";
+import type { UiEvent } from "@/shared/chatStream";
 
 const TIMEOUT_MS = 90_000;
 // Recon's own budget, spent OUTSIDE the scrape's. It's an LLM loop with a

@@ -17,13 +17,13 @@ import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 
 import { useChatStore } from "@/client/chatStore";
+import { wasStockItem } from "@/shared/applicationItem";
 import type {
   ApplicationItem,
   ApplicationItemStatus,
   ApplicationView as ApplicationViewPayload,
   FindingTone,
-} from "@/server/views/application";
-import { wasStockItem } from "@/shared/applicationItem";
+} from "@/shared/views/application";
 
 import {
   ConfirmRemoveButton,

@@ -18,7 +18,6 @@
 // records a learned board reader but never AUTHORS one — authoring costs an LLM
 // call, which is reconBoard's job.
 
-import type { RunContext } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { reconOnCooldown } from "@/server/entities/boardReaders/readerHealth";
 import {
@@ -27,6 +26,7 @@ import {
 } from "@/server/entities/boardReaders/recordReaderRun";
 import { upsertScrapedJobs } from "@/server/entities/jobs/upsertScrapedJobs";
 import { BoardReaderOrigin } from "@/server/generated/prisma/client";
+import type { RunContext } from "@/server/platform/runContext";
 import { scrapeUrl } from "@/server/platform/scrape";
 import type { BoardRecipe } from "@/server/platform/scrape/recipe/types";
 import { isLearnedSource } from "@/server/platform/scrape/types";

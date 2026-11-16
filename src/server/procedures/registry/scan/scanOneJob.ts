@@ -2,13 +2,13 @@
 // then run the per-user match. Enrichment is idempotent — an already-enriched Job
 // short-circuits pass 1, which is what makes a rate-limited run cheap to resume.
 
-import type { RunContext } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import {
   ROLE_ATTR_SELECT,
   toRoleAttrs,
 } from "@/server/entities/jobs/roleAttrs";
 import { readMemory } from "@/server/entities/memory/store";
+import type { RunContext } from "@/server/platform/runContext";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import { enrichJobSubAgent } from "@/server/subagents/registry/enrichJob";
 import { scanJobSubAgent } from "@/server/subagents/registry/scanJob";

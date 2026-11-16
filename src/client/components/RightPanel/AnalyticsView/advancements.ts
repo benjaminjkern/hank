@@ -4,7 +4,7 @@
 import type {
   Advancement,
   AdvancementCategory,
-} from "@/server/views/analytics";
+} from "@/shared/views/analytics";
 
 import type { DefaultTheme } from "styled-components";
 

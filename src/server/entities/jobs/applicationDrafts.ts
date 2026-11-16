@@ -13,6 +13,11 @@
 import { bulkUpdate } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
 import { JobInteractionStatus, Prisma } from "@/server/generated/prisma/client";
+import type {
+  ApplicationEdit,
+  DraftAuthor,
+  ShortAnswer,
+} from "@/shared/applicationDrafts";
 import { diffWords, renderWordDiff, type WordDiff } from "@/shared/utils/diff";
 import { nowDate } from "@/shared/utils/now";
 import { normalizeForCompare } from "@/shared/utils/text";
@@ -29,8 +34,6 @@ import {
   readStoredUserQuestions,
   removedSinceRelayed,
 } from "./userAddedQuestions";
-
-import type { ShortAnswer } from "./types";
 
 export type ProposedDrafts = {
   coverLetter: string | null;
@@ -60,12 +63,6 @@ export const DRAFTED_ROW_SELECT = {
   proposedDrafts: true,
   relayedDrafts: true,
 } as const;
-
-// Whose words an item currently holds. Nothing records this: the live text
-// either matches what Hank wrote or it doesn't, and only his own writes move
-// that baseline. So putting his wording back makes it his again — which is the
-// honest answer, since it IS his again.
-export type DraftAuthor = "hank" | "user";
 
 // Null when there's nothing written to attribute.
 export function authorFor(
@@ -165,18 +162,6 @@ export function isUserOwned(
 ): boolean {
   return authorFor(row, item) === "user";
 }
-
-export type ApplicationEdit = {
-  itemId: string;
-  // "Cover letter", or the question as the form asks it.
-  label: string;
-  // "wrote" — nothing was there; "revised" — Hank's version changed;
-  // "cleared" — the user emptied it; "added" — the user described a question
-  // the scrape missed, which is news even with no answer under it yet;
-  // "removed" — they took one of their own back off the form.
-  change: "wrote" | "revised" | "cleared" | "added" | "removed";
-  diff: WordDiff;
-};
 
 // Every item on one row whose live text differs from what Hank has SEEN. Note
 // the column: an unsent change is measured against `relayedDrafts`, while whose

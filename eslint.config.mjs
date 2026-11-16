@@ -22,6 +22,73 @@ import prettier from "eslint-config-prettier";
 // import order + architecture only.
 const OWN_CODE = ["src/**/*.ts", "src/**/*.tsx", "scripts/**/*.ts"];
 
+// The client never imports from src/server/ — not even a type. Everything both
+// sides need (payload shapes, the chat stream's events, Prisma's enums via
+// src/shared/generated/) lives in src/shared/, and the server imports it from
+// there, so there is one definition and no copy to keep in sync. "Client" is any
+// file under src/client/ or src/shared/, plus any `"use client"` module
+// (src/app/ holds a few). A value import would also drag Prisma into the browser
+// bundle — which only `next build` would otherwise catch. Server actions are
+// the one way a client file reaches server code, and they live in src/app/.
+const clientServerBoundary = {
+  rules: {
+    "no-server-imports": {
+      meta: {
+        type: "problem",
+        messages: {
+          serverImport:
+            "Client code may not import from src/server/ ({{source}}) — not even a type. Move the shared shape to src/shared/ and have the server import it from there.",
+        },
+      },
+      create(context) {
+        const file = context.filename.replaceAll("\\", "/");
+        const byPath = /\/src\/(client|shared)\//.test(file);
+        let isClient = byPath;
+        const fromServer = (source) => {
+          if (source === "@/server" || source.startsWith("@/server/")) {
+            return true;
+          }
+          if (!source.startsWith(".")) return false;
+          const dir = file.slice(0, file.lastIndexOf("/"));
+          const parts = `${dir}/${source}`.split("/");
+          const out = [];
+          for (const part of parts) {
+            if (part === "..") out.pop();
+            else if (part !== ".") out.push(part);
+          }
+          return out.join("/").includes("/src/server/");
+        };
+        const check = (node) => {
+          if (!isClient || !node.source) return;
+          const source = String(node.source.value);
+          if (fromServer(source)) {
+            context.report({
+              node,
+              messageId: "serverImport",
+              data: { source },
+            });
+          }
+        };
+        return {
+          Program(node) {
+            isClient =
+              byPath ||
+              node.body.some(
+                (stmt) =>
+                  stmt.type === "ExpressionStatement" &&
+                  stmt.directive === "use client",
+              );
+          },
+          ImportDeclaration: check,
+          ExportNamedDeclaration: check,
+          ExportAllDeclaration: check,
+          ImportExpression: check,
+        };
+      },
+    },
+  },
+};
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
@@ -188,6 +255,13 @@ const eslintConfig = defineConfig([
     rules: { "no-await-in-loop": "off" },
   },
 
+  // Client/server boundary — see clientServerBoundary above.
+  {
+    files: ["src/**/*.ts", "src/**/*.tsx"],
+    plugins: { "client-server": clientServerBoundary },
+    rules: { "client-server/no-server-imports": "error" },
+  },
+
   // Architecture DAG enforcement. AGENTS.md documents a strict one-way layering
   // (tools → procedures → views → entities → platform, with utils/ app-blind and
   // agent/runtime domain-blind) that until now was convention-only. This turns
@@ -230,11 +304,6 @@ const eslintConfig = defineConfig([
           type: "agent-session",
           partialMatch: false,
           pattern: "src/server/agent/session/**",
-        },
-        {
-          type: "agent-runtree",
-          partialMatch: false,
-          pattern: "src/server/agent/runTree/**",
         },
         {
           type: "contracts",
@@ -316,7 +385,6 @@ const eslintConfig = defineConfig([
                         "agent-runtime",
                         "agent-hank",
                         "agent-session",
-                        "agent-runtree",
                       ],
                     },
                   },
@@ -344,10 +412,8 @@ const eslintConfig = defineConfig([
                         "agent-runtime",
                         "agent-hank",
                         "agent-session",
-                        "agent-runtree",
                         "app",
                         "components",
-                        "shared",
                         "client",
                       ],
                     },
@@ -374,7 +440,6 @@ const eslintConfig = defineConfig([
                         "agent-runtime",
                         "agent-hank",
                         "agent-session",
-                        "agent-runtree",
                       ],
                     },
                   },
@@ -403,7 +468,6 @@ const eslintConfig = defineConfig([
                         "agent-runtime",
                         "agent-hank",
                         "agent-session",
-                        "agent-runtree",
                       ],
                     },
                   },
@@ -454,6 +518,7 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "src/server/generated/**",
+    "src/shared/generated/**",
   ]),
 ]);
 

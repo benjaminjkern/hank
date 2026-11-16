@@ -6,8 +6,7 @@ import {
   appendMemory,
   mergeMemorySection,
 } from "@/server/entities/memory/store";
-
-import { toolError } from "../lib/toolError";
+import { toolError } from "@/server/platform/agent/toolError";
 
 import type { ToolDef } from "../lib/types";
 

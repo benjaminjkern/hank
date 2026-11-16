@@ -9,9 +9,9 @@ import {
   resolveJobBySlug,
   resolveCompanyBySlug,
 } from "@/server/entities/resolveBySlug";
+import { toolError } from "@/server/platform/agent/toolError";
 
 import { slugLookupError } from "./slugLookupError";
-import { toolError } from "./toolError";
 
 import type { ToolResult } from "./types";
 

@@ -9,7 +9,7 @@
 // here; null (no show event this turn) means the panel didn't move (default:
 // the dashboard).
 
-import type { UiEvent } from "@/server/contracts";
+import type { UiEvent } from "@/shared/chatStream";
 
 type ShowEvent = Extract<UiEvent, { type: "show" }>;
 
