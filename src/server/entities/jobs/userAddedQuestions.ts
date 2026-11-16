@@ -9,9 +9,9 @@
 // — this is the on-disk shape, and rewriting an entry has to preserve fields
 // this module doesn't know about.
 
-import type { Prisma } from "@/generated/prisma/client";
 import { bulkUpdate } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
+import type { Prisma } from "@/server/generated/prisma/client";
 import { normalizeForCompare } from "@/shared/utils/text";
 
 export type StoredUserQuestion = {

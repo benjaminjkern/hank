@@ -7,7 +7,7 @@
 // companyStatusFields.ts. Mirrors entities/jobs/jobInteractionInputs.ts on the
 // job side.
 
-import { CompanyStatus } from "@/generated/prisma/client";
+import { CompanyStatus } from "@/server/generated/prisma/client";
 
 // CLOSED is reserved for genuine dead-ends — "no fit right now but plausible
 // later" is caught_up_company, and "couldn't read the board" is block_company.

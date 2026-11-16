@@ -12,11 +12,11 @@
 // recon is a once-per-board act, and putting it on the recurring scrape path
 // would re-pay for it forever.
 
-import { BoardReaderOrigin } from "@/generated/prisma/client";
-import type { RunContext } from "@/server/agent/contracts";
+import type { RunContext } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { reconOnCooldown } from "@/server/entities/boardReaders/readerHealth";
 import { saveBoardReader } from "@/server/entities/boardReaders/recordReaderRun";
+import { BoardReaderOrigin } from "@/server/generated/prisma/client";
 import { boardMatchKey } from "@/server/platform/scrape/recipe/matchKey";
 import { runBoardRecipe } from "@/server/platform/scrape/recipe/runRecipe";
 import { procedure } from "@/server/procedures/lib/procedure";

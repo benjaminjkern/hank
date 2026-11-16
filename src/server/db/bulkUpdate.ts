@@ -47,7 +47,7 @@ import type {
   Opportunity,
   OpportunityEvent,
   Prisma,
-} from "@/generated/prisma/client";
+} from "@/server/generated/prisma/client";
 
 import { prisma } from "./prisma";
 

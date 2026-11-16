@@ -4,7 +4,7 @@
 // them to runAgentTurn: one source of truth for what Hank says and what he can
 // call. There is no per-flow switch — one prompt builder, one tool list.
 //
-// Note the split from the sibling agent/tools/ directory: that holds the tool
+// Note the split from the sibling tools/ directory: that holds the tool
 // DEFINITIONS (one file per ToolDef); toolset.ts here holds which of them Hank
 // is handed.
 

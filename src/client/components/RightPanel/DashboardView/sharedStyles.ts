@@ -58,25 +58,8 @@ export const EmptyRow = styled.div`
   color: ${({ theme }) => theme.colors.textSubtle};
 `;
 
-// "+N more" / "Collapse" toggle for company + opportunity job lists that run
-// past the preview cap. Full-width row so it reads as a list affordance, not
-// a floating button; mono + accent matches the other dashboard chrome.
-export const MoreButton = styled.button`
-  width: 100%;
-  padding: ${({ theme }) => `${theme.space.sm} ${theme.space.lg}`};
-  font-size: 11px;
-  font-family: ${({ theme }) => theme.font.mono};
-  color: ${({ theme }) => theme.colors.accent};
-  background: transparent;
-  text-align: left;
-  cursor: pointer;
-  &:hover {
-    background: ${({ theme }) => theme.colors.bgHover};
-  }
-`;
-
 // Cap the inline job list inside each company / opportunity box; the rest
-// hides behind a "+N more" toggle. Matches the company-detail page's preview.
+// hides behind a show-more toggle. Matches the company-detail page's preview.
 export const DASHBOARD_PREVIEW_COUNT = 5;
 
 // No wrapper opacity — dimming the whole section made rows read as

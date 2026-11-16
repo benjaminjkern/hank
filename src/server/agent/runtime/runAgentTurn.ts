@@ -23,7 +23,6 @@
 //   - Sub-agent trace fanout (sub-agents called by tool handlers emit their
 //     own traces via ctx.trace; this helper forwards them as-is).
 
-import type { RunContext, StreamEvent } from "@/server/agent/contracts";
 import {
   HIDDEN_TOOLS,
   isTransientStreamError,
@@ -34,17 +33,18 @@ import {
   createTraceAccumulator,
   type TraceMap,
 } from "@/server/agent/runTree/traceAccumulator";
-import { toolAffectsViewedState } from "@/server/agent/tools/lib";
-import { toolInputSchema } from "@/server/agent/tools/lib/inputSchema";
-import { toolErrorContent } from "@/server/agent/tools/lib/toolError";
+import type { RunContext, StreamEvent } from "@/server/contracts";
+import type { Reasoning } from "@/server/platform/llm/reasoning";
+import type { TraceEvent } from "@/server/platform/trace/types";
+import { withCaptureContext } from "@/server/platform/usage/captureContext";
+import { toolAffectsViewedState } from "@/server/tools/lib";
+import { toolInputSchema } from "@/server/tools/lib/inputSchema";
+import { toolErrorContent } from "@/server/tools/lib/toolError";
 import type {
   AnyToolDef,
   ToolContext,
   ToolResult,
-} from "@/server/agent/tools/lib/types";
-import type { Reasoning } from "@/server/platform/llm/reasoning";
-import type { TraceEvent } from "@/server/platform/trace/types";
-import { withCaptureContext } from "@/server/platform/usage/captureContext";
+} from "@/server/tools/lib/types";
 import { isUserAbortError } from "@/shared/utils/abort";
 
 import type Anthropic from "@anthropic-ai/sdk";

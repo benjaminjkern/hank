@@ -3,8 +3,8 @@
 // appetites for machinery: compaction summarizes what a turn DID (tool calls
 // included), memory consolidation only mines what was SAID.
 
-import { Role } from "@/generated/prisma/client";
-import type { Prisma } from "@/generated/prisma/client";
+import { Role } from "@/server/generated/prisma/client";
+import type { Prisma } from "@/server/generated/prisma/client";
 import { stripFocusRefTokens } from "@/shared/focusRefToken";
 import { isRecord } from "@/shared/utils/guards";
 import { truncate } from "@/shared/utils/text";

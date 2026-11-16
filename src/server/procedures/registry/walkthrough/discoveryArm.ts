@@ -1,5 +1,5 @@
-import { yieldUiEvents } from "@/server/agent/contracts";
-import type { TurnEvent } from "@/server/agent/contracts";
+import { yieldUiEvents } from "@/server/contracts";
+import type { TurnEvent } from "@/server/contracts";
 import { streamingProcedure } from "@/server/procedures/lib/procedure";
 import { runCommitDiscovery } from "@/server/procedures/registry/commitDiscovery";
 import { runFindCompanies } from "@/server/procedures/registry/findCompanies";

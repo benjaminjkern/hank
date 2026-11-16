@@ -9,7 +9,7 @@ import {
   type JobEventType,
   CompanyEventType,
   JobInteractionStatus,
-} from "@/generated/prisma/client";
+} from "@/server/generated/prisma/client";
 
 // The cached `JobInteraction.status` a given event advances the role to. The
 // OpportunityEvent log is the audit trail; status is its denormalized read.

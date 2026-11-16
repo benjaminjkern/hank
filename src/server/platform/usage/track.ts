@@ -1,5 +1,5 @@
-import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import type { Prisma } from "@/server/generated/prisma/client";
 
 import { currentCaptureContext } from "./captureContext";
 

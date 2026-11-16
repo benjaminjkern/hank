@@ -13,19 +13,19 @@
 // what the settle produced, never to start new work — a re-scrape here is how
 // "close these out" turned into a fresh round the user didn't ask for.
 
-import {
-  CompanyStatus,
-  JobEventType,
-  JobInteractionStatus,
-} from "@/generated/prisma/client";
-import { statusEvent, widgetEvent } from "@/server/agent/contracts";
-import type { TurnEvent } from "@/server/agent/contracts";
+import { statusEvent, widgetEvent } from "@/server/contracts";
+import type { TurnEvent } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { markCompanyReady } from "@/server/entities/companies/markCompanyStatus";
 import { caughtUpCompany } from "@/server/entities/companies/setCompanyAside";
 import { roundStartedAt } from "@/server/entities/jobs/boardStance";
 import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
+import {
+  CompanyStatus,
+  JobEventType,
+  JobInteractionStatus,
+} from "@/server/generated/prisma/client";
 import { streamingProcedure } from "@/server/procedures/lib/procedure";
 import { runPreScan } from "@/server/procedures/registry/preScan";
 import { preScanPoolWhere } from "@/server/procedures/registry/preScan/pool";

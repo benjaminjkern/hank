@@ -1,8 +1,8 @@
-// The sub-agent trace vocabulary. Lives in platform/ rather than agent/tools/lib/
+// The sub-agent trace vocabulary. Lives in platform/ rather than tools/lib/
 // because it is pure observability plumbing — it names spans and their nesting,
 // and knows nothing about companies, jobs, or opportunities. Producers span the
 // whole codebase (tool handlers, the sub-agent runner, scrape/), so a home under
-// agent/tools/ forced scrape/ to import upward into the agent layer for a type it
+// tools/ forced scrape/ to import upward into the agent layer for a type it
 // only forwards.
 
 // Sub-agent trace events. Tool handlers that internally run a sub-agent
@@ -67,7 +67,7 @@ export type EmitTrace = (event: TraceEvent) => void;
 // Where in-flight activity is reported: the sink, plus which parent chip/span it
 // nests under. Both optional — outside a chat dispatch there's nothing
 // listening, so every emitter no-ops rather than branching. Carried by
-// `RunContext` (agent/contracts/runContext.ts); it lives here because it's pure
+// `RunContext` (contracts/runContext.ts); it lives here because it's pure
 // observability plumbing, like `EmitTrace` itself.
 export type RunTrace = {
   onTrace?: EmitTrace;

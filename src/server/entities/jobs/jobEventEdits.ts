@@ -5,11 +5,11 @@
 // when a job had several events of the same type). Ownership is enforced here:
 // the lookup only resolves an event whose JobInteraction belongs to the user.
 
+import { prisma } from "@/server/db/prisma";
 import type {
   JobEventType,
   JobInteractionStatus,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+} from "@/server/generated/prisma/client";
 
 export type TargetJobEvent = {
   id: string;

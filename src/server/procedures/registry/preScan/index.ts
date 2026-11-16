@@ -25,7 +25,7 @@
 // mode="cold_start"; the company keeps whatever status it had (NEW at add time)
 // and whats_next lands on the top-up-sparse-memory rung next turn.
 
-import type { RunContext, RunTrace } from "@/server/agent/contracts";
+import type { RunContext, RunTrace } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { passOnJobs } from "@/server/entities/jobs/passOnJobs";
 import { traceText } from "@/server/platform/trace/traceText";

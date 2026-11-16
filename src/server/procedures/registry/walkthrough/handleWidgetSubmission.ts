@@ -6,8 +6,8 @@
 // shortlist gates, company_checklist, next_company_picker — live in
 // widgets/dispatchTopLevelSubmission.ts.)
 
-import { statusEvent, yieldUiEvents } from "@/server/agent/contracts";
-import type { TurnEvent } from "@/server/agent/contracts";
+import { statusEvent, yieldUiEvents } from "@/server/contracts";
+import type { TurnEvent } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { reviveCompany } from "@/server/entities/companies/resumeCompany";
 import { caughtUpCompany } from "@/server/entities/companies/setCompanyAside";

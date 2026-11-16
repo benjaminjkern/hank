@@ -24,15 +24,15 @@
 // the company, so it can run in parallel with anything else without coupling
 // to user-specific signal.
 
-import type { AnyToolDef } from "@/server/agent/tools/lib/types";
-import { fetchUrlTool } from "@/server/agent/tools/registry/fetchUrl";
-import { probeAtsTool } from "@/server/agent/tools/registry/probeAts";
-import { testScrapeTool } from "@/server/agent/tools/registry/testScrape";
 import type { LlmModel } from "@/server/platform/llm/models";
 import type {
   SubAgentDef,
   SubAgentOutputSchema,
 } from "@/server/subagents/lib/types";
+import type { AnyToolDef } from "@/server/tools/lib/types";
+import { fetchUrlTool } from "@/server/tools/registry/fetchUrl";
+import { probeAtsTool } from "@/server/tools/registry/probeAts";
+import { testScrapeTool } from "@/server/tools/registry/testScrape";
 
 import type Anthropic from "@anthropic-ai/sdk";
 

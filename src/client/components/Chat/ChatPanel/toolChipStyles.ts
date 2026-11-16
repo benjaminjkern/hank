@@ -73,9 +73,8 @@ export const ToolProgress = styled.span`
 `;
 
 // Click-anywhere header for an expandable tool chip. Wraps a ToolChip (or the
-// shortlist-widget compact chip) plus a rotating caret, all inside a button
-// for keyboard accessibility. Caret rotation mirrors the BucketCaret pattern
-// from DashboardView.
+// shortlist-widget compact chip) plus the shared Caret, all inside a button
+// for keyboard accessibility.
 export const ToolHeaderButton = styled.button`
   display: inline-flex;
   align-self: flex-start;
@@ -88,15 +87,6 @@ export const ToolHeaderButton = styled.button`
   font: inherit;
   color: inherit;
   text-align: left;
-`;
-
-export const ToolCaret = styled.span<{ $open: boolean }>`
-  font-size: 9px;
-  color: ${({ theme }) => theme.colors.textSubtle};
-  display: inline-block;
-  width: 8px;
-  transform: rotate(${({ $open }) => ($open ? "90deg" : "0deg")});
-  transition: transform 0.12s ease;
 `;
 
 // Indented panel under the header showing input, result, and recursive

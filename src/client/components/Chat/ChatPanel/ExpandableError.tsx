@@ -2,10 +2,11 @@ import { useState } from "react";
 
 import type { ErrorSegment } from "@/client/chatStore";
 
+import { Caret } from "../../RightPanel/shared/Caret";
+
 import {
   ErrorChip,
   ToolBlock,
-  ToolCaret,
   ToolExpanded,
   ToolFieldLabel,
   ToolHeaderButton,
@@ -28,9 +29,7 @@ export function ExpandableError({ segment }: { segment: ErrorSegment }) {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
-        <ToolCaret $open={open} aria-hidden>
-          ▶
-        </ToolCaret>
+        <Caret open={open} size={9} />
         <ErrorChip>{ERROR_CHIP_LABEL}</ErrorChip>
       </ToolHeaderButton>
       {open && (

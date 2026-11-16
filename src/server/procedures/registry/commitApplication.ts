@@ -18,8 +18,8 @@
 // is reusable elsewhere; what stops is the relay (an APPLIED row's edits are
 // housekeeping, not something to reconsider) — see `listUnrelayedApplicationEdits`.
 
-import type { RunContext } from "@/server/agent/contracts";
 import { appendPipelineActivity } from "@/server/agent/session";
+import type { RunContext } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import {
   applicationEditsFor,

@@ -8,11 +8,11 @@
 // handed back as candidates — the one outcome the chain deliberately leaves to
 // its caller.
 
-import { CompanyBlockReason } from "@/generated/prisma/client";
-import { statusEvent } from "@/server/agent/contracts";
-import type { TurnEvent } from "@/server/agent/contracts";
+import { statusEvent } from "@/server/contracts";
+import type { TurnEvent } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { blockCompany } from "@/server/entities/companies/setCompanyAside";
+import { CompanyBlockReason } from "@/server/generated/prisma/client";
 import { streamingProcedure } from "@/server/procedures/lib/procedure";
 import { runEnrichCompaniesCollect } from "@/server/procedures/registry/enrichCompanies";
 import { urlHost } from "@/shared/utils/url";

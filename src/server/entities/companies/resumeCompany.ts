@@ -6,8 +6,11 @@
 // Neither touches the panel. Focus is ephemeral: the caller threads the company
 // as the state machine's entry target and emits its own show events.
 
-import { CompanyEventType, CompanyStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import {
+  CompanyEventType,
+  CompanyStatus,
+} from "@/server/generated/prisma/client";
 
 import { companyStatusFields } from "./companyStatusFields";
 import { logCompanyEvent } from "./logCompanyEvent";

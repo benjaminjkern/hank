@@ -8,12 +8,12 @@
 // Works purely in ids — translating the agent's slugs → ids is the tool layer's
 // job. Patch semantics per field: `undefined` = leave unchanged, `null` = clear.
 
+import { prisma } from "@/server/db/prisma";
 import {
   OpportunityEventType,
   type OpportunityStatus,
   type Prisma,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+} from "@/server/generated/prisma/client";
 
 import { planOpportunityEvents } from "./logOpportunityEvent";
 

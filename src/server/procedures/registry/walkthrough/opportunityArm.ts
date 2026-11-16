@@ -1,4 +1,4 @@
-import type { TurnEvent } from "@/server/agent/contracts";
+import type { TurnEvent } from "@/server/contracts";
 import { streamingProcedure } from "@/server/procedures/lib/procedure";
 
 import type { WalkthroughArgs, WalkthroughResult } from "./types";

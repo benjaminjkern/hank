@@ -11,9 +11,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-import type { RunContext, RunTrace } from "@/server/agent/contracts";
-import { toolInputSchema } from "@/server/agent/tools/lib/inputSchema";
-import type { AnyToolDef, ToolContext } from "@/server/agent/tools/lib/types";
+import type { RunContext, RunTrace } from "@/server/contracts";
 import {
   SCRATCHPAD_FIELD,
   SCRATCHPAD_SCHEMA_NOTE,
@@ -29,6 +27,8 @@ import {
   recordUsage,
   type UsageOperation,
 } from "@/server/platform/usage/track";
+import { toolInputSchema } from "@/server/tools/lib/inputSchema";
+import type { AnyToolDef, ToolContext } from "@/server/tools/lib/types";
 import { isUserAbortError } from "@/shared/utils/abort";
 
 import { recordSubAgentRun, redactCaptureContent } from "./subAgentRun";

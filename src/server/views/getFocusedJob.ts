@@ -1,7 +1,6 @@
 // The job detail page — the payload the right panel and chat store render, plus
 // the loader that builds it.
 
-import { JobInteractionStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { loadMergedQuestions } from "@/server/entities/jobs/applicationQuestions";
 import { liveVerdict, placedVerdict } from "@/server/entities/jobs/boardStance";
@@ -15,6 +14,7 @@ import {
   onBoardWhere,
 } from "@/server/entities/jobs/shortlistPool";
 import type { ShortAnswer } from "@/server/entities/jobs/types";
+import { JobInteractionStatus } from "@/server/generated/prisma/client";
 import type {
   ApplicationQuestion,
   ApplicationQuestionsEnvelope,

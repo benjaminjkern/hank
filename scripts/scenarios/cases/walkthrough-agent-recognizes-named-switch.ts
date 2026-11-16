@@ -1,5 +1,5 @@
-import { CompanyStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { CompanyStatus } from "@/server/generated/prisma/client";
 
 import { USER_ID, drainPipeline, withFocus } from "../lib";
 

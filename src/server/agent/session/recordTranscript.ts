@@ -18,11 +18,11 @@
 // a reconnecting or polling client reads, and a row that only lands when the
 // batch finishes is a batch nobody can watch.
 
-import { Role } from "@/generated/prisma/client";
-import type { Prisma } from "@/generated/prisma/client";
-import type { TurnEvent } from "@/server/agent/contracts";
 import { newRunTreeId } from "@/server/agent/runTree/ids";
+import type { TurnEvent } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
+import { Role } from "@/server/generated/prisma/client";
+import type { Prisma } from "@/server/generated/prisma/client";
 
 // The persisted shape of one streamed content event. Deliberately not
 // Anthropic's ContentBlock: `pipeline_status` / `pipeline_widget` are our own

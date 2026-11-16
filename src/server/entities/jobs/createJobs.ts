@@ -9,12 +9,12 @@
 // the focused-company fallback, and the duplicate-sourceUrl pre-check are the
 // tool layer's job.
 
+import { prisma } from "@/server/db/prisma";
 import {
   EventSource,
   JobEventType,
   JobInteractionStatus,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+} from "@/server/generated/prisma/client";
 
 import { mintJobSlugs } from "./jobSlug";
 import { roleAttrColumns, type RoleAttrs } from "./roleAttrs";

@@ -26,7 +26,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import {
   PrismaClient,
   JobInteractionStatus,
-} from "../../../src/generated/prisma/client";
+} from "../../../src/server/generated/prisma/client";
 import {
   isStockFieldType,
   type ApplicationQuestion,

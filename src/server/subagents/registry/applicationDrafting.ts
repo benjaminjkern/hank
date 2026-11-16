@@ -8,8 +8,6 @@
 // draft can be written in the user's own voice. The caller persists the result;
 // this sub-agent writes nothing.
 
-import type { AnyToolDef } from "@/server/agent/tools/lib/types";
-import { readReusableApplicationTool } from "@/server/agent/tools/registry/readReusableApplication";
 import { attributePairs } from "@/server/entities/jobs/attributePairs";
 import {
   formatPastCoverLetterIndex,
@@ -25,6 +23,8 @@ import type {
   SubAgentDef,
   SubAgentOutputSchema,
 } from "@/server/subagents/lib/types";
+import type { AnyToolDef } from "@/server/tools/lib/types";
+import { readReusableApplicationTool } from "@/server/tools/registry/readReusableApplication";
 
 // TUNED for flash: the two-step gap-check (name the JD's gap-competencies, then
 // verify no first-person claim of a gap) takes the fabrication trap to 3/3 on

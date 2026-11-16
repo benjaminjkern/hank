@@ -23,12 +23,12 @@
 // self-contained: the input IS the context, so there's no live-memory bypass to
 // configure.
 
-import { JobCloseReason } from "@/generated/prisma/client";
 import { attributePairs } from "@/server/entities/jobs/attributePairs";
 import {
   roleAttrPairs,
   type RoleAttrs,
 } from "@/server/entities/jobs/roleAttrs";
+import { JobCloseReason } from "@/server/generated/prisma/client";
 import type { LlmModel } from "@/server/platform/llm/models";
 import { SUB_AGENT_READ_TOOLS } from "@/server/subagents/lib/readTools";
 import type {

@@ -6,8 +6,8 @@
 // Windowed rather than paged: which window, and how the "more pages" line
 // reads, belong to the channel asking — see tools/lib/paginate.ts.
 
-import type { OpportunityStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import type { OpportunityStatus } from "@/server/generated/prisma/client";
 
 export type OpportunityEventHeader = {
   opportunityId: string;

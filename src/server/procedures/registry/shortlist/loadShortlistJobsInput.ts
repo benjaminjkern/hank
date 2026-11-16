@@ -10,7 +10,6 @@
 // next. A board demotion is not a rejection signal here either — it arrives as
 // the candidate's own `priorDeferNote` at commit, not as a separate input.
 
-import { JobInteractionStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import {
   liveVerdict,
@@ -27,6 +26,7 @@ import {
 } from "@/server/entities/jobs/shortlistPool";
 import { readMemory } from "@/server/entities/memory/store";
 import { readResumeBackground } from "@/server/entities/resume/store";
+import { JobInteractionStatus } from "@/server/generated/prisma/client";
 import type {
   ShortlistJobsInput,
   ShortlistCandidate,

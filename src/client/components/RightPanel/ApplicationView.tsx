@@ -30,6 +30,7 @@ import {
   ReuseSwitch,
 } from "./shared/applicationArtifacts";
 import { AuthorMark } from "./shared/AuthorMark";
+import { Caret } from "./shared/Caret";
 
 const Root = styled.div`
   display: flex;
@@ -216,14 +217,6 @@ const StockHeader = styled.button`
   cursor: pointer;
   padding: ${({ theme }) => theme.space.xs} 0;
   text-align: left;
-`;
-
-const StockCaret = styled.span<{ $open: boolean }>`
-  display: inline-block;
-  transition: transform 120ms ease;
-  transform: rotate(${({ $open }) => ($open ? "90deg" : "0deg")});
-  color: ${({ theme }) => theme.colors.textSubtle};
-  font-size: 10px;
 `;
 
 const StockTitle = styled.h3`
@@ -464,7 +457,7 @@ function StockFields({ items }: { items: ApplicationItem[] }) {
     <StockSection>
       <StockHeaderRow>
         <StockHeader onClick={() => setOpen((o) => !o)}>
-          <StockCaret $open={open}>▶</StockCaret>
+          <Caret open={open} />
           <StockTitle>The rest of the form</StockTitle>
           <StockCount>{items.length}</StockCount>
         </StockHeader>

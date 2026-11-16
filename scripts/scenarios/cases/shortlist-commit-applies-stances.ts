@@ -1,12 +1,12 @@
+import { prisma } from "@/server/db/prisma";
+import { commitShortlist } from "@/server/entities/companies/commitShortlist";
 import {
   CompanyStatus,
   JobCloseReason,
   JobDeferReason,
   JobInteractionStatus,
   ProposedVerdict,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
-import { commitShortlist } from "@/server/entities/companies/commitShortlist";
+} from "@/server/generated/prisma/client";
 
 import { USER_ID } from "../lib";
 

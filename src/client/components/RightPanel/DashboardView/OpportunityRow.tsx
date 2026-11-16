@@ -1,10 +1,15 @@
 import styled from "styled-components";
 
 import type { DashboardOpportunity } from "@/client/chatStore";
-import { appliedTierBadge, closedActionLabel } from "@/shared/statusColors";
+import {
+  appliedTierBadge,
+  closedActionLabel,
+  statusLabel,
+} from "@/shared/statusColors";
 import { fullDateTime, relativeTime } from "@/shared/utils/date";
 import { nowMs } from "@/shared/utils/now";
 
+import { ShowMoreToggle } from "../shared/ShowMoreToggle";
 import { useExpandable } from "../shared/useExpandable";
 
 import {
@@ -12,7 +17,6 @@ import {
   EmptyRow,
   Group,
   GroupCount,
-  MoreButton,
   RowMain,
   StatusPill,
 } from "./sharedStyles";
@@ -146,14 +150,7 @@ export function OpportunityRow({
 
   const jobs = opportunity.jobs ?? [];
   const now = nowMs();
-  const {
-    visible: visibleJobs,
-    truncated,
-    canCollapse,
-    hiddenCount,
-    expand,
-    collapse,
-  } = useExpandable(jobs, DASHBOARD_PREVIEW_COUNT);
+  const jobList = useExpandable(jobs, DASHBOARD_PREVIEW_COUNT);
 
   return (
     <Group>
@@ -161,7 +158,7 @@ export function OpportunityRow({
         <OppGroupLabelRow>
           <OppGroupLabel>{opportunity.label}</OppGroupLabel>
           <StatusPill $status={opportunity.status}>
-            {opportunity.status}
+            {statusLabel(opportunity.status)}
           </StatusPill>
         </OppGroupLabelRow>
         {metaParts.length > 0 && (
@@ -175,7 +172,7 @@ export function OpportunityRow({
         <EmptyRow>no roles pitched yet</EmptyRow>
       ) : (
         <>
-          {visibleJobs.map((j) => {
+          {jobList.visible.map((j) => {
             const muted = j.status === "CLOSED" || j.status === "REJECTED";
             const RowComponent = muted ? MutedRoleRow : RoleRow;
             const timingCaption =
@@ -205,18 +202,14 @@ export function OpportunityRow({
                     $appliedAt={j.appliedAt}
                     $now={now}
                   >
-                    {j.status}
+                    {statusLabel(j.status)}
                     {appliedTierBadge(j.appliedAt, now)}
                   </StatusPill>
                 </RolePills>
               </RowComponent>
             );
           })}
-          {truncated ? (
-            <MoreButton onClick={expand}>+{hiddenCount} more</MoreButton>
-          ) : canCollapse ? (
-            <MoreButton onClick={collapse}>Collapse</MoreButton>
-          ) : null}
+          <ShowMoreToggle expandable={jobList} />
         </>
       )}
     </Group>

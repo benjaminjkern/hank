@@ -9,13 +9,13 @@
 // mid-flight Stop can't strand a CLOSED status with no backing event. Neither
 // dual-writes a CompanyEvent — a per-role set-aside isn't a company milestone.
 
+import { prisma } from "@/server/db/prisma";
 import {
   type JobCloseReason,
   type JobDeferReason,
   JobEventType,
   JobInteractionStatus,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+} from "@/server/generated/prisma/client";
 
 import { logJobEvent } from "./logJobEvents";
 

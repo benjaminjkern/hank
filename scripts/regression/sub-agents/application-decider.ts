@@ -28,12 +28,12 @@ import "dotenv/config";
 import Anthropic from "@anthropic-ai/sdk";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-import { PrismaClient } from "../../../src/generated/prisma/client";
 import {
   ROLE_ATTR_SELECT,
   toRoleAttrs,
   type RoleAttrColumns,
 } from "../../../src/server/entities/jobs/roleAttrs";
+import { PrismaClient } from "../../../src/server/generated/prisma/client";
 import { resolveAnthropicApiKey } from "../../../src/server/platform/llm/resolveAnthropicKey";
 import { partitionApplicationForm } from "../../../src/server/procedures/registry/draftApplication/loadApplicationDeciderInput";
 import { runSubAgent } from "../../../src/server/subagents/lib/runSubAgent";

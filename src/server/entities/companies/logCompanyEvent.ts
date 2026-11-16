@@ -17,9 +17,12 @@
 // company, so there is no company feed to write — those callers get a silent
 // no-op instead of a guard at every site.
 
-import { CompanyEventType, EventSource } from "@/generated/prisma/client";
-import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import {
+  CompanyEventType,
+  EventSource,
+} from "@/server/generated/prisma/client";
+import type { Prisma } from "@/server/generated/prisma/client";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 

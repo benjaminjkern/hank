@@ -12,7 +12,7 @@
 //
 // Failure reports what didn't resolve and which slugs would have, and stops
 // there — the agent-facing sentence and its audit key are the tool layer's
-// (`slugLookupError` in agent/tools/lib). Offering the valid slugs is what lets
+// (`slugLookupError` in tools/lib). Offering the valid slugs is what lets
 // the model self-correct in the same turn, so the hint list is worth the extra
 // query even though only two of the resolvers can produce one cheaply.
 

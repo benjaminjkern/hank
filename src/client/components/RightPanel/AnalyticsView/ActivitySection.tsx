@@ -8,6 +8,8 @@ import type { Advancement } from "@/server/views/analytics";
 import { dayKey } from "@/shared/utils/date";
 import { nowMs } from "@/shared/utils/now";
 
+import { Switch } from "../shared/Switch";
+
 import { ActivityHeatmap, type HoverTip } from "./ActivityHeatmap";
 import { categorySummary } from "./advancements";
 import { DayList } from "./DayList";
@@ -19,7 +21,6 @@ import {
   SectionCount,
   SectionHead,
   SectionTitle,
-  ToggleLabel,
 } from "./styles";
 
 // Activity: heatmap + per-day list.
@@ -123,14 +124,11 @@ export function ActivitySection({
             ›
           </PageArrow>
         </RangeChips>
-        <ToggleLabel>
-          <input
-            type="checkbox"
-            checked={showRejections}
-            onChange={(e) => setShowRejections(e.target.checked)}
-          />
-          Show rejections
-        </ToggleLabel>
+        <Switch
+          on={showRejections}
+          onChange={setShowRejections}
+          label="Show rejections"
+        />
       </ControlsRow>
 
       <ActivityHeatmap

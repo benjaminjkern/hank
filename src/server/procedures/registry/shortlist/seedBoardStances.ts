@@ -3,10 +3,10 @@
 // Stances only — no status changes, no events; commit_shortlist is where the
 // board becomes real (entities/companies/commitShortlist.ts).
 
-import { ProposedVerdict } from "@/generated/prisma/client";
 import { bulkUpdate, type Database } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
 import { shortlistPoolStatusWhere } from "@/server/entities/jobs/shortlistPool";
+import { ProposedVerdict } from "@/server/generated/prisma/client";
 import type { ShortlistJobsOutput } from "@/server/subagents/registry/shortlistJobs";
 
 // Hard ceiling on picks. The shortlist is meant to be the 3-5 STRONGEST fits,

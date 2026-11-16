@@ -10,12 +10,12 @@ import "dotenv/config";
 import Anthropic from "@anthropic-ai/sdk";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-import { PrismaClient } from "../../../src/generated/prisma/client";
 import { serializeTranscript } from "../../../src/server/agent/session/serializeTranscript";
 import {
   readMemory,
   listMemories,
 } from "../../../src/server/entities/memory/store";
+import { PrismaClient } from "../../../src/server/generated/prisma/client";
 import { resolveAnthropicApiKey } from "../../../src/server/platform/llm/resolveAnthropicKey";
 import { loadMemoryConsolidationInput } from "../../../src/server/procedures/registry/consolidateSessionMemory";
 import { runSubAgent } from "../../../src/server/subagents/lib/runSubAgent";

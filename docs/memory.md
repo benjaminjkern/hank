@@ -4,7 +4,7 @@ Three things in this codebase get called "notes" — different lifecycles, consu
 
 ## The three storage shapes
 
-1. **`MemoryNote`** — markdown files keyed by path. Free-form, path-addressed, agent-authored — Hank's notebook. Reads/writes via [memory tools](../src/server/agent/tools/registry/writeMemory.ts); storage in [store.ts](../src/server/entities/memory/store.ts); path allowlist in [paths.ts](../src/server/entities/memory/paths.ts).
+1. **`MemoryNote`** — markdown files keyed by path. Free-form, path-addressed, agent-authored — Hank's notebook. Reads/writes via [memory tools](../src/server/tools/registry/writeMemory.ts); storage in [store.ts](../src/server/entities/memory/store.ts); path allowlist in [paths.ts](../src/server/entities/memory/paths.ts).
 2. **Inline note fields** on domain rows (`Event.notes`, `Opportunity.notes`, `Contact.notes`, the per-status `closeNote`/`deferNote`/`pauseNote`/`blockNote`, …) — bounded freeform attached to one entity. Read/written through the entity's normal tools, surfaced in the focused-entity views. There is deliberately **no general-purpose "notes about this pursuit" field on `JobInteraction`** (dropped 2026-07-25, migration `20260725120000_drop_job_interaction_notes`): `jobs/{slug}.md` covers the same ground better — the agent reads/writes it by slug, the consolidation pass folds it, and it outlives the row. Per-status "why" stays in the reason/note pairs.
 3. **`ChatSession.summary`** + **`AdminNote`** — session-scoped recall and admin-only feedback log.
 

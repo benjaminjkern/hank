@@ -10,7 +10,7 @@ import {
   JobEventType,
   JobCloseReason,
   JobInteractionStatus,
-} from "@/generated/prisma/client";
+} from "@/server/generated/prisma/client";
 
 export const ShortAnswerSchema = z.object({
   question: z.string(),

@@ -13,8 +13,8 @@
 //     on the board, and the commit is what closes it. Judging it again would
 //     re-roll a verdict that's already on the board.
 
-import { JobInteractionStatus } from "@/generated/prisma/client";
-import type { Prisma } from "@/generated/prisma/client";
+import { JobInteractionStatus } from "@/server/generated/prisma/client";
+import type { Prisma } from "@/server/generated/prisma/client";
 
 export function preScanPoolWhere(): Prisma.JobInteractionWhereInput {
   return {

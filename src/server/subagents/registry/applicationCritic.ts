@@ -34,16 +34,16 @@
 // draft nobody sent isn't in the recruiter's file, and an inconsistency against
 // one would be a fabricated finding.
 
-import {
-  JobCloseReason,
-  JobInteractionStatus,
-} from "@/generated/prisma/client";
 import { attributePairs } from "@/server/entities/jobs/attributePairs";
 import {
   formatRoleAttrs,
   roleAttrPairs,
   type RoleAttrs,
 } from "@/server/entities/jobs/roleAttrs";
+import {
+  JobCloseReason,
+  JobInteractionStatus,
+} from "@/server/generated/prisma/client";
 import type { LlmModel } from "@/server/platform/llm/models";
 import type {
   SubAgentDef,

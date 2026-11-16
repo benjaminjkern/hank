@@ -5,8 +5,8 @@
 // → id translation is the tool layer's job. Mirror of
 // entities/opportunities/updateOpportunity.
 
-import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import type { Prisma } from "@/server/generated/prisma/client";
 
 import { roleAttrColumnPatch, type RoleAttrs } from "./roleAttrs";
 

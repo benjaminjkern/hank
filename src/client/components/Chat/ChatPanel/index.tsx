@@ -53,9 +53,13 @@ export function ChatPanel() {
   };
   const discardPanelEdits = useChatStore((s) => s.discardPanelEdits);
   // Which chip has its × armed. One at a time is enough — arming is a transient
-  // gesture aimed at a specific chip — and it resets on its own when that
-  // surface's count reaches zero.
+  // gesture aimed at a specific chip. It disarms once that surface's count
+  // reaches zero (sent, or discarded), so the chip a later edit brings back
+  // starts out unarmed.
   const [discarding, setDiscarding] = useState<NegotiationPanel | null>(null);
+  if (discarding !== null && pendingPanelEdits[discarding] === 0) {
+    setDiscarding(null);
+  }
   const pendingPanelTotal = NEGOTIATION_PANELS.reduce(
     (n, panel) => n + pendingPanelEdits[panel],
     0,

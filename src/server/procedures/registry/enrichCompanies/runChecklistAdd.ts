@@ -12,8 +12,8 @@
 // question, so it's reported back and the caller stops rather than stacking
 // another widget under an unanswered one.
 
-import { statusEvent, widgetEvent } from "@/server/agent/contracts";
-import type { TurnEvent } from "@/server/agent/contracts";
+import { statusEvent, widgetEvent } from "@/server/contracts";
+import type { TurnEvent } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { createCompanyStubs } from "@/server/entities/companies/createCompanyStubs";
 import { streamingProcedure } from "@/server/procedures/lib/procedure";

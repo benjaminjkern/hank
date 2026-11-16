@@ -18,12 +18,8 @@
 // Nothing here calls an LLM to decide anything, and nothing here writes the
 // user's row — runChat has already done that (see runChat's step 1).
 
-import { statusEvent, yieldUiEvents } from "@/server/agent/contracts";
-import type {
-  EntryTarget,
-  RunContext,
-  TurnEvent,
-} from "@/server/agent/contracts";
+import { statusEvent, yieldUiEvents } from "@/server/contracts";
+import type { EntryTarget, RunContext, TurnEvent } from "@/server/contracts";
 import {
   addMoreCompaniesWidget,
   runDisambiguationResolution,

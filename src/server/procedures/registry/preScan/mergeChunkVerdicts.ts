@@ -7,8 +7,8 @@
 // Nothing here decides a COMPANY status: pre-scan doesn't write one, and its
 // callers pick their own from the survivor count.
 
-import type { JobCloseReason } from "@/generated/prisma/client";
 import { humanJobCloseReason } from "@/server/entities/jobs/humanJobReasonLabels";
+import type { JobCloseReason } from "@/server/generated/prisma/client";
 import {
   preScanCloseReason,
   type PreScanJobBatchOutput,

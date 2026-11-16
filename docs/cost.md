@@ -4,7 +4,7 @@ Read this before you "optimize a tool" or "fix the cost of a phase." The intuiti
 
 ## Cost lives in the context, not in the tools
 
-Every tool in [src/server/agent/tools/](../src/server/agent/tools/) is deterministic TypeScript. **Zero of them consume Anthropic tokens.** What costs tokens is the **assistant reply that contains the `tool_use` block** — the model reads the whole conversation history plus the system prompt to decide to make that call. Removing a mutator like `close_job` or `update_job_interaction` doesn't remove its telemetry cost; the model pays rent on the whole apartment every time it crosses the room.
+Every tool in [src/server/tools/](../src/server/tools/) is deterministic TypeScript. **Zero of them consume Anthropic tokens.** What costs tokens is the **assistant reply that contains the `tool_use` block** — the model reads the whole conversation history plus the system prompt to decide to make that call. Removing a mutator like `close_job` or `update_job_interaction` doesn't remove its telemetry cost; the model pays rent on the whole apartment every time it crosses the room.
 
 The only tools whose _results_ meaningfully add cost are the ones that dump a lot of content back into the conversation — `scrape_jobs_for_company` (one row per job; big boards = 50–200 rows), `read_job_description` (full posting body), `fetch_url` (cleaned page text). Everything else returns a status/id confirmation under 200 B. **These big-result tools are the real cost drivers** — the bulk of tool-result content that lands in history comes from `scrape_jobs_for_company` + `read_job_description`.
 

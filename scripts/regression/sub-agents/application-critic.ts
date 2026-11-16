@@ -25,13 +25,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import {
-  JobInteractionStatus,
-  PrismaClient,
-} from "../../../src/generated/prisma/client";
-import {
   ROLE_ATTR_SELECT,
   toRoleAttrs,
 } from "../../../src/server/entities/jobs/roleAttrs";
+import {
+  JobInteractionStatus,
+  PrismaClient,
+} from "../../../src/server/generated/prisma/client";
 import { resolveAnthropicApiKey } from "../../../src/server/platform/llm/resolveAnthropicKey";
 import { runSubAgent } from "../../../src/server/subagents/lib/runSubAgent";
 import {

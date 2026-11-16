@@ -16,8 +16,8 @@
 //     save_application_answer so that tool and draft_application_question share
 //     exactly one persistence path.
 
-import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import type { Prisma } from "@/server/generated/prisma/client";
 import {
   isCoverLetterQuestion,
   type ApplicationQuestion,

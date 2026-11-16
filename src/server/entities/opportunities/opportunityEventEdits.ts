@@ -4,11 +4,11 @@
 // delete can flag (not auto-recompute) a now-stale status, exactly like the job
 // path. Ownership is enforced via the parent Opportunity's userId.
 
+import { prisma } from "@/server/db/prisma";
 import type {
   OpportunityEventType,
   OpportunityStatus,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+} from "@/server/generated/prisma/client";
 
 export type TargetOpportunityEvent = {
   id: string;

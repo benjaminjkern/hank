@@ -10,8 +10,8 @@
 // several ways of reaching it (a cold start, a wrap, a close/pause, Hank's
 // show_whats_next handoff) — they all land on this function.
 
-import { statusEvent, widgetEvent } from "@/server/agent/contracts";
-import type { RunContext, TurnEvent } from "@/server/agent/contracts";
+import { statusEvent, widgetEvent } from "@/server/contracts";
+import type { RunContext, TurnEvent } from "@/server/contracts";
 import { runWhatsNext } from "@/server/procedures/registry/whatsNext";
 
 // The profile gatekeeper's read of what's thin — the weakest slots plus probe

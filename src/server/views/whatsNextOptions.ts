@@ -10,15 +10,15 @@
 // The rung-0 profile gate that runs BEFORE this is a procedure — it costs an
 // LLM call — and lives in procedures/registry/whatsNext.ts.
 
+import { prisma } from "@/server/db/prisma";
+import { OWED_JOB_STATUSES } from "@/server/entities/jobs/attention";
+import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import {
   CompanyPauseReason,
   CompanyStatus,
   JobInteractionStatus,
   OpportunityStatus,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
-import { OWED_JOB_STATUSES } from "@/server/entities/jobs/attention";
-import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
+} from "@/server/generated/prisma/client";
 import { nowDate, nowMs } from "@/shared/utils/now";
 
 // Per-row shape rendered in the widget. Subtitles are activity-based — what

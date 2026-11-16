@@ -10,8 +10,8 @@
 // makes it worth drawing on later — and an explicit `reuse` in the same edit
 // (the switch itself) wins.
 
-import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import type { Prisma } from "@/server/generated/prisma/client";
 import { normalizeForCompare } from "@/shared/utils/text";
 
 import { readReuseFlags, readShortAnswers } from "./applicationDrafts";

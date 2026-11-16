@@ -12,7 +12,7 @@
 // only offered where the profile is already past the gate, and the gate stays a
 // cold-start / between-flow concern owned by this procedure.
 
-import type { RunContext } from "@/server/agent/contracts";
+import type { RunContext } from "@/server/contracts";
 import { traceText } from "@/server/platform/trace/traceText";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runProfileEnrichmentGate } from "@/server/procedures/registry/profileEnrichmentGate";

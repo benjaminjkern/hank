@@ -12,7 +12,6 @@
 // (procedures/registry/chat/runChatTurn.ts). Same for the outcome — this returns
 // each tool's raw result and lets the caller decide one of them ended a company.
 
-import type { RunContext, StreamEvent } from "@/server/agent/contracts";
 import {
   HANK_MAX_TOKENS,
   HANK_MODEL,
@@ -32,6 +31,7 @@ import {
   appendToolResultMessage,
   loadSessionMessages,
 } from "@/server/agent/session";
+import type { RunContext, StreamEvent } from "@/server/contracts";
 import { resolveLlmClient } from "@/server/platform/llm/resolveClient";
 import { recordUsage } from "@/server/platform/usage/track";
 

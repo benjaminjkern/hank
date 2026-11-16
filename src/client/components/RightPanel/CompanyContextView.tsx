@@ -19,13 +19,14 @@ import {
 } from "@/shared/statusColors";
 import { relativeTime } from "@/shared/utils/date";
 import { nowMs } from "@/shared/utils/now";
-import { initial } from "@/shared/utils/text";
 
+import { CompanyLogoChip } from "./shared/CompanyLogoChip";
 import { ContactCard } from "./shared/ContactCard";
 import {
   RecentActivityList,
   type RecentActivityItem,
 } from "./shared/RecentActivity";
+import { ShowMoreToggle } from "./shared/ShowMoreToggle";
 import { useExpandable } from "./shared/useExpandable";
 
 const Card = styled.div`
@@ -42,31 +43,6 @@ const HeaderRow = styled.div`
   align-items: center;
   gap: ${({ theme }) => theme.space.lg};
   border-bottom: 1px solid ${({ theme }) => theme.colors.border};
-`;
-
-const LogoBox = styled.div`
-  width: 48px;
-  height: 48px;
-  flex-shrink: 0;
-  border-radius: ${({ theme }) => theme.radius.md};
-  background: ${({ theme }) => theme.colors.bgMuted};
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-`;
-
-const LogoImg = styled.img`
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-`;
-
-const Monogram = styled.div`
-  font-size: 22px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.accent};
 `;
 
 const HeaderMain = styled.div`
@@ -284,21 +260,6 @@ const Empty = styled.div`
   font-style: italic;
 `;
 
-const ShowMoreButton = styled.button`
-  width: 100%;
-  padding: ${({ theme }) => `${theme.space.sm} ${theme.space.lg}`};
-  background: transparent;
-  font-size: 12px;
-  font-family: ${({ theme }) => theme.font.mono};
-  color: ${({ theme }) => theme.colors.accent};
-  text-align: center;
-  cursor: pointer;
-
-  &:hover {
-    background: ${({ theme }) => theme.colors.bgHover};
-  }
-`;
-
 // Never-pursued jobs use the same toggle styling as the dashboard's "skipped
 // companies" section — dashed border, muted, hidden by default. No top
 // margin: the preceding section's Card mb keeps spacing consistent with every
@@ -477,20 +438,17 @@ export function CompanyContextView({
   const viewJob = useChatStore((s) => s.viewJob);
   const viewShortlistBoard = useChatStore((s) => s.viewShortlistBoard);
   const buckets = groupJobs(company.jobs);
-  const {
-    visible: visibleContacts,
-    truncated: contactsTruncated,
-    canCollapse: canCollapseContacts,
-    hiddenCount: hiddenContactCount,
-    expand: expandContacts,
-    collapse: collapseContacts,
-  } = useExpandable(company.contacts, PREVIEW_COUNT);
+  const contactList = useExpandable(company.contacts, PREVIEW_COUNT);
 
   return (
     <>
       <Card>
         <HeaderRow>
-          <CompanyLogo logoUrl={company.logoUrl} name={company.name} />
+          <CompanyLogoChip
+            logoUrl={company.logoUrl}
+            name={company.name}
+            size={48}
+          />
           <HeaderMain>
             <CompanyName>{company.name}</CompanyName>
             <HeaderMeta>
@@ -626,19 +584,10 @@ export function CompanyContextView({
             <SectionCount>{company.contacts.length}</SectionCount>
           </SectionHead>
           <ContactsBody>
-            {visibleContacts.map((c) => (
+            {contactList.visible.map((c) => (
               <ContactCard key={c.id} contact={c} />
             ))}
-            {contactsTruncated && (
-              <ShowMoreButton onClick={expandContacts}>
-                Show {hiddenContactCount} more
-              </ShowMoreButton>
-            )}
-            {!contactsTruncated && canCollapseContacts && (
-              <ShowMoreButton onClick={collapseContacts}>
-                Collapse
-              </ShowMoreButton>
-            )}
+            <ShowMoreToggle expandable={contactList} />
           </ContactsBody>
         </Card>
       )}
@@ -677,19 +626,6 @@ export function CompanyContextView({
   );
 }
 
-function CompanyLogo({ logoUrl, name }: { logoUrl: string; name: string }) {
-  const [failed, setFailed] = useState(false);
-  return (
-    <LogoBox>
-      {failed ? (
-        <Monogram>{initial(name)}</Monogram>
-      ) : (
-        <LogoImg src={logoUrl} alt="" onError={() => setFailed(true)} />
-      )}
-    </LogoBox>
-  );
-}
-
 function JobGroup({
   title,
   jobs,
@@ -703,8 +639,7 @@ function JobGroup({
   previewCount?: number;
   onPick: (job: CompanyJobView) => void;
 }) {
-  const { visible, truncated, canCollapse, hiddenCount, expand, collapse } =
-    useExpandable(jobs, previewCount ?? jobs.length);
+  const jobList = useExpandable(jobs, previewCount ?? jobs.length);
   const now = nowMs();
 
   return (
@@ -717,7 +652,7 @@ function JobGroup({
         <Empty>{emptyText}</Empty>
       ) : (
         <>
-          {visible.map((j) => {
+          {jobList.visible.map((j) => {
             // One caption per row, saying why it's sitting where it is: when it
             // was applied (still open), why it's parked (deferred), or when it
             // ended (terminal). Statuses are mutually exclusive, so at most one
@@ -747,14 +682,7 @@ function JobGroup({
               </Row>
             );
           })}
-          {truncated && (
-            <ShowMoreButton onClick={expand}>
-              Show {hiddenCount} more
-            </ShowMoreButton>
-          )}
-          {!truncated && canCollapse && (
-            <ShowMoreButton onClick={collapse}>Collapse</ShowMoreButton>
-          )}
+          <ShowMoreToggle expandable={jobList} />
         </>
       )}
     </Card>

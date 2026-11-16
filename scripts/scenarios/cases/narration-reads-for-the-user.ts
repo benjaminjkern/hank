@@ -1,4 +1,4 @@
-import { CompanyStatus } from "@/generated/prisma/client";
+import { CompanyStatus } from "@/server/generated/prisma/client";
 import {
   narrateCompanyCaughtUp,
   narrateJobClose,

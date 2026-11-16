@@ -2,6 +2,8 @@ import styled from "styled-components";
 
 import { toneColor } from "@/shared/statusColors";
 
+import { Caret } from "../shared/Caret";
+
 import { BUCKET_META, BUCKET_TONE, type Bucket } from "./buckets";
 
 import type { ReactNode } from "react";
@@ -52,21 +54,6 @@ const BucketDot = styled.span<{ $tone: Bucket }>`
   flex-shrink: 0;
 `;
 
-// SVG chevron rather than a unicode glyph: a text caret like ▸ sits
-// asymmetrically inside its em box, so rotating the box pivots around a
-// point that isn't the visible mark — the open state ends up looking
-// off-center. The SVG draws the chevron centered in its viewBox so a
-// 90deg rotation pivots cleanly around the visible apex.
-const BucketCaret = styled.svg<{ $open: boolean }>`
-  width: 10px;
-  height: 10px;
-  display: block;
-  color: ${({ theme }) => theme.colors.textSubtle};
-  flex-shrink: 0;
-  transform: rotate(${({ $open }) => ($open ? "90deg" : "0deg")});
-  transition: transform 0.12s ease;
-`;
-
 const BucketCount = styled.span`
   font-size: 12px;
   font-family: ${({ theme }) => theme.font.mono};
@@ -105,16 +92,7 @@ export function DashboardBucket({
         type="button"
         title={BUCKET_META[bucket].hint}
       >
-        <BucketCaret $open={open} viewBox="0 0 10 10" aria-hidden>
-          <path
-            d="M3.5 2 L7 5 L3.5 8"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </BucketCaret>
+        <Caret open={open} />
         <BucketDot $tone={bucket} />
         <BucketTitle>{BUCKET_META[bucket].label}</BucketTitle>
         {count > 0 && <BucketCount>{count}</BucketCount>}

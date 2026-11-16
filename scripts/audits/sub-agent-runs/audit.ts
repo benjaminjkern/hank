@@ -24,7 +24,7 @@ import path from "path";
 import Anthropic from "@anthropic-ai/sdk";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-import { PrismaClient } from "../../../src/generated/prisma/client";
+import { PrismaClient } from "../../../src/server/generated/prisma/client";
 import { getGraderClient } from "../../lib/graderLlm";
 
 import {

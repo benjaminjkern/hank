@@ -7,7 +7,7 @@
 //   2. Ask the decider sub-agent about what's left, if anything is.
 //   3. Merge the two halves into the persisted ApplicationDecision.
 
-import type { RunContext } from "@/server/agent/contracts";
+import type { RunContext } from "@/server/contracts";
 import { loadMergedQuestions } from "@/server/entities/jobs/applicationQuestions";
 import { withTraceSpan } from "@/server/platform/trace/span";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";

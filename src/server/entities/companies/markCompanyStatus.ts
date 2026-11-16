@@ -10,10 +10,13 @@
 // directly (it must not land CAUGHT_UP from a metadata pass — its own step 3
 // wrap owns the ending, after the body-reads). PRE_SCAN itself writes no status.
 
-import { CompanyStatus, CompanyEventType } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { companyStatusFields } from "@/server/entities/companies/companyStatusFields";
 import { logCompanyEvent } from "@/server/entities/companies/logCompanyEvent";
+import {
+  CompanyStatus,
+  CompanyEventType,
+} from "@/server/generated/prisma/client";
 
 // Statuses these helpers are allowed to overwrite — the pre-walkthrough /
 // re-check states. Won't touch SHORTLISTING / APPLYING / IN_FLIGHT / IN_PROCESS

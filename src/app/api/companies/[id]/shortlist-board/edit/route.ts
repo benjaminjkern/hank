@@ -5,7 +5,7 @@
 
 import { z } from "zod";
 
-import { ProposedVerdict } from "@/generated/prisma/client";
+import { ProposedVerdict } from "@/server/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
 import { rejectImpersonatedWrite } from "@/server/platform/admin/viewerScope";

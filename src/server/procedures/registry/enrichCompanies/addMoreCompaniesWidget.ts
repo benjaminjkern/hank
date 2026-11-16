@@ -13,8 +13,8 @@
 // `passedCount` rides along so the submission can report whether this round
 // decided anything at all, which is what gates the session wrap on "Done".
 
-import { widgetEvent } from "@/server/agent/contracts";
-import type { TurnEvent } from "@/server/agent/contracts";
+import { widgetEvent } from "@/server/contracts";
+import type { TurnEvent } from "@/server/contracts";
 
 export function addMoreCompaniesWidget(
   added: string[],

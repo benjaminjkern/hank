@@ -6,7 +6,6 @@
 // text back out of it. Undrafted questions are items too, carrying empty text —
 // a form item Hank passed over has to be visible or the user can't fill it in.
 
-import { JobInteractionStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import {
   applicationEditsFor,
@@ -26,6 +25,7 @@ import {
   partitionFindings,
   readApplicationReview,
 } from "@/server/entities/jobs/applicationReview";
+import { JobInteractionStatus } from "@/server/generated/prisma/client";
 import {
   isCoverLetterQuestion,
   isStockFieldType,

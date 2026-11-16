@@ -13,8 +13,8 @@
 // Provenance is recorded in `enrichedAttributes.backfilled` so it's visible
 // which columns the model wrote versus the scraper.
 
-import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import type { Prisma } from "@/server/generated/prisma/client";
 import type { EnrichScalars } from "@/server/subagents/registry/enrichJob";
 
 // Whether a location string already states a work arrangement, so we don't

@@ -6,8 +6,8 @@
 // NEVER throw — a missing table (migration not applied) or any query error
 // degrades to "" (no block injected), not a broken turn.
 
-import { Role } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { Role } from "@/server/generated/prisma/client";
 import { relativeTime } from "@/shared/utils/date";
 import { nowMs } from "@/shared/utils/now";
 

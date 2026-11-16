@@ -3,12 +3,12 @@ import { useMemo, useState } from "react";
 import type { ToolSegment } from "@/client/chatStore";
 import { stripToolErrorMarker } from "@/shared/toolErrorMarker";
 
+import { Caret } from "../../RightPanel/shared/Caret";
 import { tryParseShortlistProposal } from "../widgets/registry/shortlistProposal/def";
 
 import { SegmentView } from "./SegmentView";
 import {
   ToolBlock,
-  ToolCaret,
   ToolChildren,
   ToolChip,
   ToolExpanded,
@@ -69,9 +69,7 @@ export function ExpandableToolChip({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
-        <ToolCaret $open={open} aria-hidden>
-          ▶
-        </ToolCaret>
+        <Caret open={open} size={9} />
         <ToolChip $status={segment.status}>{chipLabel}</ToolChip>
       </ToolHeaderButton>
       {segment.progressLabel && segment.status === "pending" && (

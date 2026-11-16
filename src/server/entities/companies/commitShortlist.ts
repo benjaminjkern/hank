@@ -11,16 +11,6 @@
 // A coherent set of writes in one transaction — a mutation, not a chain of
 // steps — which is why it lives in entities (same shape as closeCompany).
 
-import {
-  CompanyEventType,
-  CompanyStatus,
-  JobCloseReason,
-  JobDeferReason,
-  JobEventType,
-  JobInteractionStatus,
-  ProposedVerdict,
-} from "@/generated/prisma/client";
-import type { Prisma } from "@/generated/prisma/client";
 import { bulkUpdate, type Database } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
 import { planJobEvents } from "@/server/entities/jobs/logJobEvents";
@@ -29,6 +19,16 @@ import {
   isStanceable,
   onBoardWhere,
 } from "@/server/entities/jobs/shortlistPool";
+import type { Prisma } from "@/server/generated/prisma/client";
+import {
+  CompanyEventType,
+  CompanyStatus,
+  JobCloseReason,
+  JobDeferReason,
+  JobEventType,
+  JobInteractionStatus,
+  ProposedVerdict,
+} from "@/server/generated/prisma/client";
 
 import { logCompanyEvent } from "./logCompanyEvent";
 

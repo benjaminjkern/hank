@@ -6,7 +6,7 @@
 // to make the company eligible for re-authoring. So there is no promotion tier
 // and no trust ladder: HEALTHY or QUARANTINED, one direction per event.
 
-import { BoardReaderHealth } from "@/generated/prisma/client";
+import { BoardReaderHealth } from "@/server/generated/prisma/client";
 
 // Consecutive failed runs before we stop trying the stored plan. Three rather
 // than one because a board being down for a day is far more common than a

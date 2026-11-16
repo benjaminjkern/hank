@@ -4,10 +4,10 @@ import { useState } from "react";
 import styled from "styled-components";
 
 import { useChatStore } from "@/client/chatStore";
-import type {
-  FocusedJobView,
-  ShortAnswer,
-} from "@/server/agent/tools/lib/types";
+import type { ShortAnswer } from "@/server/entities/jobs/types";
+import type { FocusedJobView } from "@/server/views/getFocusedJob";
+
+import { Switch } from "./Switch";
 
 // The right panel's shared section chrome, plus the controls that act on a
 // drafted artifact WITHOUT editing its text: the "reuse when drafting" switch,
@@ -75,60 +75,13 @@ const DangerInlineButton = styled.button`
   }
 `;
 
-// Reuse toggle. The label states the control's *purpose* and never changes; the
-// on/off track + accent vs muted color show its current state. Keep it that way
-// — a label that changes with the state ("Used" / "Not used") reads as a
-// factual status rather than a switch. One label on every surface that shows
-// the switch (the application page and the Documents artifacts list), so the
-// two can't describe the same flag differently.
-// The switch alone decides whether this answer feeds future drafting
+// Reuse toggle. One label on every surface that shows the switch (the
+// application page and the Documents artifacts list), so the two can't
+// describe the same flag differently — and it names the control's purpose
+// rather than its state ("Used" / "Not used" reads as a factual status, not a
+// switch). The switch alone decides whether this answer feeds future drafting
 // (independent of whether it's been used), so it renders on every artifact.
 const SWITCH_LABEL = "Reuse when drafting";
-
-const SwitchButton = styled.button<{ $on: boolean }>`
-  display: inline-flex;
-  align-items: center;
-  gap: ${({ theme }) => theme.space.xs};
-  font-size: 10px;
-  font-family: ${({ theme }) => theme.font.mono};
-  padding: 2px 8px 2px 6px;
-  border-radius: 999px;
-  cursor: pointer;
-  white-space: nowrap;
-  background: ${({ theme, $on }) => ($on ? theme.colors.bgMuted : "transparent")};
-  color: ${({ theme, $on }) => ($on ? theme.colors.accent : theme.colors.textSubtle)};
-  border: 1px solid
-    ${({ theme, $on }) => ($on ? theme.colors.border : theme.colors.border)};
-  &:hover {
-    border-color: ${({ theme }) => theme.colors.borderStrong};
-  }
-  &:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-  }
-`;
-
-const SwitchTrack = styled.span<{ $on: boolean }>`
-  position: relative;
-  display: inline-block;
-  width: 18px;
-  height: 10px;
-  flex-shrink: 0;
-  border-radius: 999px;
-  background: ${({ theme, $on }) => ($on ? theme.colors.accent : theme.colors.textSubtle)};
-  transition: background 0.15s ease;
-`;
-
-const SwitchKnob = styled.span<{ $on: boolean }>`
-  position: absolute;
-  top: 1px;
-  left: ${({ $on }) => ($on ? "9px" : "1px")};
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: ${({ theme }) => theme.colors.bgPanel};
-  transition: left 0.15s ease;
-`;
 
 export function ReuseSwitch({
   on,
@@ -140,23 +93,17 @@ export function ReuseSwitch({
   onChange: (next: boolean) => void;
 }) {
   return (
-    <SwitchButton
-      type="button"
-      $on={on}
+    <Switch
+      on={on}
       disabled={disabled}
-      onClick={() => onChange(!on)}
+      onChange={onChange}
+      label={SWITCH_LABEL}
       title={
         on
           ? "Hank draws on this when drafting new cover letters and answers. Click to stop (the text stays)."
           : "Hank won't reuse this when drafting. Click to include it."
       }
-      aria-pressed={on}
-    >
-      <SwitchTrack $on={on}>
-        <SwitchKnob $on={on} />
-      </SwitchTrack>
-      {SWITCH_LABEL}
-    </SwitchButton>
+    />
   );
 }
 

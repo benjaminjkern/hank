@@ -12,6 +12,8 @@
 // consolidate + compact is procedures/registry/wrapSegment.ts, which the
 // chat runner invokes once per message.
 
+import { prisma } from "@/server/db/prisma";
+import { planJobEvents } from "@/server/entities/jobs/logJobEvents";
 import {
   type CompanyBlockReason,
   type CompanyCloseReason,
@@ -21,9 +23,7 @@ import {
   JobCloseReason,
   JobEventType,
   JobInteractionStatus,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
-import { planJobEvents } from "@/server/entities/jobs/logJobEvents";
+} from "@/server/generated/prisma/client";
 
 import { companyStatusFields } from "./companyStatusFields";
 import { computeCompanyEngagement } from "./engagement";

@@ -1,5 +1,5 @@
-import { JobInteractionStatus, Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { JobInteractionStatus, Prisma } from "@/server/generated/prisma/client";
 
 import { USER_ID, drainPipeline, withFocus } from "../lib";
 

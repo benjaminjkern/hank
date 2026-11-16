@@ -1,0 +1,54 @@
+import { z } from "zod";
+
+import { JOB_CLOSE_REASONS } from "@/server/entities/jobs/jobInteractionInputs";
+import { closeJob } from "@/server/entities/jobs/setJobAside";
+import type { JobCloseReason } from "@/server/generated/prisma/client";
+
+import { resolveJobArg } from "../lib/resolveEntityArg";
+
+import type { ToolDef } from "../lib/types";
+
+export const closeJobTool: ToolDef<{
+  job?: string;
+  reason: JobCloseReason;
+  note?: string;
+}> = {
+  name: "close_job",
+  affectsViewedState: true,
+  description:
+    "Pass on a single shortlisted job. Logs a CLOSED event with the structured reason. Use when the user has decided not to apply to one job within an otherwise-active company. This is an ATOMIC RECORD-ONLY action: it does not bring up the next role — call company_walkthrough on its company afterward to bring up the remaining roles if the user is moving on. **`job` is the role's slug — pass the role the user means; don't ask 'which one' when 'this' is clear.**",
+  parser: z.object({
+    job: z
+      .string()
+      .optional()
+      .describe("The role's slug — the role the user means."),
+    reason: z
+      .enum(JOB_CLOSE_REASONS)
+      .describe(
+        "Why this ONE role is dead. NOT_A_MATCH = the role itself doesn't fit. LOCATION_MISMATCH = its location or work arrangement doesn't work. USER_REJECTED = the user looked at it and said no. OTHER = anything else (put it in the note). These are JOB-level values: NOT_A_MATCH / LOCATION_MISMATCH / OTHER also appear on close_company, where they mean the whole employer — writing off an employer is close_company, not this.",
+      ),
+    note: z
+      .string()
+      .optional()
+      .describe(
+        "The user's actual reason for passing, in their own words where possible — one sentence. Fill this whenever you have it (ask a short 'why?' first if they didn't say and it isn't clear from context).",
+      ),
+  }),
+  async handle(input, ctx) {
+    const resolved = await resolveJobArg(ctx, input.job, {
+      source: "close_job",
+      ambiguousMessage: "no job slug provided — pass the role's slug",
+    });
+    if (!resolved.ok) return resolved.result;
+    const jobId = resolved.id;
+    await closeJob({
+      userId: ctx.userId,
+      jobId,
+      reason: input.reason,
+      note: input.note,
+    });
+    // Record-only — focus is ephemeral, so nothing advances on its own; the
+    // system prompt has Hank call company_walkthrough if the user is moving on.
+    return { content: `Job skipped (${input.reason}).` };
+  },
+};

@@ -5,7 +5,7 @@
 import {
   OpportunityEventType,
   OpportunityStatus,
-} from "@/generated/prisma/client";
+} from "@/server/generated/prisma/client";
 
 // The four lead statuses the tools offer the model.
 const ACTIVE_LEAD_STATUSES = [

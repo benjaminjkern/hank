@@ -6,9 +6,9 @@
 // params + the volatile prompt pieces — so the inspector can reconstruct the
 // exact request (skeleton + volatile) and see the params the turn actually used.
 
-import type { Prisma } from "@/generated/prisma/client";
 import type { HankSystemPrompt } from "@/server/agent/hank";
 import type { AgentTurnResult } from "@/server/agent/runtime/runAgentTurn";
+import type { Prisma } from "@/server/generated/prisma/client";
 import { upsertPromptSnapshot } from "@/server/platform/usage/promptSnapshot";
 
 export async function captureTurn(

@@ -6,7 +6,7 @@
 // The total is the gate for the global spend cap; overCap() short-circuits
 // the experiment before the next turn / persona.
 
-import type { PrismaClient } from "@/generated/prisma/client";
+import type { PrismaClient } from "@/server/generated/prisma/client";
 import { costOf } from "@/server/platform/usage/pricing";
 
 type Usage =

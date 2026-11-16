@@ -3,8 +3,8 @@
 // attach_contact_to_opportunity tool and createOpportunities' seed links. Works
 // purely in ids.
 
-import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import type { Prisma } from "@/server/generated/prisma/client";
 
 export async function linkContactsToOpportunity(args: {
   opportunityId: string;

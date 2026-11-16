@@ -14,7 +14,7 @@
 // slugs do NOT use this: their slug is a derived dedup identity minted inside the
 // create transaction (see entities/companies/companySlug.ts).
 
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/server/generated/prisma/client";
 
 import { capSlug } from "../../../shared/utils/slugify";
 

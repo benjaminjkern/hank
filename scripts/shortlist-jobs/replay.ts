@@ -28,7 +28,10 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-import { PrismaClient, JobEventType } from "../../src/generated/prisma/client";
+import {
+  PrismaClient,
+  JobEventType,
+} from "../../src/server/generated/prisma/client";
 import { loadShortlistJobsInput } from "../../src/server/procedures/registry/shortlist/loadShortlistJobsInput";
 import { runSubAgent } from "../../src/server/subagents/lib/runSubAgent";
 import { shortlistJobsSubAgent } from "../../src/server/subagents/registry/shortlistJobs";

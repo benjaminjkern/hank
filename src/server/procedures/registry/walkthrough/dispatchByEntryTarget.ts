@@ -1,5 +1,5 @@
-import { statusEvent } from "@/server/agent/contracts";
-import type { TurnEvent } from "@/server/agent/contracts";
+import { statusEvent } from "@/server/contracts";
+import type { TurnEvent } from "@/server/contracts";
 
 import { runCompanyArm } from "./companyArm";
 import { runDiscoveryArm, runDiscoveryCommitArm } from "./discoveryArm";

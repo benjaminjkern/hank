@@ -1,5 +1,8 @@
-import { CompanyStatus, JobInteractionStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import {
+  CompanyStatus,
+  JobInteractionStatus,
+} from "@/server/generated/prisma/client";
 
 import {
   USER_ID,

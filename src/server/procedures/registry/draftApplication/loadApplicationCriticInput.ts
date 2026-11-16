@@ -6,13 +6,13 @@
 // reviewer knows. Anything not returned here is invisible to it, which is the
 // point: no user memory, no thesis, no notes.
 
-import { JobEventType } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import {
   ROLE_ATTR_SELECT,
   toRoleAttrs,
 } from "@/server/entities/jobs/roleAttrs";
 import { readResumeBackground } from "@/server/entities/resume/store";
+import { JobEventType } from "@/server/generated/prisma/client";
 import type {
   ApplicationCriticInput,
   SiblingApplication,

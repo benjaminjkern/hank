@@ -10,8 +10,8 @@
 // out of the for-await calls the generator's return() → its finally runs
 // clearActiveRun, so the next turn never trips the ALREADY_STREAMING guard.
 
-import type { UiEvent } from "@/server/agent/contracts";
 import { runUserMessage } from "@/server/agent/runtime/runUserMessage";
+import type { UiEvent } from "@/server/contracts";
 import type { WidgetKind } from "@/shared/widgetKinds";
 
 import { resolvePanelHint } from "./panelHint";

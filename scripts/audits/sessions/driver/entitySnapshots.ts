@@ -23,12 +23,12 @@
 // spec — the compact user-facing summary, which also keeps the auditor input
 // from ballooning with full JD text.
 
-import type { PrismaClient } from "@/generated/prisma/client";
 import {
   ROLE_ATTR_SELECT,
   formatRoleAttrs,
   toRoleAttrs,
 } from "@/server/entities/jobs/roleAttrs";
+import type { PrismaClient } from "@/server/generated/prisma/client";
 
 import type { AuditTurn } from "./replay";
 

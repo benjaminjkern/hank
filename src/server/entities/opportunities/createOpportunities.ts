@@ -6,12 +6,12 @@
 // local-time strings → Dates is the tool layer's job, so this stays reusable and
 // free of agent/UI vocabulary.
 
+import { prisma } from "@/server/db/prisma";
 import {
   EventSource,
   OpportunityEventType,
   OpportunityStatus,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+} from "@/server/generated/prisma/client";
 
 import { mintOpportunitySlug } from "./opportunitySlug";
 

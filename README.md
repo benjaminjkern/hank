@@ -93,7 +93,7 @@ One page, two surfaces:
 
 - **Next.js 16** App Router, **React 19**, **TypeScript**
 - **Postgres** via **Prisma 7** (adapter pattern; client generated to
-  `src/generated/prisma/`), with **Kysely** compiling batched per-row updates
+  `src/server/generated/prisma/`), with **Kysely** compiling batched per-row updates
 - **styled-components 6** with SSR — no Tailwind, no CSS classes
 - **Auth.js v5** — Google / GitHub OAuth, database-backed sessions
 - **DeepSeek** for every LLM call; the **Anthropic SDK** for vision only

@@ -1,5 +1,5 @@
-import { CompanyStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { CompanyStatus } from "@/server/generated/prisma/client";
 import { runWhatsNext } from "@/server/procedures/registry/whatsNext";
 
 import { SESSION_ID, USER_ID } from "../lib";

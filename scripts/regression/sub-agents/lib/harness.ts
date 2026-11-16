@@ -14,7 +14,7 @@ import "dotenv/config";
 import Anthropic from "@anthropic-ai/sdk";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-import { PrismaClient } from "../../../../src/generated/prisma/client";
+import { PrismaClient } from "../../../../src/server/generated/prisma/client";
 import { resolveAnthropicApiKey } from "../../../../src/server/platform/llm/resolveAnthropicKey";
 
 import {

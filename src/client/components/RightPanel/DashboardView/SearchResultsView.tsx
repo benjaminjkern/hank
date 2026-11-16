@@ -3,7 +3,8 @@ import styled from "styled-components";
 import { appliedTierBadge, statusLabel } from "@/shared/statusColors";
 import { nowMs } from "@/shared/utils/now";
 
-import { CompanyLogoChip } from "./CompanyLogoChip";
+import { CompanyLogoChip } from "../shared/CompanyLogoChip";
+
 import {
   CloseNoteLine,
   CloseReasonLabel,
@@ -126,7 +127,11 @@ export function SearchResultsView({
               onClick={() => onPickCompany(c.companyId)}
             >
               <ClosedRowLeft>
-                <CompanyLogoChip logoUrl={c.logoUrl} name={c.companyName} />
+                <CompanyLogoChip
+                  logoUrl={c.logoUrl}
+                  name={c.companyName}
+                  size={20}
+                />
                 <Title>{c.companyName}</Title>
               </ClosedRowLeft>
               <CloseReasonLabel>{c.stateLabel}</CloseReasonLabel>

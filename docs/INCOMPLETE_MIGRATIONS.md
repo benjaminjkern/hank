@@ -68,7 +68,7 @@ Documented on purpose. Listed here so nobody "discovers" them and half-fixes one
 - **`pipeline_status` / `pipeline_widget` / `pipeline_activity`** — persisted block-type strings in `ChatMessage.content` (`run_error` is a later sibling, correctly named). There is no pipeline layer; renaming needs a data migration and breaks replay. Called out in AGENTS.md already.
 - **`TokenUsage.operation` aliases** — [track.ts](../src/server/platform/usage/track.ts) keeps `scrape_html`, `company_hunter`, `prescan_deep`, `users_distill` in the union solely so old rows type-check. No code path emits them. _Droppable once the rows roll off `pnpm usage`'s default window; `users_distill` says so in-line._
 - **`VerificationToken`** — empty model kept as an Auth.js adapter convention (magic-link sign-in intentionally absent).
-- **Two dedupKey spellings for one failure** — a failed slug lookup keys the audit either by the resolver (`resolve:company_not_found`, 26 call sites) or by the calling tool (`update_job:not_found:company`, 10 call sites). Both predate [slugLookupError.ts](../src/server/agent/tools/lib/slugLookupError.ts), which now renders both from one place via its optional `source` — so the split is one `opts` argument, not 36 hand-written strings. **Not collapsed because picking a winner changes live audit keys**, and the per-tool form is both more informative and the one matching AGENTS.md's documented `<source>:<failure mode>:<input shape>` shape. _To finish: pass `source` at the other 26 sites, delete the `resolve:` fallback, make `source` required._
+- **Two dedupKey spellings for one failure** — a failed slug lookup keys the audit either by the resolver (`resolve:company_not_found`, 26 call sites) or by the calling tool (`update_job:not_found:company`, 10 call sites). Both predate [slugLookupError.ts](../src/server/tools/lib/slugLookupError.ts), which now renders both from one place via its optional `source` — so the split is one `opts` argument, not 36 hand-written strings. **Not collapsed because picking a winner changes live audit keys**, and the per-tool form is both more informative and the one matching AGENTS.md's documented `<source>:<failure mode>:<input shape>` shape. _To finish: pass `source` at the other 26 sites, delete the `resolve:` fallback, make `source` required._
 
 ---
 
@@ -85,7 +85,7 @@ grep -rhoE "\]\((\.\./)?(src|scripts|prisma|docs)/[A-Za-z0-9_./-]+\)" docs/ AGEN
 ---
 ## E. Dead code
 
-Measured by enumerating the 1,252 exported symbols across 549 `.ts`/`.tsx` files (excluding `src/generated/`) and counting references outside the defining file. Two clean results: **zero unreferenced source files** (the only never-imported file is `scripts/regression/key-crypto.ts`, a CLI entry point) and **zero exported values used only inside their own file**.
+Measured by enumerating the 1,252 exported symbols across 549 `.ts`/`.tsx` files (excluding `src/server/generated/`) and counting references outside the defining file. Two clean results: **zero unreferenced source files** (the only never-imported file is `scripts/regression/key-crypto.ts`, a CLI entry point) and **zero exported values used only inside their own file**.
 
 The last sweep deleted 12 dead symbols and one dead component, dropped the `export` from 22 internal-only values, and removed the `scrapeUrl` vestigial parameter. What remains is a short list of judgement calls.
 
@@ -105,7 +105,7 @@ Each survived the sweep because deleting it costs something a reader would want 
 
 ### E2. Barrel re-exports nobody imports through the barrel (9)
 
-`StreamEventOf` · `TurnDone` ([agent/contracts](../src/server/agent/contracts/index.ts)) · `ChatArgs` ([procedures/registry/chat](../src/server/procedures/registry/chat/index.ts)) · `RunScanResult` ([scan](../src/server/procedures/registry/scan/index.ts)) · `ShortlistArgs` ([shortlist](../src/server/procedures/registry/shortlist/index.ts)) · `runEnrichCompanies`, `EnrichCompaniesResult`, `EnrichOutcome`, `EnrichProgressEvent` ([enrichCompanies](../src/server/procedures/registry/enrichCompanies/index.ts)).
+`StreamEventOf` · `TurnDone` ([contracts](../src/server/contracts/index.ts)) · `ChatArgs` ([procedures/registry/chat](../src/server/procedures/registry/chat/index.ts)) · `RunScanResult` ([scan](../src/server/procedures/registry/scan/index.ts)) · `ShortlistArgs` ([shortlist](../src/server/procedures/registry/shortlist/index.ts)) · `runEnrichCompanies`, `EnrichCompaniesResult`, `EnrichOutcome`, `EnrichProgressEvent` ([enrichCompanies](../src/server/procedures/registry/enrichCompanies/index.ts)).
 
 Left alone on purpose: each of those barrels documents itself as the procedure's **public surface** ("import from here, not a deep path"), so a curated-but-not-yet-imported name is the intended shape, not a tombstone. Trimming them to only what has a caller today would make the surface arbitrary — an entry's args type sitting beside the entry is coherent.
 

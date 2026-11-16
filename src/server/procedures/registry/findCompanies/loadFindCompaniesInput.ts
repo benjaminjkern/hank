@@ -5,7 +5,6 @@
 // by whether the user answered. Declined names shouldn't come back unprompted;
 // unanswered ones are still on the table and can be carried into this batch.
 
-import { CompanyStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import {
   listOpenSuggestions,
@@ -13,6 +12,7 @@ import {
 } from "@/server/entities/companies/companySuggestions";
 import { readMemory } from "@/server/entities/memory/store";
 import { readResumeBackground } from "@/server/entities/resume/store";
+import { CompanyStatus } from "@/server/generated/prisma/client";
 import type {
   FindCompaniesInput,
   WatchlistContextEntry,

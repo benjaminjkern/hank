@@ -28,19 +28,19 @@
 // exclusively (claimSessionForNewRun), so nothing else is moving these rows
 // mid-batch. Re-reading them inside the write is what cost three round trips.
 
-import {
-  EventSource,
-  JobEventType,
-  JobInteractionStatus,
-  JobCloseReason,
-  type Prisma,
-} from "@/generated/prisma/client";
 import { bulkUpdate, type Database } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
 import {
   logCompanyEvents,
   type CompanyEventInput,
 } from "@/server/entities/companies/logCompanyEvent";
+import {
+  EventSource,
+  JobEventType,
+  JobInteractionStatus,
+  JobCloseReason,
+  type Prisma,
+} from "@/server/generated/prisma/client";
 
 import { EVENT_TO_STATUS, DUAL_WRITE_COMPANY_EVENT } from "./jobEventStatus";
 

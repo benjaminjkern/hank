@@ -7,10 +7,6 @@
 // (procedures/registry/shortlist), the edit paths (setBoardStance), and the
 // commit that clears them (entities/companies/commitShortlist).
 
-import {
-  JobInteractionStatus,
-  ProposedVerdict,
-} from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import {
   isOnBoard,
@@ -25,6 +21,10 @@ import {
   isStanceable,
   CONSIDERED_STATUSES,
 } from "@/server/entities/jobs/shortlistPool";
+import {
+  JobInteractionStatus,
+  ProposedVerdict,
+} from "@/server/generated/prisma/client";
 import type {
   NegotiationRow,
   NegotiationState,

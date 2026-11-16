@@ -11,9 +11,9 @@
 // everything Hank did before stopping for their next input.
 
 import { buildRenderedWidget } from "@/../scripts/regression/conversations/driver/widgetRender";
-import type { Prisma } from "@/generated/prisma/client";
-import { Role } from "@/generated/prisma/client";
 import { detectFabricatedUiRender } from "@/server/agent/session/uiProvenance";
+import type { Prisma } from "@/server/generated/prisma/client";
+import { Role } from "@/server/generated/prisma/client";
 import {
   parseToolErrorMarker,
   stripToolErrorMarker,

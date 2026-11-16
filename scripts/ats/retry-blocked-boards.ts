@@ -29,14 +29,14 @@
 
 import "dotenv/config";
 
+import { prisma } from "../../src/server/db/prisma";
+import { saveBoardReader } from "../../src/server/entities/boardReaders/recordReaderRun";
+import { reviveCompany } from "../../src/server/entities/companies/resumeCompany";
 import {
   BoardReaderOrigin,
   CompanyBlockReason,
   CompanyStatus,
-} from "../../src/generated/prisma/client";
-import { prisma } from "../../src/server/db/prisma";
-import { saveBoardReader } from "../../src/server/entities/boardReaders/recordReaderRun";
-import { reviveCompany } from "../../src/server/entities/companies/resumeCompany";
+} from "../../src/server/generated/prisma/client";
 import { testScrape } from "../../src/server/platform/scrape";
 import { detectAts } from "../../src/server/platform/scrape/ats";
 import { MIN_REAL_JOBS } from "../../src/server/platform/scrape/ats/shared";

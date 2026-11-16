@@ -23,8 +23,8 @@
 // message ended something: the chat runner off `endedCompanyId`, or the
 // add-more dispatch when the user says they're done adding.
 
-import type { RunContext } from "@/server/agent/contracts";
 import { appendPipelineActivity } from "@/server/agent/session";
+import type { RunContext } from "@/server/contracts";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runCompactSession } from "@/server/procedures/registry/compactSession";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";

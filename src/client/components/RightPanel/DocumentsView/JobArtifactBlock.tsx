@@ -2,8 +2,8 @@
 
 import styled from "styled-components";
 
-import type { FocusedJobView } from "@/server/agent/tools/lib/types";
 import type { DocumentArtifact } from "@/server/views/documents";
+import type { FocusedJobView } from "@/server/views/getFocusedJob";
 import { statusColor, statusLabel } from "@/shared/statusColors";
 
 import {
@@ -12,6 +12,7 @@ import {
   effectiveReuse,
   patchJobInteraction,
 } from "../shared/applicationArtifacts";
+import { Caret } from "../shared/Caret";
 
 import { artifactCountMeta, reuseMeta } from "./artifactMeta";
 import { EmptyHint, InlineButton, Prose } from "./styles";
@@ -75,7 +76,7 @@ export function JobArtifactBlock({
   return (
     <JobBlock>
       <JobHeader type="button" onClick={onToggle} aria-expanded={expanded}>
-        <Chevron $open={expanded}>▶</Chevron>
+        <Caret open={expanded} />
         <JobHeadMain>
           <JobTitle>{artifact.jobTitle}</JobTitle>
           <JobCo>{artifact.companyName}</JobCo>
@@ -187,15 +188,6 @@ const JobHeader = styled.button`
   &:hover {
     background: ${({ theme }) => theme.colors.bgMuted};
   }
-`;
-
-const Chevron = styled.span<{ $open: boolean }>`
-  display: inline-block;
-  font-size: 10px;
-  color: ${({ theme }) => theme.colors.textSubtle};
-  flex-shrink: 0;
-  transform: rotate(${({ $open }) => ($open ? "90deg" : "0deg")});
-  transition: transform 0.15s ease;
 `;
 
 const JobHeadMain = styled.div`

@@ -35,6 +35,7 @@ import {
 // Types only — the loader beside them opens a database connection, so a VALUE
 // from that module would follow Prisma into the browser bundle.
 
+import { Caret } from "./shared/Caret";
 import { PanelRowCard } from "./shared/negotiation";
 import {
   StanceMarks,
@@ -106,14 +107,6 @@ const TierHeader = styled.button`
   cursor: pointer;
   padding: ${({ theme }) => theme.space.xs} 0;
   text-align: left;
-`;
-
-const TierCaret = styled.span<{ $open: boolean }>`
-  display: inline-block;
-  transition: transform 120ms ease;
-  transform: rotate(${({ $open }) => ($open ? "90deg" : "0deg")});
-  color: ${({ theme }) => theme.colors.textSubtle};
-  font-size: 10px;
 `;
 
 const TierTitle = styled.h3`
@@ -288,7 +281,7 @@ function DiscardGroup({
   return (
     <TierSection>
       <TierHeader onClick={() => setOpen((o) => !o)}>
-        <TierCaret $open={open}>▶</TierCaret>
+        <Caret open={open} />
         <TierTitle>{DISCARD_LABEL}</TierTitle>
         <TierCount>{placed.length}</TierCount>
         {open && <ScanTag>— {DISCARD_HINT}</ScanTag>}

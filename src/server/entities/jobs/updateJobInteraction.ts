@@ -1,10 +1,10 @@
+import { prisma } from "@/server/db/prisma";
 import {
   JobInteractionStatus,
   type JobDeferReason,
   Prisma,
   type JobCloseReason,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+} from "@/server/generated/prisma/client";
 
 type ShortAnswerInput = { question: string; answer: string };
 

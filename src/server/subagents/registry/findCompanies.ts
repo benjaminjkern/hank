@@ -24,19 +24,19 @@
 // sub-agent re-emits the ones the new direction supports, which is what stops a
 // checklist the user typed past from being lost work.
 
-import { CompanyStatus } from "@/generated/prisma/client";
-import type { AnyToolDef } from "@/server/agent/tools/lib/types";
-import { fetchUrlTool } from "@/server/agent/tools/registry/fetchUrl";
 import type {
   OpenSuggestion,
   SuggestionHistoryEntry,
 } from "@/server/entities/companies/companySuggestions";
+import { CompanyStatus } from "@/server/generated/prisma/client";
 import type { LlmModel } from "@/server/platform/llm/models";
 import type {
   SubAgentDef,
   SubAgentOutputSchema,
 } from "@/server/subagents/lib/types";
 import { USER_FACING_VOICE } from "@/server/subagents/lib/voice";
+import type { AnyToolDef } from "@/server/tools/lib/types";
+import { fetchUrlTool } from "@/server/tools/registry/fetchUrl";
 
 import type Anthropic from "@anthropic-ai/sdk";
 

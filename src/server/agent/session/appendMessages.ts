@@ -2,9 +2,9 @@
 // transcript — user turns, assistant replies, deterministic-layer activity notes,
 // and tool results — goes through one of these.
 
-import { Role } from "@/generated/prisma/client";
-import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { Role } from "@/server/generated/prisma/client";
+import type { Prisma } from "@/server/generated/prisma/client";
 import {
   linkAttachmentsToMessage,
   listAttachmentsByIds,

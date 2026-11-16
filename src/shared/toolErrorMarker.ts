@@ -1,6 +1,6 @@
 // The inert `<!--tool-error:{...}-->` marker a failed tool result carries in its
 // `content`. Shared because three readers need it on different sides: the
-// server writes it (agent/tools/lib/toolError.ts), the chat panel strips it for
+// server writes it (tools/lib/toolError.ts), the chat panel strips it for
 // display, and the session-audit harness parses it back out.
 
 // Broad bucket codes. The specific "why" lives in `dedupHint`, which is what the

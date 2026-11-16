@@ -1,5 +1,8 @@
-import { JobEventType, JobInteractionStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import {
+  JobEventType,
+  JobInteractionStatus,
+} from "@/server/generated/prisma/client";
 import { appliedAgeTier } from "@/shared/statusColors";
 import { nowMs } from "@/shared/utils/now";
 

@@ -12,8 +12,8 @@
 // on the next turn by itself — and runChatTurn reads that same flip as the
 // completion that brings up the what's-next chooser.
 
-import type { RunContext } from "@/server/agent/contracts";
 import { appendPipelineActivity } from "@/server/agent/session";
+import type { RunContext } from "@/server/contracts";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runCompactSession } from "@/server/procedures/registry/compactSession";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";

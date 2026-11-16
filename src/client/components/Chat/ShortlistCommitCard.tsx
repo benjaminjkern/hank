@@ -15,6 +15,8 @@ import { z } from "zod";
 
 import { useChatStore } from "@/client/chatStore";
 
+import { Caret } from "../RightPanel/shared/Caret";
+
 type ShortlistCommitParsed = {
   companyName: string;
   approved: Array<{ id: string; title: string; hankTag: "pick" | "override" }>;
@@ -146,11 +148,7 @@ export function ShortlistCommitCard({
         aria-expanded={open}
         $expandable={canExpand}
       >
-        {canExpand && (
-          <CommitCaret $open={open} aria-hidden>
-            ▶
-          </CommitCaret>
-        )}
+        {canExpand && <Caret open={open} />}
         <CommitTitle>{headline}</CommitTitle>
       </CommitHeader>
       {open && canExpand && (
@@ -222,14 +220,6 @@ const CommitHeader = styled.button<{ $expandable: boolean }>`
     background: ${({ theme, $expandable }) =>
       $expandable ? theme.colors.bgPanel : "transparent"};
   }
-`;
-
-const CommitCaret = styled.span<{ $open: boolean }>`
-  display: inline-block;
-  font-size: 10px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  transform: rotate(${({ $open }) => ($open ? "90deg" : "0deg")});
-  transition: transform 0.1s ease;
 `;
 
 const CommitTitle = styled.span`

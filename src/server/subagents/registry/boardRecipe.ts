@@ -23,9 +23,6 @@
 // whenever the free probe succeeded, and cooldown-gated on failure. That is
 // what makes the capable model the obviously correct choice here.
 
-import type { AnyToolDef } from "@/server/agent/tools/lib/types";
-import { fetchUrlTool } from "@/server/agent/tools/registry/fetchUrl";
-import { testRecipeTool } from "@/server/agent/tools/registry/testRecipe";
 import type { LlmModel } from "@/server/platform/llm/models";
 import type { PageEvidence } from "@/server/platform/scrape/generic/pageEvidence";
 import type { BoardRecipe } from "@/server/platform/scrape/recipe/types";
@@ -33,6 +30,9 @@ import type {
   SubAgentDef,
   SubAgentOutputSchema,
 } from "@/server/subagents/lib/types";
+import type { AnyToolDef } from "@/server/tools/lib/types";
+import { fetchUrlTool } from "@/server/tools/registry/fetchUrl";
+import { testRecipeTool } from "@/server/tools/registry/testRecipe";
 
 // pro, not flash: this runs once per board and its artifact is permanent and
 // shared, so the marginal cost of the capable model is amortized over every

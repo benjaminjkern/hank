@@ -1,4 +1,4 @@
-// Shared scrape-upsert. Its one caller is syncCompanyBoard, reached from both
+// Shared scrape-upsert. Its one caller is runSyncCompanyBoard, reached from both
 // paths that pull a company's board (the scrape_jobs_for_company procedure and
 // the walkthrough's on-entry board scrape); it takes the array of normalized
 // job records from `scrapeUrl` and persists them through the same writes.
@@ -19,16 +19,16 @@
 // the app has, and a first pull of a 200-role board used to be ~1000 round
 // trips (a per-job upsert, slug write, interaction check, insert and event).
 
+import { bulkUpdate } from "@/server/db/bulkUpdate";
+import { prisma } from "@/server/db/prisma";
+import { logCompanyEvent } from "@/server/entities/companies/logCompanyEvent";
 import {
   EventSource,
   JobEventType,
   CompanyEventType,
   JobInteractionStatus,
   Prisma,
-} from "@/generated/prisma/client";
-import { bulkUpdate } from "@/server/db/bulkUpdate";
-import { prisma } from "@/server/db/prisma";
-import { logCompanyEvent } from "@/server/entities/companies/logCompanyEvent";
+} from "@/server/generated/prisma/client";
 import { isLearnedSource } from "@/server/platform/scrape/types";
 import type {
   ScrapeDiagnostics,

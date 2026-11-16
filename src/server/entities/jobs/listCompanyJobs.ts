@@ -5,12 +5,12 @@
 // Windowed rather than paged: which window, and how the "more pages" line
 // reads, belong to the channel asking — see tools/lib/paginate.ts.
 
+import { prisma } from "@/server/db/prisma";
 import type {
   JobInteractionStatus,
   JobCloseReason,
   Prisma,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+} from "@/server/generated/prisma/client";
 
 export type CompanyJobRow = {
   status: JobInteractionStatus;

@@ -2,7 +2,7 @@
 
 import styled from "styled-components";
 
-import type { ContactView } from "@/server/agent/tools/lib/types";
+import type { ContactView } from "@/server/views/contactView";
 
 // One person, rendered the same way wherever they surface — the opportunity
 // detail page (recruiters on an inbound lead) and the company page (in-house

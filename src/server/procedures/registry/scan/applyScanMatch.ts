@@ -14,13 +14,13 @@
 // it leaves a PASS stance the user can overturn on the board, and the commit is
 // what closes the role and logs that.
 
+import { prisma } from "@/server/db/prisma";
+import { passOnJobs } from "@/server/entities/jobs/passOnJobs";
 import {
   JobCloseReason,
   JobInteractionStatus,
   MatchBucket,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
-import { passOnJobs } from "@/server/entities/jobs/passOnJobs";
+} from "@/server/generated/prisma/client";
 import type {
   ScanMatchBucket,
   ScanCloseReason,

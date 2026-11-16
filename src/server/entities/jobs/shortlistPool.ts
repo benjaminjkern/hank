@@ -2,12 +2,12 @@
 // seed, the commit, the board view, and the reconsider path can't drift on what
 // "the pool" means or on which rows a stance may be set against.
 
+import { prisma } from "@/server/db/prisma";
 import {
   JobDeferReason,
   JobInteractionStatus,
-} from "@/generated/prisma/client";
-import type { Prisma } from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+} from "@/server/generated/prisma/client";
+import type { Prisma } from "@/server/generated/prisma/client";
 
 // The status subset of "what's in the shortlist pool" — the rows a seed ranks
 // and a commit decides: read-and-ready (SCANNED), committed picks

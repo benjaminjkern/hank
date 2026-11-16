@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import styled from "styled-components";
 
 import { useChatStore } from "@/client/chatStore";
-import type { FocusedJobView } from "@/server/agent/tools/lib/types";
 import type { DocumentArtifact } from "@/server/views/documents";
+import type { FocusedJobView } from "@/server/views/getFocusedJob";
 import { withImpersonate } from "@/shared/impersonation";
 
 import { ArtifactsBody } from "./ArtifactsBody";
@@ -31,14 +31,10 @@ export function DocumentsView() {
 
   const [data, setData] = useState<DocumentsPayload | null>(null);
   const [loadError, setLoadError] = useState(false);
-
-  function load() {
-    setLoadError(false);
-    fetch(withImpersonate("/api/documents", impersonate))
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
-      .then((d: DocumentsPayload) => setData(d))
-      .catch(() => setLoadError(true));
-  }
+  // Bumped to re-run the fetch below — the resume page asks for it after an
+  // upload or a removal.
+  const [reloadCount, setReloadCount] = useState(0);
+  const reload = () => setReloadCount((n) => n + 1);
 
   // Re-runs on `documentsEpoch`, which the store bumps whenever a tool changed
   // viewed state — this page is the one panel mode with nothing in the store
@@ -50,7 +46,10 @@ export function DocumentsView() {
     fetch(withImpersonate("/api/documents", impersonate))
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
       .then((d: DocumentsPayload) => {
-        if (!cancelled) setData(d);
+        if (!cancelled) {
+          setData(d);
+          setLoadError(false);
+        }
       })
       .catch(() => {
         if (!cancelled) setLoadError(true);
@@ -58,7 +57,7 @@ export function DocumentsView() {
     return () => {
       cancelled = true;
     };
-  }, [impersonate, documentsEpoch]);
+  }, [impersonate, documentsEpoch, reloadCount]);
 
   if (loadError)
     return (
@@ -124,7 +123,7 @@ export function DocumentsView() {
           background={data.docs.resume}
           readOnly={readOnly}
           impersonate={impersonate}
-          onReload={load}
+          onReload={reload}
           onBackgroundSaved={(c) => setDoc("resume", c)}
         />
       </SubPageShell>

@@ -16,11 +16,6 @@
 // machinery underneath (runHankTurn streams and persists a turn; runAgentTurn
 // dispatches its tools) and knows none of that.
 
-import type {
-  ChatTurnRunner,
-  EntryTarget,
-  TurnEvent,
-} from "@/server/agent/contracts";
 import { buildHankSystem } from "@/server/agent/hank";
 import { loadHankDiscoveryContext } from "@/server/agent/hank/discoveryContext";
 import { loadHankProfileContext } from "@/server/agent/hank/profileContext";
@@ -30,6 +25,11 @@ import {
   runHankTurn,
   type TranscriptInfo,
 } from "@/server/agent/runtime/runHankTurn";
+import type {
+  ChatTurnRunner,
+  EntryTarget,
+  TurnEvent,
+} from "@/server/contracts";
 import { isProfileObviouslyEnriched } from "@/server/entities/profile/profileInventory";
 import { loadRecentClientErrors } from "@/server/platform/clientEvents/recent";
 import { withCaptureContext } from "@/server/platform/usage/captureContext";

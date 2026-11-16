@@ -18,9 +18,8 @@
 // whenever the company ended moments later). The note is a persisted row, so
 // nothing is lost by waiting for the wrap.
 
-import { JobEventType, ProposedVerdict } from "@/generated/prisma/client";
-import type { RunContext } from "@/server/agent/contracts";
 import { appendPipelineActivity } from "@/server/agent/session";
+import type { RunContext } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import {
   commitShortlist,
@@ -28,6 +27,10 @@ import {
 } from "@/server/entities/companies/commitShortlist";
 import { roundStartedAt } from "@/server/entities/jobs/boardStance";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
+import {
+  JobEventType,
+  ProposedVerdict,
+} from "@/server/generated/prisma/client";
 import { procedure } from "@/server/procedures/lib/procedure";
 
 const STANCE_WORDS: Record<ProposedVerdict, string> = {

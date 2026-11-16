@@ -14,10 +14,13 @@
 // It writes no session state: focus is ephemeral, so the entryTarget IS the
 // handoff.
 
-import { CompanyStatus, JobInteractionStatus } from "@/generated/prisma/client";
-import type { EntryTarget } from "@/server/agent/contracts";
+import type { EntryTarget } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { companyStatusFields } from "@/server/entities/companies/companyStatusFields";
+import {
+  CompanyStatus,
+  JobInteractionStatus,
+} from "@/server/generated/prisma/client";
 import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import type { NextCompanyPickerSubmission } from "./parse";

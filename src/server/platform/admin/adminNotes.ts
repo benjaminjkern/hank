@@ -8,8 +8,8 @@
 // dance at every call site would drift; centralising it keeps the contract
 // single-sourced.
 
-import { Role } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { Role } from "@/server/generated/prisma/client";
 
 export type AdminNoteCategory =
   | "user_confusion"

@@ -3,13 +3,8 @@
 import { create } from "zustand";
 
 import { reportClientEvent } from "@/client/clientEvents";
-import type {
-  CompanyJobView,
-  FocusedCompanyView as ServerFocusedCompanyView,
-  FocusedJobView as ServerFocusedJobView,
-  FocusedOpportunityView as ServerFocusedOpportunityView,
-  ShortAnswer,
-} from "@/server/agent/tools/lib/types";
+import type { LoopEvent } from "@/server/contracts";
+import type { ShortAnswer } from "@/server/entities/jobs/types";
 import type { ApplicationView } from "@/server/views/application";
 import type {
   AttachmentView,
@@ -31,6 +26,12 @@ import type {
   DashboardView,
 } from "@/server/views/dashboard";
 import type { DiscoveryListView } from "@/server/views/discoveryList";
+import type {
+  CompanyJobView,
+  FocusedCompanyView as ServerFocusedCompanyView,
+} from "@/server/views/getFocusedCompany";
+import type { FocusedJobView as ServerFocusedJobView } from "@/server/views/getFocusedJob";
+import type { FocusedOpportunityView as ServerFocusedOpportunityView } from "@/server/views/getFocusedOpportunity";
 import type { PanelView } from "@/server/views/panelView";
 import type { ShortlistBoardView } from "@/server/views/shortlistBoard";
 import { withImpersonate } from "@/shared/impersonation";
@@ -39,7 +40,6 @@ import type {
   NegotiationPanel,
   PanelMode,
 } from "@/shared/panelMode";
-import type { WidgetKind } from "@/shared/widgetKinds";
 
 export type { CompanyJobView };
 
@@ -1723,67 +1723,6 @@ function upsertToolSegment(segments: Segment[], next: ToolSegment): Segment[] {
   return [...segments.slice(0, idx), merged, ...segments.slice(idx + 1)];
 }
 
-type LoopEventJson =
-  | { type: "text"; text: string; parentToolUseId?: string }
-  | {
-      type: "tool_use_start";
-      name: string;
-      toolUseId: string;
-      input: unknown;
-      parentToolUseId?: string;
-    }
-  | {
-      type: "tool_use_progress";
-      toolUseId: string;
-      label: string;
-      parentToolUseId?: string;
-    }
-  | {
-      type: "tool_use_complete";
-      toolUseId: string;
-      result: string;
-      error?: boolean;
-      parentToolUseId?: string;
-      // Server signal that completion of this tool may have changed entities
-      // the user is currently looking at. Triggers a debounced mid-turn
-      // refetch of the dashboard + viewed entity payloads.
-      affectsViewedState?: boolean;
-    }
-  | {
-      type: "ui";
-      event:
-        | {
-            // Presentational "put this entity on screen" event (show_* tools +
-            // pipeline dispatch) — updates only viewed*/panelMode. Focus is
-            // ephemeral; there's no sticky focus slot to touch.
-            type: "show";
-            company: ServerFocusedCompanyView | null;
-            job: ServerFocusedJobView | null;
-            opportunity: ServerFocusedOpportunityView | null;
-            board: ShortlistBoardView | null;
-            application: ApplicationView | null;
-            discovery: DiscoveryListView | null;
-          }
-        | { type: "panel_mode"; mode: PanelMode };
-    }
-  | { type: "pipeline_status"; text: string }
-  | {
-      type: "pipeline_widget";
-      toolUseId: string;
-      kind: string;
-      payload: unknown;
-    }
-  // The server opened a new assistant ChatMessage row; everything after it
-  // belongs in a bubble under that id. See applyEvent's message_start case.
-  | { type: "message_start"; messageId: string }
-  // Transient mid-turn refresh ping from a deterministic pipeline runner —
-  // schedules the same debounced dashboard + viewed-entity refetch that an
-  // affectsViewedState tool completion does. No payload, nothing to render.
-  | { type: "refresh_viewed_state" }
-  | { type: "stopped" }
-  | { type: "done" }
-  | { type: "error"; message: string; code?: string };
-
 // Debounced mid-turn refresh of dashboard + currently-viewed entity payloads.
 // Called when a `tool_use_complete` arrives with `affectsViewedState: true`.
 // Coalesces rapid sequential triggers (e.g. a flurry of status updates
@@ -1818,7 +1757,7 @@ function cancelPendingViewedStateRefresh() {
 function applyEvent(
   set: (fn: (s: State) => Partial<State>) => void,
   assistantId: string,
-  ev: LoopEventJson,
+  ev: LoopEvent,
 ): string {
   switch (ev.type) {
     case "message_start":
@@ -2068,7 +2007,7 @@ const SSE_READ_TIMEOUT_MS = 45_000;
 // trap the UI. See chatStore.stop().
 const STOP_TERMINAL_GRACE_MS = 5_000;
 
-async function* readSSE(response: Response): AsyncGenerator<LoopEventJson> {
+async function* readSSE(response: Response): AsyncGenerator<LoopEvent> {
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -2100,7 +2039,7 @@ async function* readSSE(response: Response): AsyncGenerator<LoopEventJson> {
       const data = line.slice(6).trim();
       if (!data) continue;
       try {
-        yield JSON.parse(data) as LoopEventJson;
+        yield JSON.parse(data) as LoopEvent;
       } catch {
         // ignore malformed lines
       }

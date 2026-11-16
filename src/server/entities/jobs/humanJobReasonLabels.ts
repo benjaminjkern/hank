@@ -11,7 +11,10 @@
 // a company-level one, and the labels read differently even where the value
 // overlaps.
 
-import type { JobCloseReason, JobDeferReason } from "@/generated/prisma/client";
+import type {
+  JobCloseReason,
+  JobDeferReason,
+} from "@/server/generated/prisma/client";
 
 const JOB_CLOSE_REASON_LABELS: Record<JobCloseReason, string> = {
   WITHDRAWN: "withdrawn",

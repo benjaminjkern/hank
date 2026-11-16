@@ -7,8 +7,8 @@ import { useChatStore } from "@/client/chatStore";
 import type {
   ApplicationQuestion,
   ApplicationQuestionsEnvelope,
-  FocusedJobView,
-} from "@/server/agent/tools/lib/types";
+} from "@/server/platform/scrape/types";
+import type { FocusedJobView } from "@/server/views/getFocusedJob";
 import { formatJobRefToken } from "@/shared/jobRefToken";
 import {
   jobStatusColor,
@@ -17,13 +17,13 @@ import {
 } from "@/shared/statusColors";
 import { relativeTime } from "@/shared/utils/date";
 import { nowMs } from "@/shared/utils/now";
-import { initial } from "@/shared/utils/text";
 
 import {
   Section,
   SectionHeader,
   SectionLabel,
 } from "./shared/applicationArtifacts";
+import { CompanyLogoChip } from "./shared/CompanyLogoChip";
 import {
   RecentActivity,
   type RecentActivityItem,
@@ -148,33 +148,6 @@ const CompanyLineButton = styled.button.attrs({ type: "button" })`
     color: ${({ theme }) => theme.colors.text};
     background: ${({ theme }) => theme.colors.bgHover};
   }
-`;
-
-// Small logo chip next to the company name. 18px tall, square, falls back
-// to a monogram via the same initial() helper the company page uses.
-const CompanyLogoBox = styled.span`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  border-radius: ${({ theme }) => theme.radius.sm};
-  background: ${({ theme }) => theme.colors.bgMuted};
-  border: 1px solid ${({ theme }) => theme.colors.border};
-  overflow: hidden;
-`;
-
-const CompanyLogoImg = styled.img`
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-`;
-
-const CompanyLogoMonogram = styled.span`
-  font-size: 10px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.colors.accent};
 `;
 
 // Bullet-separated metadata line under the company name: location ·
@@ -432,6 +405,7 @@ export function JobDetailView({ job }: { job: NonNullable<FocusedJobView> }) {
                 <CompanyLogoChip
                   logoUrl={job.company.logoUrl}
                   name={job.company.name}
+                  size={18}
                 />
                 {companyLabel}
               </CompanyLineButton>
@@ -553,19 +527,6 @@ export function JobDetailView({ job }: { job: NonNullable<FocusedJobView> }) {
         />
       </Section>
     </Card>
-  );
-}
-
-function CompanyLogoChip({ logoUrl, name }: { logoUrl: string; name: string }) {
-  const [failed, setFailed] = useState(false);
-  return (
-    <CompanyLogoBox>
-      {failed ? (
-        <CompanyLogoMonogram>{initial(name)}</CompanyLogoMonogram>
-      ) : (
-        <CompanyLogoImg src={logoUrl} alt="" onError={() => setFailed(true)} />
-      )}
-    </CompanyLogoBox>
   );
 }
 

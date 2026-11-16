@@ -1,7 +1,7 @@
 "use client";
 
-import type { FocusedJobView } from "@/server/agent/tools/lib/types";
 import type { DocumentArtifact } from "@/server/views/documents";
+import type { FocusedJobView } from "@/server/views/getFocusedJob";
 
 import { JobArtifactBlock } from "./JobArtifactBlock";
 import { EmptyHint } from "./styles";

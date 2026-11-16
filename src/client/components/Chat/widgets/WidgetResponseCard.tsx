@@ -23,7 +23,9 @@ import styled from "styled-components";
 
 import { useChatStore } from "@/client/chatStore";
 import { asArray, asNonEmptyString, isRecord } from "@/shared/utils/guards";
-import { initial } from "@/shared/utils/text";
+
+import { Caret } from "../../RightPanel/shared/Caret";
+import { CompanyLogoChip } from "../../RightPanel/shared/CompanyLogoChip";
 
 const MARKER_RE = /^<!--widget-response:(\{[\s\S]*?\})-->/;
 
@@ -124,7 +126,7 @@ export function WidgetResponseCard({
         const logoUrl = asNonEmptyString(view.logoUrl);
         return (
           <Chip
-            icon={<CompanyLogo name={name} logoUrl={logoUrl} />}
+            icon={<CompanyLogoChip logoUrl={logoUrl} name={name} size={16} />}
             tone="accent"
             title={`Continuing with ${name}`}
             onClick={companyId ? () => void viewCompany(companyId) : undefined}
@@ -156,7 +158,13 @@ export function WidgetResponseCard({
         const logoUrl = asNonEmptyString(view.logoUrl);
         return (
           <Chip
-            icon={<CompanyLogo name={companyName ?? title} logoUrl={logoUrl} />}
+            icon={
+              <CompanyLogoChip
+                logoUrl={logoUrl}
+                name={companyName ?? title}
+                size={16}
+              />
+            }
             tone="accent"
             title={`Continuing with ${title}`}
             onClick={jobId ? () => void viewJob(jobId) : undefined}
@@ -226,9 +234,7 @@ function ShortlistResponseCard({
         aria-expanded={open}
         $expandable
       >
-        <Caret $open={open} aria-hidden>
-          ▶
-        </Caret>
+        <Caret open={open} />
         <Icon $tone="accent">✓</Icon>
         <Title>{headline}</Title>
       </Header>
@@ -308,22 +314,6 @@ function JobLink({
       {label}
     </LinkText>
   );
-}
-
-function CompanyLogo({
-  name,
-  logoUrl,
-}: {
-  name: string;
-  // Pre-resolved logo URL (the picker runs companyLogoUrl at submit time and
-  // embeds the final URL in _view). Empty/null → monogram fallback.
-  logoUrl: string | null;
-}) {
-  const [failed, setFailed] = useState(false);
-  if (!logoUrl || failed) {
-    return <LogoFallback aria-hidden>{initial(name)}</LogoFallback>;
-  }
-  return <LogoImg src={logoUrl} alt="" onError={() => setFailed(true)} />;
 }
 
 // chatStore actions read lazily so this module's helpers can call them
@@ -434,14 +424,6 @@ const Sub = styled.div`
   word-break: break-word;
 `;
 
-const Caret = styled.span<{ $open: boolean }>`
-  display: inline-block;
-  font-size: 10px;
-  color: ${({ theme }) => theme.colors.textMuted};
-  transform: rotate(${({ $open }) => ($open ? "90deg" : "0deg")});
-  transition: transform 0.12s ease;
-`;
-
 const Body = styled.div`
   display: flex;
   flex-direction: column;
@@ -527,26 +509,4 @@ const NameChip = styled.span`
   background: ${({ theme }) => theme.colors.bgMuted};
   border: 1px solid ${({ theme }) => theme.colors.border};
   color: ${({ theme }) => theme.colors.text};
-`;
-
-const LogoImg = styled.img`
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
-  object-fit: contain;
-  flex-shrink: 0;
-`;
-
-const LogoFallback = styled.span`
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 9px;
-  font-weight: 700;
-  background: ${({ theme }) => theme.colors.bgMuted};
-  color: ${({ theme }) => theme.colors.textMuted};
-  flex-shrink: 0;
 `;

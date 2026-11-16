@@ -10,9 +10,9 @@
 // The baseline is re-stamped whenever Hank writes (his new text becomes the
 // thing to diverge from) and whenever an edit is relayed (he's now seen it).
 
-import { JobInteractionStatus, Prisma } from "@/generated/prisma/client";
 import { bulkUpdate } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
+import { JobInteractionStatus, Prisma } from "@/server/generated/prisma/client";
 import { diffWords, renderWordDiff, type WordDiff } from "@/shared/utils/diff";
 import { nowDate } from "@/shared/utils/now";
 import { normalizeForCompare } from "@/shared/utils/text";

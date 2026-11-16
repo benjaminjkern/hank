@@ -7,7 +7,7 @@
 // not a generator (see enrichOne.ts). No hard wall timeout — the hunter's turn
 // cap and the user's Stop button are the bounds.
 
-import type { RunTrace } from "@/server/agent/contracts";
+import type { RunTrace } from "@/server/contracts";
 import { streamingProcedure } from "@/server/procedures/lib/procedure";
 
 import { enrichOne } from "./enrichOne";

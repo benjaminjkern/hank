@@ -1,11 +1,11 @@
+import { prisma } from "@/server/db/prisma";
 import {
   CompanyStatus,
   type Prisma,
   type CompanyBlockReason,
   type CompanyCloseReason,
   type CompanyPauseReason,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+} from "@/server/generated/prisma/client";
 
 import { companyStatusFields } from "./companyStatusFields";
 

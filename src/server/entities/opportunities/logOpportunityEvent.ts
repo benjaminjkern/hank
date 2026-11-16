@@ -10,16 +10,16 @@
 // the status flip must commit together. Works purely in ids; slug→id
 // translation is the tool layer's job.
 
+import { bulkUpdate, type Database } from "@/server/db/bulkUpdate";
+import { prisma } from "@/server/db/prisma";
 import {
   EventSource,
   OpportunityEventType,
   OpportunityStatus,
   type Prisma,
-} from "@/generated/prisma/client";
-import { bulkUpdate, type Database } from "@/server/db/bulkUpdate";
-import { prisma } from "@/server/db/prisma";
+} from "@/server/generated/prisma/client";
 
-// Lead-level status auto-cache (moved here from agent/tools/lib/opportunities.ts,
+// Lead-level status auto-cache (moved here from tools/lib/opportunities.ts,
 // which kept only the agent-facing enum LISTS). INBOUND_RECEIVED / NOTE /
 // STATUS_CHANGED don't shift status — a STATUS_CHANGED is written by
 // updateOpportunity when it sets the status directly, not derived from this map.

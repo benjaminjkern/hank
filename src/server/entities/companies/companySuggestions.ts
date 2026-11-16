@@ -19,8 +19,8 @@
 // reaches memory through the ordinary consolidation pass; per-name reason codes
 // were a lossy re-encoding of it.
 
-import { CompanySuggestionVerdict } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { CompanySuggestionVerdict } from "@/server/generated/prisma/client";
 import { nowMs } from "@/shared/utils/now";
 import { slugify } from "@/shared/utils/slugify";
 

@@ -7,18 +7,18 @@
 // we keep what we have and carry on; with none, there's nothing to show, so the
 // company is set aside instead of dead-ending the user on an empty page.
 
-import { CompanyBlockReason } from "@/generated/prisma/client";
-import { statusEvent } from "@/server/agent/contracts";
-import type { TurnEvent } from "@/server/agent/contracts";
+import { statusEvent } from "@/server/contracts";
+import type { TurnEvent } from "@/server/contracts";
 import {
   blockCompany,
   caughtUpCompany,
 } from "@/server/entities/companies/setCompanyAside";
-import { syncCompanyBoard } from "@/server/entities/jobs/syncCompanyBoard";
+import { CompanyBlockReason } from "@/server/generated/prisma/client";
 import type { ScrapeFailureKind } from "@/server/platform/scrape/types";
 import { streamingProcedure } from "@/server/procedures/lib/procedure";
 import { runReconBoard } from "@/server/procedures/registry/reconBoard";
 import type { ReconBoardResult } from "@/server/procedures/registry/reconBoard";
+import { runSyncCompanyBoard } from "@/server/procedures/registry/syncCompanyBoard";
 import { urlHost } from "@/shared/utils/url";
 
 import { narrateCompanyBlock, narrateCompanyCaughtUp } from "./narration";
@@ -69,12 +69,7 @@ export const runBoardScrape = streamingProcedure(
         : `Scanning ${urlHost(sourceUrl) ?? sourceUrl} for openings…`,
     );
 
-    let fetched = await syncCompanyBoard({
-      userId: args.userId,
-      companyId,
-      sourceUrl,
-      signal: args.signal,
-    });
+    let fetched = await runSyncCompanyBoard({ ...args, companyId, sourceUrl });
 
     // Unreadable in a way a better read-plan could fix — work one out and try
     // once more, rather than setting the company aside for a board shape we've
@@ -93,12 +88,7 @@ export const runBoardScrape = streamingProcedure(
       });
       reconVerdict = recon.kind;
       if (recon.kind === "learned") {
-        fetched = await syncCompanyBoard({
-          userId: args.userId,
-          companyId,
-          sourceUrl,
-          signal: args.signal,
-        });
+        fetched = await runSyncCompanyBoard({ ...args, companyId, sourceUrl });
       } else if (recon.kind === "needs_browser") {
         yield statusEvent(
           `${displayName}'s openings only show up once their page fully loads in a browser, which I can't do from here — send me a specific role's link and I can still work it.`,

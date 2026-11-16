@@ -1,6 +1,6 @@
-import type { AnyToolDef } from "@/server/agent/tools/lib/types";
-import { listMemoriesTool } from "@/server/agent/tools/registry/listMemories";
-import { readMemoryTool } from "@/server/agent/tools/registry/readMemory";
+import type { AnyToolDef } from "@/server/tools/lib/types";
+import { listMemoriesTool } from "@/server/tools/registry/listMemories";
+import { readMemoryTool } from "@/server/tools/registry/readMemory";
 
 // Default read-only toolset shared with every sub-agent that gets read tools at
 // all. Extend by composing — e.g. `[...SUB_AGENT_READ_TOOLS, pastClosedJobsTool]`

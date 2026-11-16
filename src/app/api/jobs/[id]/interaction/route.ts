@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { Prisma } from "@/generated/prisma/client";
-import type { ShortAnswer } from "@/server/agent/tools/lib/types";
+import { Prisma } from "@/server/generated/prisma/client";
+import type { ShortAnswer } from "@/server/entities/jobs/types";
 import { prisma } from "@/server/db/prisma";
 import { updateJobInteraction } from "@/server/entities/jobs/updateJobInteraction";
 import { rejectImpersonatedWrite } from "@/server/platform/admin/viewerScope";

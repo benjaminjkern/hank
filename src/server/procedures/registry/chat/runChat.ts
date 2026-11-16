@@ -12,12 +12,8 @@
 // is deliberate: that file is true of any message regardless of what it says,
 // while every branch below is a decision about companies, roles, and profiles.
 
-import { statusEvent, yieldUiEvents } from "@/server/agent/contracts";
-import type {
-  EntryTarget,
-  RunContext,
-  TurnEvent,
-} from "@/server/agent/contracts";
+import { statusEvent, yieldUiEvents } from "@/server/contracts";
+import type { EntryTarget, RunContext, TurnEvent } from "@/server/contracts";
 import { flipDueInterviewsToDebrief } from "@/server/entities/jobs/flipDueInterviews";
 import { streamingProcedure } from "@/server/procedures/lib/procedure";
 import { runWrapSegment } from "@/server/procedures/registry/wrapSegment";

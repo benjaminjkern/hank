@@ -5,8 +5,8 @@
 // strand a denormalized status. Ownership is enforced here (CompanyEvent carries
 // its own userId).
 
-import type { CompanyEventType } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import type { CompanyEventType } from "@/server/generated/prisma/client";
 
 export type TargetCompanyEvent = {
   id: string;

@@ -19,7 +19,7 @@
 // widget-submission handler, and three leaves (summarizeCloseRationales /
 // narration / yieldStateChange).
 
-import type { TurnEvent } from "@/server/agent/contracts";
+import type { TurnEvent } from "@/server/contracts";
 import { streamingProcedure } from "@/server/procedures/lib/procedure";
 import { parseWidgetSubmission } from "@/server/widgets/parse";
 

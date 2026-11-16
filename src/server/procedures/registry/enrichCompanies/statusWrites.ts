@@ -2,9 +2,12 @@
 // CompanyInteraction. Kept together because each is a detail of the chain
 // rather than a step of it.
 
-import { CompanyStatus, CompanyBlockReason } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { companyStatusFields } from "@/server/entities/companies/companyStatusFields";
+import {
+  CompanyStatus,
+  CompanyBlockReason,
+} from "@/server/generated/prisma/client";
 import { nowDate } from "@/shared/utils/now";
 
 // `huntingStartedAt` drives the "Scanning…" badge, so it brackets the whole

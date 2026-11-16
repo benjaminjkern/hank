@@ -2,7 +2,7 @@
 // `panel_mode` events that move the right panel to it — the one dispatcher every
 // show_* tool and deterministic mutator goes through.
 
-import type { EntryTarget, UiEvent } from "@/server/agent/contracts";
+import type { EntryTarget, UiEvent } from "@/server/contracts";
 import { getFocusedCompanyView } from "@/server/views/getFocusedCompany";
 import { getFocusedJobView } from "@/server/views/getFocusedJob";
 import { getFocusedOpportunityView } from "@/server/views/getFocusedOpportunity";

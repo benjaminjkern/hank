@@ -9,13 +9,13 @@
 // reason for free rather than leaving it destroyed — the same
 // revert-is-a-no-op property the application page gets from `proposedDrafts`.
 
+import { prisma } from "@/server/db/prisma";
 import {
   CompanyEventType,
   JobDeferReason,
   JobInteractionStatus,
   ProposedVerdict,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+} from "@/server/generated/prisma/client";
 
 import { onBoardWhere } from "./shortlistPool";
 

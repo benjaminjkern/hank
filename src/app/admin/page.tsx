@@ -1,4 +1,4 @@
-import { Prisma } from "@/generated/prisma/client";
+import { Prisma } from "@/server/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { requireAdmin } from "@/server/platform/auth/requireAdmin";
 import { costOf } from "@/server/platform/usage/pricing";

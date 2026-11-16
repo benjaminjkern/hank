@@ -6,8 +6,8 @@
 // (never-discussed first) and capped, because
 // the block is rebuilt into the system prompt on every turn.
 
-import { CompanyStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { CompanyStatus } from "@/server/generated/prisma/client";
 
 // The cap is the reason the ordering matters: past this many, the stalest
 // companies are the ones worth reminding Hank about — the fresh ones are

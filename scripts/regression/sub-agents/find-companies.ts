@@ -29,7 +29,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import {
   PrismaClient,
   CompanyStatus,
-} from "../../../src/generated/prisma/client";
+} from "../../../src/server/generated/prisma/client";
 import { resolveAnthropicApiKey } from "../../../src/server/platform/llm/resolveAnthropicKey";
 import { runSubAgent } from "../../../src/server/subagents/lib/runSubAgent";
 import {

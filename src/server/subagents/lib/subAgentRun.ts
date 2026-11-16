@@ -15,8 +15,8 @@
 // relative to the LLM spend that produced them). Never throws — a capture
 // failure must not break the request.
 
-import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { Prisma } from "@/server/generated/prisma/client";
 import { currentCaptureContext } from "@/server/platform/usage/captureContext";
 import type { UsageOperation } from "@/server/platform/usage/track";
 

@@ -24,11 +24,11 @@
 // them apart is what lets the user change their mind before sending, and what
 // stops a checkbox click from costing a URL hunt.
 
+import { prisma } from "@/server/db/prisma";
 import {
   CompanySuggestionMark,
   type CompanySuggestionVerdict,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+} from "@/server/generated/prisma/client";
 import { nowDate } from "@/shared/utils/now";
 
 import { currentBatch, suggestionKey } from "./companySuggestions";

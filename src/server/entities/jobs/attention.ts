@@ -7,7 +7,7 @@
 //
 // See docs/flows.md → "What counts as immediate" and docs/lifecycle.md.
 
-import { JobInteractionStatus } from "@/generated/prisma/client";
+import { JobInteractionStatus } from "@/server/generated/prisma/client";
 
 // Post-application job statuses where the user personally owes the NEXT move,
 // INDEPENDENT of the parent company's status. A company can be CAUGHT_UP

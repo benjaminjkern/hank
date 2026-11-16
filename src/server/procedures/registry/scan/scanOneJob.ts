@@ -2,7 +2,7 @@
 // then run the per-user match. Enrichment is idempotent — an already-enriched Job
 // short-circuits pass 1, which is what makes a rate-limited run cheap to resume.
 
-import type { RunContext } from "@/server/agent/contracts";
+import type { RunContext } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import {
   ROLE_ATTR_SELECT,

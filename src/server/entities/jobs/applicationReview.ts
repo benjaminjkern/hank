@@ -13,7 +13,7 @@
 // the item instead — clear-on-edit — settled a finding the moment the item was
 // touched, so editing and undoing reported two live objections as answered.
 
-import type { Prisma } from "@/generated/prisma/client";
+import type { Prisma } from "@/server/generated/prisma/client";
 import { fnv1a } from "@/shared/utils/hash";
 import { normalizeForCompare } from "@/shared/utils/text";
 

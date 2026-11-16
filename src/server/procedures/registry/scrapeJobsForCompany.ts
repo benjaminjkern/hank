@@ -19,16 +19,16 @@
 // name is deliberately absent — the caller resolved it by slug and already has
 // it.
 
-import { CompanyStatus } from "@/generated/prisma/client";
-import type { RunContext, UiEvent } from "@/server/agent/contracts";
+import type { RunContext, UiEvent } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { markCompanyPostFilter } from "@/server/entities/companies/markCompanyStatus";
-import { syncCompanyBoard } from "@/server/entities/jobs/syncCompanyBoard";
+import { CompanyStatus } from "@/server/generated/prisma/client";
 import type { ScrapeFailureKind } from "@/server/platform/scrape/types";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runPreScan } from "@/server/procedures/registry/preScan";
 import { runReconBoard } from "@/server/procedures/registry/reconBoard";
 import type { ReconBoardResult } from "@/server/procedures/registry/reconBoard";
+import { runSyncCompanyBoard } from "@/server/procedures/registry/syncCompanyBoard";
 import { buildShowEvents } from "@/server/views/showEvents";
 
 const TIMEOUT_MS = 90_000;
@@ -237,11 +237,10 @@ async function drive(
     priorStatus: CompanyStatus;
   },
 ): Promise<ScrapeJobsForCompanyResult> {
-  const scraped = await syncCompanyBoard({
-    userId: args.userId,
+  const scraped = await runSyncCompanyBoard({
+    ...args,
     companyId: args.company.id,
     sourceUrl: args.company.sourceUrl!,
-    signal: args.signal,
   });
 
   // Show the company regardless of outcome so the panel reflects the scrape.

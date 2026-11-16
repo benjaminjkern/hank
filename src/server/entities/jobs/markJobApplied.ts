@@ -5,14 +5,14 @@
 // This is the SINGLE write for "applied": the agent's `log_job_events` tool
 // refuses APPLIED so it can't take a second path.
 
+import { prisma } from "@/server/db/prisma";
+import { refreshCompanyEngagement } from "@/server/entities/companies/engagement";
+import { logJobEvent } from "@/server/entities/jobs/logJobEvents";
 import {
   ApplyChannel,
   JobEventType,
   JobInteractionStatus,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
-import { refreshCompanyEngagement } from "@/server/entities/companies/engagement";
-import { logJobEvent } from "@/server/entities/jobs/logJobEvents";
+} from "@/server/generated/prisma/client";
 
 import { WORKABLE_STATUSES } from "./jobInteractionInputs";
 

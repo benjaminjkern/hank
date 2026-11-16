@@ -3,7 +3,7 @@
 // homogeneous batch of one sub-agent's real invocations, which keeps the
 // per-operation fixtures + purpose in the (cached) system prompt coherent.
 
-import type { PrismaClient } from "../../../../src/generated/prisma/client";
+import type { PrismaClient } from "../../../../src/server/generated/prisma/client";
 
 export type SubAgentRunRow = {
   id: string;

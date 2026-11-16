@@ -21,8 +21,8 @@ import styled from "styled-components";
 
 import { useChatStore } from "@/client/chatStore";
 import { companyLogoUrl } from "@/shared/companyLogo";
-import { initial } from "@/shared/utils/text";
 
+import { CompanyLogoChip } from "../../../../RightPanel/shared/CompanyLogoChip";
 import {
   ButtonRow,
   Meta,
@@ -369,28 +369,21 @@ function RowButton({ row, disabled, highlighted, onChoose }: RowButtonProps) {
 }
 
 function Avatar({ row }: { row: NextCompanyPickerRow }) {
-  const [failed, setFailed] = useState(false);
+  // An opportunity has no company logo — its monogram is the whole avatar.
   if (row.kind === "opportunity") {
-    return (
-      <AvatarBox>
-        <AvatarMonogram>{initial(row.label)}</AvatarMonogram>
-      </AvatarBox>
-    );
+    return <CompanyLogoChip logoUrl={null} name={row.label} size={28} />;
   }
   // company OR job — both carry the parent company's logo/source for the chip,
   // falling back to a monogram of the company name (job rows) / company (company
   // rows), then the title if a job has no company name on file.
-  const url = companyLogoUrl(row.sourceUrl, row.logoUrl);
   const monogramSeed =
     row.kind === "company" ? row.name : (row.companyName ?? row.title);
   return (
-    <AvatarBox>
-      {failed || url === "" ? (
-        <AvatarMonogram>{initial(monogramSeed)}</AvatarMonogram>
-      ) : (
-        <AvatarImg src={url} alt="" onError={() => setFailed(true)} />
-      )}
-    </AvatarBox>
+    <CompanyLogoChip
+      logoUrl={companyLogoUrl(row.sourceUrl, row.logoUrl)}
+      name={monogramSeed}
+      size={28}
+    />
   );
 }
 
@@ -435,30 +428,6 @@ const Row = styled.button<{ $highlighted?: boolean }>`
     opacity: 0.5;
     cursor: not-allowed;
   }
-`;
-
-const AvatarBox = styled.div`
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: ${({ theme }) => theme.colors.bgMuted};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  flex-shrink: 0;
-`;
-
-const AvatarImg = styled.img`
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-`;
-
-const AvatarMonogram = styled.div`
-  font-size: 13px;
-  font-weight: 700;
-  color: ${({ theme }) => theme.colors.text};
 `;
 
 const RowBody = styled.div`

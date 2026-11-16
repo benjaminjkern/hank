@@ -16,10 +16,13 @@
 //
 // No JobEvent. Nothing has happened to the role yet; the commit logs the close.
 
-import { ProposedVerdict } from "@/generated/prisma/client";
-import type { EliminatedBy, JobCloseReason } from "@/generated/prisma/client";
 import { bulkUpdate, type Database } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
+import { ProposedVerdict } from "@/server/generated/prisma/client";
+import type {
+  EliminatedBy,
+  JobCloseReason,
+} from "@/server/generated/prisma/client";
 import { nowDate } from "@/shared/utils/now";
 
 export async function passOnJobs(args: {

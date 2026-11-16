@@ -32,7 +32,7 @@ if (!r.ok) return toolError("ENTITY_NOT_FOUND", r.message, r.dedupHint);
 const companyId = r.value.id; // use internally exactly as before
 ```
 
-Optional params that default to the focused entity only resolve when present; the focused id read from the session stays a raw cuid. Any tool **result string** the LLM reads emits the slug, not the cuid (`updated ${r.value.slug}`). Worked examples: [createJobs.ts](../src/server/agent/tools/registry/createJobs.ts), [logJobEvents.ts](../src/server/agent/tools/registry/logJobEvents.ts) (batch `resolveJobsBySlug` preserves partial-success behavior), [createOpportunities.ts](../src/server/agent/tools/registry/createOpportunities.ts).
+Optional params that default to the focused entity only resolve when present; the focused id read from the session stays a raw cuid. Any tool **result string** the LLM reads emits the slug, not the cuid (`updated ${r.value.slug}`). Worked examples: [createJobs.ts](../src/server/tools/registry/createJobs.ts), [logJobEvents.ts](../src/server/tools/registry/logJobEvents.ts) (batch `resolveJobsBySlug` preserves partial-success behavior), [createOpportunities.ts](../src/server/tools/registry/createOpportunities.ts).
 
 ## What stays a cuid (deliberately)
 

@@ -9,8 +9,8 @@
 // preScanPoolWhere and shortlistPoolStatusWhere: "no stance" IS "not yet
 // judged this round".
 
-import { JobInteractionStatus } from "@/generated/prisma/client";
-import type { Prisma } from "@/generated/prisma/client";
+import { JobInteractionStatus } from "@/server/generated/prisma/client";
+import type { Prisma } from "@/server/generated/prisma/client";
 
 export function scanPoolWhere(): Prisma.JobInteractionWhereInput {
   return {

@@ -15,7 +15,7 @@ import type {
   CompanyBlockReason,
   CompanyPauseReason,
   CompanyCloseReason,
-} from "@/generated/prisma/client";
+} from "@/server/generated/prisma/client";
 
 const COMPANY_CLOSE_REASON_LABELS: Record<CompanyCloseReason, string> = {
   NOT_A_MATCH: "not a match",

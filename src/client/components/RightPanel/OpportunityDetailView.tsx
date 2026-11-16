@@ -7,7 +7,7 @@ import { useChatStore } from "@/client/chatStore";
 import type {
   FocusedOpportunityView,
   OpportunityJobView,
-} from "@/server/agent/tools/lib/types";
+} from "@/server/views/getFocusedOpportunity";
 import {
   statusLabel,
   jobStatusColor,

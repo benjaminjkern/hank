@@ -1,7 +1,7 @@
 // What the enrich chain is handed and what it reports back, per company and per
 // batch.
 
-import type { RunContext } from "@/server/agent/contracts";
+import type { RunContext } from "@/server/contracts";
 import type { AmbiguousCompanyCandidate } from "@/server/subagents/registry/companyBasicInfo";
 
 // One company to enrich. `context` (a disambiguating hint / suggestion

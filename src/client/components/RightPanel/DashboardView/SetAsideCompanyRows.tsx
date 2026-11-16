@@ -5,7 +5,8 @@ import type {
 } from "@/client/chatStore";
 import { statusLabel } from "@/shared/statusColors";
 
-import { CompanyLogoChip } from "./CompanyLogoChip";
+import { CompanyLogoChip } from "../shared/CompanyLogoChip";
+
 import {
   CloseNoteLine,
   CloseReasonLabel,
@@ -24,11 +25,15 @@ export function ClosedCompanyRow({
   company: DashboardClosedCompany;
   onPick: () => void;
 }) {
-  const reasonLabel = company.closeReason ?? "OTHER";
+  const reasonLabel = statusLabel(company.closeReason ?? "OTHER");
   return (
     <ClosedRow onClick={onPick}>
       <ClosedRowLeft>
-        <CompanyLogoChip logoUrl={company.logoUrl} name={company.companyName} />
+        <CompanyLogoChip
+          logoUrl={company.logoUrl}
+          name={company.companyName}
+          size={20}
+        />
         <div>
           <Title>{company.companyName}</Title>
           {company.closeNote && (
@@ -52,7 +57,11 @@ export function PausedCompanyRow({
   return (
     <ClosedRow onClick={onPick}>
       <ClosedRowLeft>
-        <CompanyLogoChip logoUrl={company.logoUrl} name={company.companyName} />
+        <CompanyLogoChip
+          logoUrl={company.logoUrl}
+          name={company.companyName}
+          size={20}
+        />
         <div>
           <Title>{company.companyName}</Title>
           {company.pauseNote && (
@@ -72,13 +81,15 @@ export function BlockedCompanyRow({
   company: DashboardBlockedCompany;
   onPick: () => void;
 }) {
-  // Render the raw reason enum (UPPERCASE), matching the closed/deferred reason
-  // chips, which show closeReason/deferReason verbatim.
-  const reasonLabel = company.blockReason ?? "OTHER";
+  const reasonLabel = statusLabel(company.blockReason ?? "OTHER");
   return (
     <ClosedRow onClick={onPick}>
       <ClosedRowLeft>
-        <CompanyLogoChip logoUrl={company.logoUrl} name={company.companyName} />
+        <CompanyLogoChip
+          logoUrl={company.logoUrl}
+          name={company.companyName}
+          size={20}
+        />
         <div>
           <Title>{company.companyName}</Title>
           {company.blockNote && (

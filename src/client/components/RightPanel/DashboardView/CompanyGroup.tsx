@@ -1,19 +1,19 @@
 import styled from "styled-components";
 
 import type { DashboardCompany } from "@/client/chatStore";
-import { appliedTierBadge } from "@/shared/statusColors";
+import { appliedTierBadge, statusLabel } from "@/shared/statusColors";
 import { relativeTime } from "@/shared/utils/date";
 import { nowMs } from "@/shared/utils/now";
 
+import { CompanyLogoChip } from "../shared/CompanyLogoChip";
+import { ShowMoreToggle } from "../shared/ShowMoreToggle";
 import { useExpandable } from "../shared/useExpandable";
 
-import { CompanyLogoChip } from "./CompanyLogoChip";
 import {
   DASHBOARD_PREVIEW_COUNT,
   EmptyRow,
   Group,
   GroupCount,
-  MoreButton,
   RowMain,
   StatusPill,
   Title,
@@ -122,7 +122,7 @@ function emptyHintFor(c: DashboardCompany): string {
 
 // One company box in a live bucket: header (logo + name + status + "N in
 // pipeline" count) over its job rows, capped at DASHBOARD_PREVIEW_COUNT with
-// a "+N more" toggle. Extracted from the bucket render so it can own the
+// a show-more toggle. Extracted from the bucket render so it can own the
 // expand state (hooks can't live in a .map callback).
 export function CompanyGroup({
   company: c,
@@ -135,22 +135,15 @@ export function CompanyGroup({
 }) {
   const jobs = c.jobInteractions;
   const now = nowMs();
-  const {
-    visible: visibleJobs,
-    truncated,
-    canCollapse,
-    hiddenCount,
-    expand,
-    collapse,
-  } = useExpandable(jobs, DASHBOARD_PREVIEW_COUNT);
+  const jobList = useExpandable(jobs, DASHBOARD_PREVIEW_COUNT);
 
   return (
     <Group>
       <GroupHeader onClick={onPickCompany}>
         <GroupHeaderLeft>
-          <CompanyLogoChip logoUrl={c.logoUrl} name={c.companyName} />
+          <CompanyLogoChip logoUrl={c.logoUrl} name={c.companyName} size={20} />
           <GroupName>{c.companyName}</GroupName>
-          <StatusPill $status={c.status}>{c.status}</StatusPill>
+          <StatusPill $status={c.status}>{statusLabel(c.status)}</StatusPill>
         </GroupHeaderLeft>
         {jobs.length > 0 && (
           <GroupCount>
@@ -164,7 +157,7 @@ export function CompanyGroup({
         <EmptyRow>{emptyHintFor(c)}</EmptyRow>
       ) : (
         <>
-          {visibleJobs.map((i) => {
+          {jobList.visible.map((i) => {
             // For an applied job, lead the meta with when it went out so the
             // user sees the wait at a glance (the pill color escalates with it).
             const appliedCaption =
@@ -191,17 +184,13 @@ export function CompanyGroup({
                   $appliedAt={i.appliedAt}
                   $now={now}
                 >
-                  {i.status}
+                  {statusLabel(i.status)}
                   {appliedTierBadge(i.appliedAt, now)}
                 </StatusPill>
               </Row>
             );
           })}
-          {truncated ? (
-            <MoreButton onClick={expand}>+{hiddenCount} more</MoreButton>
-          ) : canCollapse ? (
-            <MoreButton onClick={collapse}>Collapse</MoreButton>
-          ) : null}
+          <ShowMoreToggle expandable={jobList} />
         </>
       )}
     </Group>

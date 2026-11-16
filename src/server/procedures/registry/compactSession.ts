@@ -5,9 +5,9 @@
 // callers compose ahead of this one (`runConsolidateSessionMemory` → this), so
 // the summary is written over post-consolidation memory.
 
-import { Role } from "@/generated/prisma/client";
-import type { RunContext } from "@/server/agent/contracts";
+import type { RunContext } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
+import { Role } from "@/server/generated/prisma/client";
 import { traceText } from "@/server/platform/trace/traceText";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";

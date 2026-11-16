@@ -14,14 +14,14 @@
 // — never the mechanism, since the user has no notes/transcript model and
 // naming those leaks internal jargon.
 
+import { humanCompanyBlockReason } from "@/server/entities/companies/humanCompanyReasonLabels";
+import { humanJobCloseReason } from "@/server/entities/jobs/humanJobReasonLabels";
 import {
   CompanyStatus,
   type ApplyChannel,
   type JobCloseReason,
   type CompanyBlockReason,
-} from "@/generated/prisma/client";
-import { humanCompanyBlockReason } from "@/server/entities/companies/humanCompanyReasonLabels";
-import { humanJobCloseReason } from "@/server/entities/jobs/humanJobReasonLabels";
+} from "@/server/generated/prisma/client";
 import type { CritiqueStop } from "@/server/procedures/registry/draftApplication/critiqueAndRevise";
 import { formatFocusRefToken } from "@/shared/focusRefToken";
 

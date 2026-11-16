@@ -16,11 +16,11 @@
 // with whatever the user actually said. What lands in memory is the PATTERN, not
 // the roster.
 
-import { CompanySuggestionVerdict } from "@/generated/prisma/client";
-import { yieldUiEvents } from "@/server/agent/contracts";
-import type { RunContext, TurnEvent } from "@/server/agent/contracts";
 import { appendPipelineActivity } from "@/server/agent/session/appendMessages";
+import { yieldUiEvents } from "@/server/contracts";
+import type { RunContext, TurnEvent } from "@/server/contracts";
 import { settleSuggestionBatch } from "@/server/entities/companies/suggestionMark";
+import { CompanySuggestionVerdict } from "@/server/generated/prisma/client";
 import { streamingProcedure } from "@/server/procedures/lib/procedure";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
 import {

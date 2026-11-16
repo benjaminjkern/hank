@@ -29,7 +29,6 @@
 // Aborts (user-pressed Stop) propagate via runController.signal all the way down
 // through the procedure → sub-agents.
 
-import type { LoopEvent } from "@/server/agent/contracts";
 import {
   clearActiveRun,
   claimSessionForNewRun,
@@ -41,6 +40,7 @@ import {
   getOrCreateActiveSession,
   recordTranscript,
 } from "@/server/agent/session";
+import type { LoopEvent } from "@/server/contracts";
 import { classifyLlmError } from "@/server/platform/llm/classifyLlmError";
 import {
   NoAnthropicKeyError,

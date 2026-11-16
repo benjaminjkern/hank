@@ -1,12 +1,12 @@
 // The shape EVERY sub-agent is declared in — the sub-agent equivalent of
-// `ToolDef` (agent/tools/lib/types.ts): a registry file holds ONE `SubAgentDef`
+// `ToolDef` (tools/lib/types.ts): a registry file holds ONE `SubAgentDef`
 // literal describing the LLM call, and nothing runs it but
 // [`runSubAgent`](./runSubAgent.ts). See docs/sub-agents.md for how to pick a
 // shape; this file is the contract.
 //
 // A def declares WHAT the call is; the caller supplies WHO it runs for. Hence
 // `runSubAgent`'s two arguments: `input` (the sub-agent's own domain input) and
-// `ctx` (a [`RunContext`](../../agent/contracts/runContext.ts) — user, trace,
+// `ctx` (a [`RunContext`](../../contracts/runContext.ts) — user, trace,
 // abort). Nothing about how the call is SHAPED rides on ctx.
 //
 // Three independent axes shape it, and between them they cover every sub-agent
@@ -27,10 +27,10 @@
 //     JSON schema. Emitting it TERMINATES the loop and its payload is the
 //     sub-agent's return value. Never trace or meter it as a tool call.
 
-import type { AnyToolDef } from "@/server/agent/tools/lib/types";
 import type { LlmModel } from "@/server/platform/llm/models";
 import type { Reasoning } from "@/server/platform/llm/reasoning";
 import type { UsageOperation } from "@/server/platform/usage/track";
+import type { AnyToolDef } from "@/server/tools/lib/types";
 
 import type Anthropic from "@anthropic-ai/sdk";
 

@@ -4,9 +4,9 @@
 // the client imports these types and extends them with what only a live stream
 // carries.
 
-import { Role } from "@/generated/prisma/client";
-import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { Role } from "@/server/generated/prisma/client";
+import type { Prisma } from "@/server/generated/prisma/client";
 import { listAttachmentsForMessages } from "@/server/platform/storage/attachments";
 import { isRecord } from "@/shared/utils/guards";
 

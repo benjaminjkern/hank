@@ -194,7 +194,7 @@ const eslintConfig = defineConfig([
   // the load-bearing back-edges into lint errors. Denylist model (default:
   // "allow" + targeted "disallow") so we forbid exactly the documented back-edges
   // rather than asserting the full positive graph — that keeps false positives at
-  // zero. `agent/contracts` (RunContext / UiEvent / EntryTarget) is a leaf
+  // zero. `contracts/` (RunContext / UiEvent / EntryTarget) is a leaf
   // vocabulary imported broadly, so it is never a forbidden target.
   {
     files: ["src/**/*.ts", "src/**/*.tsx"],
@@ -207,14 +207,14 @@ const eslintConfig = defineConfig([
       // First match wins — most specific paths first.
       "boundaries/elements": [
         {
-          type: "agent-tools-lib",
+          type: "tools-lib",
           partialMatch: false,
-          pattern: "src/server/agent/tools/lib/**",
+          pattern: "src/server/tools/lib/**",
         },
         {
-          type: "agent-tools",
+          type: "tools",
           partialMatch: false,
-          pattern: "src/server/agent/tools/**",
+          pattern: "src/server/tools/**",
         },
         {
           type: "agent-runtime",
@@ -237,9 +237,9 @@ const eslintConfig = defineConfig([
           pattern: "src/server/agent/runTree/**",
         },
         {
-          type: "agent-contracts",
+          type: "contracts",
           partialMatch: false,
-          pattern: "src/server/agent/contracts/**",
+          pattern: "src/server/contracts/**",
         },
         {
           type: "subagents-lib",
@@ -310,9 +310,9 @@ const eslintConfig = defineConfig([
                         "subagents-lib",
                         "subagents-registry",
                         "widgets",
-                        "agent-contracts",
-                        "agent-tools",
-                        "agent-tools-lib",
+                        "contracts",
+                        "tools",
+                        "tools-lib",
                         "agent-runtime",
                         "agent-hank",
                         "agent-session",
@@ -338,9 +338,9 @@ const eslintConfig = defineConfig([
                         "subagents-lib",
                         "subagents-registry",
                         "widgets",
-                        "agent-contracts",
-                        "agent-tools",
-                        "agent-tools-lib",
+                        "contracts",
+                        "tools",
+                        "tools-lib",
                         "agent-runtime",
                         "agent-hank",
                         "agent-session",
@@ -369,8 +369,8 @@ const eslintConfig = defineConfig([
                       anyOf: [
                         "procedures",
                         "widgets",
-                        "agent-tools",
-                        "agent-tools-lib",
+                        "tools",
+                        "tools-lib",
                         "agent-runtime",
                         "agent-hank",
                         "agent-session",
@@ -397,9 +397,9 @@ const eslintConfig = defineConfig([
                         "subagents-lib",
                         "subagents-registry",
                         "widgets",
-                        "agent-contracts",
-                        "agent-tools",
-                        "agent-tools-lib",
+                        "contracts",
+                        "tools",
+                        "tools-lib",
                         "agent-runtime",
                         "agent-hank",
                         "agent-session",
@@ -453,7 +453,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    "src/generated/**",
+    "src/server/generated/**",
   ]),
 ]);
 

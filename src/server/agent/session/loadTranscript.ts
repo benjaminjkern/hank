@@ -4,10 +4,10 @@
 // that tell Hank what the deterministic layer already put on screen.
 
 import { renderWidgetText } from "@/client/components/Chat/widgets/registry";
-import type { Prisma } from "@/generated/prisma/client";
-import { Role } from "@/generated/prisma/client";
 import { buildProvenanceMessage } from "@/server/agent/session/uiProvenance";
 import { prisma } from "@/server/db/prisma";
+import type { Prisma } from "@/server/generated/prisma/client";
+import { Role } from "@/server/generated/prisma/client";
 import { listAttachmentsForMessages } from "@/server/platform/storage/attachments";
 import { stripFocusRefTokens } from "@/shared/focusRefToken";
 import { stripWidgetMarker } from "@/shared/widgetMarker";

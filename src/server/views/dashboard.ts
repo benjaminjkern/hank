@@ -2,6 +2,12 @@
 // status, plus their live inbound leads and the admin counters. Feeds the right
 // panel's dashboard mode (GET /api/dashboard); the client imports these types.
 
+import { prisma } from "@/server/db/prisma";
+import { flipDueInterviewsToDebrief } from "@/server/entities/jobs/flipDueInterviews";
+import {
+  ROLE_ATTR_SELECT,
+  toRoleAttrs,
+} from "@/server/entities/jobs/roleAttrs";
 import {
   CompanyStatus,
   JobEventType,
@@ -10,13 +16,7 @@ import {
   type CompanyPauseReason,
   type CompanyCloseReason,
   type CompanyBlockReason,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
-import { flipDueInterviewsToDebrief } from "@/server/entities/jobs/flipDueInterviews";
-import {
-  ROLE_ATTR_SELECT,
-  toRoleAttrs,
-} from "@/server/entities/jobs/roleAttrs";
+} from "@/server/generated/prisma/client";
 import { companyLogoUrl } from "@/shared/companyLogo";
 
 // Active = SCANNED (Hank has read it, awaiting shortlist approval) or

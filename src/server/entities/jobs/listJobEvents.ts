@@ -7,12 +7,12 @@
 // pages" line reads, belong to the channel asking — see tools/lib/paginate.ts.
 // Each row carries its id so the agent can target it for edit/delete.
 
+import { prisma } from "@/server/db/prisma";
 import type {
   JobInteractionStatus,
   JobCloseReason,
   JobDeferReason,
-} from "@/generated/prisma/client";
-import { prisma } from "@/server/db/prisma";
+} from "@/server/generated/prisma/client";
 
 export type JobEventHeader = {
   jobInteractionId: string;

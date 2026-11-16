@@ -23,7 +23,7 @@ import {
   EventSource,
   JobInteractionStatus,
   JobEventType,
-} from "@/generated/prisma/client";
+} from "@/server/generated/prisma/client";
 
 import { logJobEvents } from "./logJobEvents";
 

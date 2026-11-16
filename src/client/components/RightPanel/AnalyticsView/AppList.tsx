@@ -5,9 +5,8 @@ import styled from "styled-components";
 import type { Application } from "@/server/views/analytics";
 import { statusColor, statusLabel } from "@/shared/statusColors";
 
+import { ShowMoreToggle } from "../shared/ShowMoreToggle";
 import { useExpandable } from "../shared/useExpandable";
-
-import { MoreButton } from "./styles";
 
 export function AppList({
   apps,
@@ -20,15 +19,14 @@ export function AppList({
   onPickJob: (jobId: string) => void;
   onPickCompany: (companyId: string) => void;
 }) {
-  const { visible, truncated, canCollapse, hiddenCount, expand, collapse } =
-    useExpandable(apps, 10);
+  const appList = useExpandable(apps, 10);
   return (
     <AppRows style={{ minHeight }}>
       {apps.length === 0 ? (
         <SubHint>No applications in this category.</SubHint>
       ) : (
         <>
-          {visible.map((a) => (
+          {appList.visible.map((a) => (
             <AppRow key={a.jobInteractionId} onClick={() => onPickJob(a.jobId)}>
               <AppMain>
                 <AppTitle>{a.title}</AppTitle>
@@ -52,11 +50,7 @@ export function AppList({
               </StatusPill>
             </AppRow>
           ))}
-          {truncated ? (
-            <MoreButton onClick={expand}>Show {hiddenCount} more</MoreButton>
-          ) : canCollapse ? (
-            <MoreButton onClick={collapse}>Collapse</MoreButton>
-          ) : null}
+          <ShowMoreToggle expandable={appList} topBorder />
         </>
       )}
     </AppRows>

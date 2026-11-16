@@ -14,7 +14,7 @@ import {
   type CompanyCloseReason,
   type CompanyPauseReason,
   type CompanyBlockReason,
-} from "@/generated/prisma/client";
+} from "@/server/generated/prisma/client";
 
 type CompanyStatusFieldsInput =
   | {

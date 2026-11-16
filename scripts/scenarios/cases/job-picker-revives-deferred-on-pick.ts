@@ -1,5 +1,5 @@
-import { JobInteractionStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { JobInteractionStatus } from "@/server/generated/prisma/client";
 import { runWalkthrough } from "@/server/procedures/registry/walkthrough";
 
 import { SESSION_ID, USER_ID, withFocus } from "../lib";

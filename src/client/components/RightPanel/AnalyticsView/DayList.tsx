@@ -5,10 +5,11 @@ import styled from "styled-components";
 import type { Advancement } from "@/server/views/analytics";
 import { fullDate, relativeTime } from "@/shared/utils/date";
 
+import { ShowMoreToggle } from "../shared/ShowMoreToggle";
 import { useExpandable } from "../shared/useExpandable";
 
 import { categoryColor, groupDay } from "./advancements";
-import { Dot, MoreButton } from "./styles";
+import { Dot } from "./styles";
 
 export function DayList({
   groups,
@@ -17,11 +18,10 @@ export function DayList({
   groups: { key: string; items: Advancement[]; latest: string }[];
   onPickCompany: (companyId: string) => void;
 }) {
-  const { visible, truncated, canCollapse, hiddenCount, expand, collapse } =
-    useExpandable(groups, 10);
+  const dayList = useExpandable(groups, 10);
   return (
     <>
-      {visible.map((g) => (
+      {dayList.visible.map((g) => (
         <DayBlock key={g.key}>
           <DayHeader>
             <DayWhen>{relativeTime(g.latest)}</DayWhen>
@@ -48,13 +48,7 @@ export function DayList({
           ))}
         </DayBlock>
       ))}
-      {truncated ? (
-        <MoreButton onClick={expand}>
-          Show {hiddenCount} more day{hiddenCount === 1 ? "" : "s"}
-        </MoreButton>
-      ) : canCollapse ? (
-        <MoreButton onClick={collapse}>Collapse</MoreButton>
-      ) : null}
+      <ShowMoreToggle expandable={dayList} noun={["day", "days"]} topBorder />
     </>
   );
 }

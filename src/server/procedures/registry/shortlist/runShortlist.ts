@@ -13,8 +13,8 @@
 // (free — no LLM, so no re-emit guard is needed). A `direction` rides in as
 // the ranker's extraContext for a fresh ranking on those terms.
 
-import { statusEvent, yieldUiEvents } from "@/server/agent/contracts";
-import type { RunContext, TurnEvent } from "@/server/agent/contracts";
+import { statusEvent, yieldUiEvents } from "@/server/contracts";
+import type { RunContext, TurnEvent } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { markCompanyShortlisting } from "@/server/entities/companies/markCompanyStatus";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";

@@ -6,11 +6,11 @@
 // already drafted and which ask_user items remain from JobInteraction.draftDecision.
 // Resume is automatic and idempotent — nothing to check.
 
-import { JobInteractionStatus } from "@/generated/prisma/client";
-import { statusEvent, yieldUiEvents } from "@/server/agent/contracts";
-import type { TurnEvent } from "@/server/agent/contracts";
+import { statusEvent, yieldUiEvents } from "@/server/contracts";
+import type { TurnEvent } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
+import { JobInteractionStatus } from "@/server/generated/prisma/client";
 import { streamingProcedure } from "@/server/procedures/lib/procedure";
 import { runDraftApplication } from "@/server/procedures/registry/draftApplication";
 import {

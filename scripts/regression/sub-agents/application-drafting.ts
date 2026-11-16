@@ -31,16 +31,16 @@ import "dotenv/config";
 import Anthropic from "@anthropic-ai/sdk";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-import { PrismaClient } from "../../../src/generated/prisma/client";
-import { readReusableApplicationTool } from "../../../src/server/agent/tools/registry/readReusableApplication";
 import {
   ROLE_ATTR_SELECT,
   toRoleAttrs,
   type RoleAttrs,
 } from "../../../src/server/entities/jobs/roleAttrs";
+import { PrismaClient } from "../../../src/server/generated/prisma/client";
 import { resolveAnthropicApiKey } from "../../../src/server/platform/llm/resolveAnthropicKey";
 import { runSubAgent } from "../../../src/server/subagents/lib/runSubAgent";
 import { applicationDraftingSubAgent } from "../../../src/server/subagents/registry/applicationDrafting";
+import { readReusableApplicationTool } from "../../../src/server/tools/registry/readReusableApplication";
 import { truncate } from "../../../src/shared/utils/text";
 
 import { runJudge, judgeCost } from "./lib/judge";
@@ -51,8 +51,8 @@ import {
   writeReport,
 } from "./lib/report";
 
-import type { AnyToolDef } from "../../../src/server/agent/tools/lib/types";
 import type { PastDrafts } from "../../../src/server/entities/jobs/pastDrafts";
+import type { AnyToolDef } from "../../../src/server/tools/lib/types";
 
 // The two former profile notes (a "search thesis" + an "about me") are one
 // profile.md now. Fixtures still author the halves separately — they're

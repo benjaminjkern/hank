@@ -6,8 +6,8 @@
 // create_companies tool and the find_companies checklist add so both build stubs
 // the same way. `slug` is returned so the enrich step can run without a re-lookup.
 
-import { CompanyStatus } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { CompanyStatus } from "@/server/generated/prisma/client";
 
 import { companySlug } from "./companySlug";
 

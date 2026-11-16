@@ -24,7 +24,6 @@ import {
   SectionCount,
   SectionHead,
   SectionTitle,
-  ToggleLabel,
 } from "./styles";
 
 // Approximate heights used to reserve the list's min-height so filtering
@@ -111,7 +110,7 @@ export function FunnelSection({
       ) : (
         <>
           <ControlsRow>
-            <ToggleLabel>
+            <CutoffLabel>
               Applied within
               <CutoffSelect
                 value={cutoffMonths == null ? "all" : String(cutoffMonths)}
@@ -130,7 +129,7 @@ export function FunnelSection({
                   </option>
                 ))}
               </CutoffSelect>
-            </ToggleLabel>
+            </CutoffLabel>
           </ControlsRow>
 
           {total === 0 ? (
@@ -189,6 +188,16 @@ export function FunnelSection({
     </Card>
   );
 }
+
+const CutoffLabel = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: ${({ theme }) => theme.colors.textMuted};
+  cursor: pointer;
+  user-select: none;
+`;
 
 const CutoffSelect = styled.select`
   font: inherit;

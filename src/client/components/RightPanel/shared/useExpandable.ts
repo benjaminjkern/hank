@@ -1,5 +1,14 @@
 import { useState } from "react";
 
+// The slice of the hook's result a show-more toggle reads.
+export type ExpandableToggle = {
+  truncated: boolean;
+  canCollapse: boolean;
+  hiddenCount: number;
+  expand: () => void;
+  collapse: () => void;
+};
+
 // Shared "preview N, then expand" logic for the right-panel lists that cap
 // their visible length behind a show-more toggle: the dashboard company /
 // opportunity job lists, the company-page job groups, the recent-activity
@@ -7,10 +16,7 @@ import { useState } from "react";
 // its own copy of the same slice + truncation + toggle bookkeeping, which is
 // where the off-by-one "+N more" / "Collapse" bugs kept getting re-derived.
 //
-// The hook owns only the *logic*; each caller keeps its own markup and copy
-// (the dashboard says "+N more", the company page says "Show N more") — the
-// variation that's intentional stays local, the bookkeeping that should never
-// differ is shared.
+// The hook owns the *logic*; ShowMoreToggle is the toggle row that goes with it.
 //
 // previewCount is the cap. Pass `items.length` to opt out of capping (e.g. a
 // group that only shows a toggle in some configurations) — canCollapse is then
@@ -22,7 +28,7 @@ export function useExpandable<T>(items: T[], previewCount: number) {
   // Currently showing the capped slice (collapsed + cappable).
   const truncated = !expanded && canCollapse;
   const visible = truncated ? items.slice(0, previewCount) : items;
-  // How many rows sit behind "+N more" while collapsed. Callers whose list is
+  // How many rows sit behind "Show N more" while collapsed. Callers whose list is
   // a server-capped slice (recent activity) compute their own count from the
   // authoritative total instead — this assumes `items` is the full list.
   const hiddenCount = Math.max(0, items.length - previewCount);

@@ -12,11 +12,11 @@
 // truncation safe, and in runCommitProfile the verdict gate that follows has to
 // see post-write memory.
 
-import type { RunContext } from "@/server/agent/contracts";
 import {
   serializeTranscript,
   type StoredMessage,
 } from "@/server/agent/session";
+import type { RunContext } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import {
   readMemory,

@@ -5,8 +5,8 @@
 // a fact about a board, and the thing that AUTHORS one (procedures/registry/
 // reconBoard/) is the procedure.
 
-import { BoardReaderOrigin, Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
+import { BoardReaderOrigin, Prisma } from "@/server/generated/prisma/client";
 import { boardMatchKey } from "@/server/platform/scrape/recipe/matchKey";
 import type { BoardRecipe } from "@/server/platform/scrape/recipe/types";
 import { nowDate } from "@/shared/utils/now";
