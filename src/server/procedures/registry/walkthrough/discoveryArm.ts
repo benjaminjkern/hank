@@ -1,6 +1,5 @@
-import { yieldUiEvents } from "@/server/contracts";
-import type { TurnEvent } from "@/server/contracts";
-import { streamingProcedure } from "@/server/procedures/lib/procedure";
+import { sayUiEvents } from "@/server/contracts";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runCommitDiscovery } from "@/server/procedures/registry/commitDiscovery";
 import { runFindCompanies } from "@/server/procedures/registry/findCompanies";
 import { buildDiscoveryEvents } from "@/server/views/showEvents";
@@ -17,28 +16,28 @@ import type { WalkthroughArgs, WalkthroughResult } from "./types";
 // direction still supports them (entities/companies/companySuggestions.ts), so
 // the list that comes back is the same names filtered against what the user just
 // said rather than a replay of a batch they'd walked away from.
-export const runDiscoveryArm = streamingProcedure(
+export const runDiscoveryArm = procedure(
   "discovery_arm",
-  async function* (
+  async (
     input: WalkthroughArgs & { direction?: string; append?: boolean },
-  ): AsyncGenerator<TurnEvent, WalkthroughResult> {
+  ): Promise<WalkthroughResult> => {
     const { direction, append, ...args } = input;
     const r = await runFindCompanies({ ...args, direction, append });
 
     // Both empty cases have to speak for themselves — a handoff already ended
     // Hank's turn, so there's no reply coming after this.
     if (r.reason === "no_basis" || r.reason === "failed") {
-      yield {
+      await args.say({
         type: "text",
         text: "I couldn't put a search together just now. What kind of companies are you looking for — sector, stage, the shape of the role?",
-      };
+      });
       return { wrappedUp: false };
     }
     if (r.reason === "none_found") {
-      yield {
+      await args.say({
         type: "text",
         text: "I looked, but nothing new came up beyond what's already on your list. Want me to try a different angle — a different sector or stage, or casting wider?",
-      };
+      });
       return { wrappedUp: false };
     }
 
@@ -58,28 +57,29 @@ export const runDiscoveryArm = streamingProcedure(
     const count = `${r.candidates.length} ${r.candidates.length === 1 ? "company" : "companies"}`;
     const chip = formatFocusRefToken("discovery", null, "Companies to add");
     const opener = r.provenance ? `${r.provenance.trim()} ` : "";
-    yield {
+    await args.say({
       type: "text",
       text: `${opener}Put ${count} on ${chip} — they're all set to add, so uncheck any you don't want and send. Tell me what's off about them and I'll look again instead.`,
-    };
-    yield* yieldUiEvents((await buildDiscoveryEvents(args.userId)).events);
+    });
+    await sayUiEvents(
+      args.say,
+      (await buildDiscoveryEvents(args.userId)).events,
+    );
     return { wrappedUp: false };
   },
 );
 
 // Settle the marks: add what's marked ADD, record what's marked PASS, and put
 // the refreshed list back on screen. Entered by the `commit_discovery` handoff.
-export const runDiscoveryCommitArm = streamingProcedure(
+export const runDiscoveryCommitArm = procedure(
   "discovery_commit_arm",
-  async function* (
-    args: WalkthroughArgs,
-  ): AsyncGenerator<TurnEvent, WalkthroughResult> {
-    const result = yield* runCommitDiscovery(args);
+  async (args: WalkthroughArgs): Promise<WalkthroughResult> => {
+    const result = await runCommitDiscovery(args);
     if (result.empty) {
-      yield {
+      await args.say({
         type: "text",
         text: "There's no company list on screen right now — say the word and I'll go find some.",
-      };
+      });
       return { wrappedUp: false };
     }
     // No panel move here: runCommitDiscovery drops it back to the dashboard the

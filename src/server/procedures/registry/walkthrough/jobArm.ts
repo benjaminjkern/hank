@@ -6,12 +6,12 @@
 // already drafted and which ask_user items remain from JobInteraction.draftDecision.
 // Resume is automatic and idempotent — nothing to check.
 
-import { statusEvent, yieldUiEvents } from "@/server/contracts";
-import type { TurnEvent } from "@/server/contracts";
+import { statusEvent, sayUiEvents } from "@/server/contracts";
+import type { Say } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { JobInteractionStatus } from "@/server/generated/prisma/client";
-import { streamingProcedure } from "@/server/procedures/lib/procedure";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runDraftApplication } from "@/server/procedures/registry/draftApplication";
 import {
   buildApplicationEvents,
@@ -23,9 +23,9 @@ import { narrateApplicationReady } from "./narration";
 
 import type { WalkthroughArgs, WalkthroughResult } from "./types";
 
-export const runJobArm = streamingProcedure(
+export const runJobArm = procedure(
   "job_arm",
-  async function* (
+  async (
     input: WalkthroughArgs & {
       jobId: string;
       // freshEntry = the user deliberately entered this job THIS turn (picked it
@@ -35,7 +35,7 @@ export const runJobArm = streamingProcedure(
       // status instead of going silent.
       freshEntry?: boolean;
     },
-  ): AsyncGenerator<TurnEvent, WalkthroughResult> {
+  ): Promise<WalkthroughResult> => {
     const { jobId, freshEntry, ...args } = input;
     const opts = { freshEntry };
     // Defensive: if the dispatched job is no longer live work (the user skipped /
@@ -51,19 +51,22 @@ export const runJobArm = streamingProcedure(
       },
     });
     if (!ji || !WORKABLE_STATUSES.includes(ji.status)) {
-      yield statusEvent(
-        "That job is no longer shortlisted — going back to the company.",
+      await args.say(
+        statusEvent(
+          "That job is no longer shortlisted — going back to the company.",
+        ),
       );
       // Focus is ephemeral — nothing to clear; re-dispatch to the company arm
       // (which surfaces the next-role picker) and show the company page. A
       // continuation — this bounce corrects a stale pick mid-flow, it doesn't
       // start a fresh visit, so the arm must not re-scrape on the way through.
       if (ji?.job.companyId) {
-        yield* yieldUiEvents(
+        await sayUiEvents(
+          args.say,
           (await buildShowEvents(args.userId, { companyId: ji.job.companyId }))
             .events,
         );
-        return yield* runCompanyArm({
+        return await runCompanyArm({
           ...args,
           companyId: ji.job.companyId,
           continuation: true,
@@ -76,7 +79,7 @@ export const runJobArm = streamingProcedure(
     // loop — the draft-application procedure. It yields the progress events and
     // returns what the shell needs to decide the co-write hand-off (Step 5.5) and
     // the terminal narration (Step 6).
-    const outcome = yield* runDraftApplication({ ...args, jobId });
+    const outcome = await runDraftApplication({ ...args, jobId });
 
     // Step 5.5: hand off to chat co-writing for any item that needs the user's own
     // input. Emits the opening once, then waits. No marker (focus is ephemeral) —
@@ -89,11 +92,13 @@ export const runJobArm = streamingProcedure(
     if (outcome.askUserItems.length > 0) {
       const drafted = outcome.hasCoverLetter || outcome.answersCount > 0;
       if (drafted) {
-        yield* yieldUiEvents(
+        await sayUiEvents(
+          args.say,
           (await buildApplicationEvents(args.userId, jobId)).events,
         );
       }
-      return yield* enterCoWrite(
+      return await enterCoWrite(
+        args.say,
         outcome.companyDisplay,
         outcome.askUserItems,
         drafted,
@@ -118,33 +123,34 @@ export const runJobArm = streamingProcedure(
         // Capability not available — explain plainly, offer the manual path, and
         // let them move on. If they paste any cover-letter / short-answer fields,
         // the free-text walkthrough path lets Hank draft + save them.
-        yield {
+        await args.say({
           type: "text",
           text:
             "Looks like I can't get to the application form for this one on my own. " +
             "If you open the posting and let me know about any cover letter or short-answer questions, " +
             "I'll draft them for you — otherwise no worries, just tap **I submitted ✓** once you've applied.",
-        };
+        });
       } else if (!outcome.hasCoverLetter && outcome.answersCount === 0) {
         // The decider ran but everything came back skip — no cover letter, nothing
         // substantive to draft, and nothing that needed the user's own input
         // (ask_user items would have handed off to co-write above and returned).
         // Don't claim "draft ready in the right panel" when no draft exists (the
         // silent-move-on bug) — say plainly there's nothing here worth drafting.
-        yield {
+        await args.say({
           type: "text",
           text:
             "I went through this application and there's nothing here I'd draft for you — " +
             "it's the kind of form you fill in directly (basic details, dropdowns, links). " +
             "Tap **I submitted ✓** once you've applied.",
-        };
+        });
       } else {
         // Put the application on screen rather than telling them where to look,
         // then hand over what the reviewer actually said about it.
-        yield* yieldUiEvents(
+        await sayUiEvents(
+          args.say,
           (await buildApplicationEvents(args.userId, jobId)).events,
         );
-        yield {
+        await args.say({
           type: "text",
           text: narrateApplicationReady({
             note: outcome.note,
@@ -154,7 +160,7 @@ export const runJobArm = streamingProcedure(
             openCount: (outcome.review?.open ?? []).length,
             stop: outcome.reviewStop,
           }),
-        };
+        });
       }
     }
     return { wrappedUp: false };
@@ -167,11 +173,12 @@ export const runJobArm = streamingProcedure(
 // (work_on_job / the next_job_picker) re-runs the draft procedure, which
 // re-derives what's still pending from draftDecision and re-emits the opening for
 // the remainder until everything's answered.
-async function* enterCoWrite(
+async function enterCoWrite(
+  say: Say,
   companyName: string,
   items: string[],
   drafted: boolean,
-): AsyncGenerator<TurnEvent, WalkthroughResult> {
+): Promise<WalkthroughResult> {
   const list = items.map((i) => `- ${i}`).join("\n");
   const lead = drafted
     ? `I've written what I could for ${companyName} — it's on the right. `
@@ -184,6 +191,6 @@ async function* enterCoWrite(
     items.length === 1
       ? `Tell me a bit about it and I'll shape it into a strong answer with you.`
       : `Tell me about the first and I'll shape it into a strong answer — we'll work through them together.`;
-  yield { type: "text", text: `${intro}\n\n${list}\n\n${closer}` };
+  await say({ type: "text", text: `${intro}\n\n${list}\n\n${closer}` });
   return { wrappedUp: false };
 }

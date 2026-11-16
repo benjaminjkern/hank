@@ -2,10 +2,11 @@
 // it reports back. Every file in this folder takes `WalkthroughArgs`; the arms
 // return `WalkthroughResult`.
 
-import type { EntryTarget, RunContext } from "@/server/contracts";
+import type { EntryTarget, RunContext, Say } from "@/server/contracts";
 
 export type WalkthroughArgs = RunContext & {
   sessionId: string;
+  say: Say;
   userMessage: string;
   // The entity to run the arm on this turn — threaded in-memory from the picker
   // dispatch or the handoff tool that just ran (see EntryTarget). Widget-submission

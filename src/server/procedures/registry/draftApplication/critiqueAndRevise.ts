@@ -29,7 +29,7 @@ import {
 } from "@/server/entities/jobs/applicationDrafts";
 import { isCoverLetterTarget } from "@/server/entities/jobs/applicationItemId";
 import { persistApplicationAnswer } from "@/server/entities/jobs/applicationQuestions";
-import { openTraceSpan } from "@/server/platform/trace/span";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {
   applicationCriticSubAgent,
@@ -83,6 +83,7 @@ export type CritiqueLoopResult = {
 type CritiqueLoopArgs = RunContext & {
   jobId: string;
   sessionId: string;
+  onEvent?: (event: CritiqueLoopEvent) => Promise<void>;
 };
 
 type FormState = {
@@ -102,23 +103,17 @@ type ResolvedItem =
       priorDraft: string;
     };
 
-export async function* critiqueAndReviseForm(
-  outerArgs: CritiqueLoopArgs,
-): AsyncGenerator<CritiqueLoopEvent, CritiqueLoopResult> {
-  // A generator can't be wrapped by withTraceSpan (the wrapper would have to
-  // drain it eagerly), so the span is opened explicitly and closed in a finally
-  // — which also covers the consumer abandoning the generator early.
-  const span = openTraceSpan("critique_and_revise", outerArgs.trace);
-  try {
-    return yield* critiqueAndRevise({ ...outerArgs, trace: span.trace });
-  } finally {
-    span.close();
-  }
-}
+// A STEP of the drafting procedure (and of review_application), traced as its
+// own span. Progress goes to `onEvent`; the verdict is the return value.
+export const critiqueAndReviseForm = procedure(
+  "critique_and_revise",
+  critiqueAndRevise,
+);
 
-async function* critiqueAndRevise(
+async function critiqueAndRevise(
   args: CritiqueLoopArgs,
-): AsyncGenerator<CritiqueLoopEvent, CritiqueLoopResult> {
+): Promise<CritiqueLoopResult> {
+  const say = args.onEvent ?? (async () => {});
   const form = await loadForm(args.userId, args.jobId);
   const hasCover = !!form.coverLetter && form.coverLetter.trim().length > 0;
   const hasAnswers = form.shortAnswers.some((a) => a.answer.trim().length > 0);
@@ -142,10 +137,11 @@ async function* critiqueAndRevise(
   let note = "";
 
   while (true) {
-    yield {
+    // eslint-disable-next-line no-await-in-loop -- each round's progress line is said as the round starts
+    await say({
       type: "progress",
       label: "Reviewing the application for accuracy and consistency…",
-    };
+    });
     // eslint-disable-next-line no-await-in-loop -- each round critiques the revision the previous round produced
     const context = await loadApplicationCriticInput({
       userId: args.userId,
@@ -213,10 +209,11 @@ async function* critiqueAndRevise(
     let anyRevised = false;
     for (const { item, notes } of byItem.values()) {
       const label = item.kind === "cover" ? "cover letter" : "short answer";
-      yield {
+      // eslint-disable-next-line no-await-in-loop -- each item's progress line is said as its revision starts
+      await say({
         type: "progress",
         label: `Revising the ${label} to address the review…`,
-      };
+      });
       // eslint-disable-next-line no-await-in-loop -- each item's revision is shown the items already revised (renderOtherItems reads the live form)
       const r = await draftSingleApplicationItem({
         jobId: args.jobId,
@@ -246,7 +243,8 @@ async function* critiqueAndRevise(
         const tgt = item.kind === "cover" ? "cover_letter" : item.question;
         revised.add(tgt);
         anyRevised = true;
-        yield { type: "revised", target: tgt };
+        // eslint-disable-next-line no-await-in-loop -- reported as each item lands, so the panel refreshes per revision
+        await say({ type: "revised", target: tgt });
       }
     }
     if (!anyRevised) {

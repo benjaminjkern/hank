@@ -12,10 +12,10 @@
 // is deliberate: that file is true of any message regardless of what it says,
 // while every branch below is a decision about companies, roles, and profiles.
 
-import { statusEvent, yieldUiEvents } from "@/server/contracts";
-import type { EntryTarget, RunContext, TurnEvent } from "@/server/contracts";
+import { statusEvent, sayUiEvents } from "@/server/contracts";
+import type { EntryTarget, RunContext, Say } from "@/server/contracts";
 import { flipDueInterviewsToDebrief } from "@/server/entities/jobs/flipDueInterviews";
-import { streamingProcedure } from "@/server/procedures/lib/procedure";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runWrapSegment } from "@/server/procedures/registry/wrapSegment";
 import { buildShowEvents } from "@/server/views/showEvents";
 import { dispatchTopLevelSubmission } from "@/server/widgets/dispatchTopLevelSubmission";
@@ -33,13 +33,14 @@ const MAX_SILENT_TRANSITIONS = 6;
 
 export type ChatArgs = RunContext & {
   sessionId: string;
+  say: Say;
   userMessage: string;
   attachmentIds: string[];
 };
 
-export const runChat = streamingProcedure(
+export const runChat = procedure(
   "chat",
-  async function* (args: ChatArgs): AsyncGenerator<TurnEvent> {
+  async (args: ChatArgs): Promise<void> => {
     // 0. The user's message, before any work that can fail. Anything that throws
     // from here on still leaves what they said in the transcript, next to the
     // `run_error` row the failure writes — see openUserTurn for why that ordering
@@ -70,7 +71,7 @@ export const runChat = streamingProcedure(
 
     // 1. Widget submission. The user's message is a structured choice rather than
     // free text, so it commits deterministically — no LLM routing.
-    const submission = yield* dispatchTopLevelSubmission({
+    const submission = await dispatchTopLevelSubmission({
       ...args,
       userMessage,
     });
@@ -103,19 +104,23 @@ export const runChat = streamingProcedure(
       !userMessage &&
       !carriesPanelEdits
     ) {
-      const r = yield* renderWhatsNext({
+      const r = await renderWhatsNext({
         ...args,
         narrateProfileSwitch: false,
       });
       if (r.kind === "rendered") return;
       pendingProfileGaps = r.gaps;
-      yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
+      await sayUiEvents(args.say, (await buildShowEvents(args.userId)).events);
     }
 
     // 3. Run chat turns until one returns wrappedUp=false (waiting on user input).
     // Each wrappedUp=true fires renderWhatsNext, which either reports the profile
     // gate is open (loop continues, Hank elicits) or renders the picker and stops
     // the loop.
+    // Sequential by nature: every pass is a continuation of the one before it
+    // (it only exists because the previous turn wrapped), and reads the state
+    // that pass wrote.
+    /* eslint-disable no-await-in-loop */
     for (let i = 0; i < MAX_SILENT_TRANSITIONS; i++) {
       // Consume the picker's entry target on the first turn only; later silent
       // transitions in this loop derive their own state.
@@ -123,14 +128,7 @@ export const runChat = streamingProcedure(
       pendingEntryTarget = undefined;
       const iterOpeningNudge = pendingOpeningNudge;
       pendingOpeningNudge = undefined;
-      let wrappedUp = false;
-      // Set when this turn ended a company. The segment wrap runs HERE, once,
-      // rather than inside each bundled mutation — see
-      // procedures/registry/wrapSegment.ts for why.
-      let endedCompanyId: string | undefined;
-      let stopped = false;
-      // eslint-disable-next-line no-await-in-loop -- streaming a turn's events as they happen — the point is to relay each one before the next
-      for await (const ev of runChatTurn({
+      const outcome = await runChatTurn({
         ...args,
         userMessage,
         // Only the FIRST pass carries them — openUserTurn settled the marks into
@@ -139,18 +137,14 @@ export const runChat = streamingProcedure(
         profileGaps: pendingProfileGaps,
         entryTarget: iterEntryTarget,
         openingNudge: iterOpeningNudge,
-      })) {
-        if (ev.type === "done") {
-          wrappedUp = ev.wrappedUp;
-          endedCompanyId = ev.endedCompanyId;
-        } else {
-          if (ev.type === "stopped") stopped = true;
-          yield ev;
-        }
-      }
+      });
+      // When this turn ended a company, the segment wrap runs HERE, once, rather
+      // than inside each bundled mutation — see
+      // procedures/registry/wrapSegment.ts for why.
+      const { wrappedUp, endedCompanyId } = outcome;
       // One-shot: gaps belong only to the turn just triggered.
       pendingProfileGaps = undefined;
-      if (stopped) return;
+      if (outcome.stopped) return;
       // A company ended this pass: consolidate memory, compact the transcript, and
       // drop the right panel back to the dashboard. Runs after the reply is on
       // screen (it's slow and the user has nothing to wait for), and exactly once
@@ -159,13 +153,16 @@ export const runChat = streamingProcedure(
         // Panel FIRST: it's showing the company that just ended, and the wrap
         // below takes seconds (two LLM passes). Dropping it back to the dashboard
         // after would leave a closed company on screen for the whole wait.
-        // eslint-disable-next-line no-await-in-loop -- a silent transition only exists because the previous turn wrapped
-        yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
+        await sayUiEvents(
+          args.say,
+          (await buildShowEvents(args.userId)).events,
+        );
         // The wrap is a ~30s silent stretch at the end of an already-answered
         // message — say what the wait is, in the user's language (never the
         // mechanism: no "notes", no "summary", no compaction talk).
-        yield statusEvent("Filing away what I learned from that stretch…");
-        // eslint-disable-next-line no-await-in-loop -- the wrap reads the state the turn above it just wrote
+        await args.say(
+          statusEvent("Filing away what I learned from that stretch…"),
+        );
         await runWrapSegment({ ...args, subject: "company" });
       }
       if (!wrappedUp) return;
@@ -175,16 +172,16 @@ export const runChat = streamingProcedure(
       // keeps the loop going is the profile gate still being open — we narrate
       // that switch (a brief "grabbing a couple details" cue) because the user
       // just wrapped something else and we owe them a transition cue.
-      const r = yield* renderWhatsNext({
+      const r = await renderWhatsNext({
         ...args,
         narrateProfileSwitch: true,
       });
       if (r.kind === "rendered") return;
       pendingProfileGaps = r.gaps;
-      // eslint-disable-next-line no-await-in-loop -- same: this pass is a continuation of the one before it
-      yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
+      await sayUiEvents(args.say, (await buildShowEvents(args.userId)).events);
       // Silent re-entry — no new user message.
       userMessage = "";
     }
+    /* eslint-enable no-await-in-loop */
   },
 );

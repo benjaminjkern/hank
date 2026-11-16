@@ -18,8 +18,8 @@
 // Nothing here calls an LLM to decide anything, and nothing here writes the
 // user's row — runChat has already done that (see runChat's step 1).
 
-import { statusEvent, yieldUiEvents } from "@/server/contracts";
-import type { EntryTarget, RunContext, TurnEvent } from "@/server/contracts";
+import { statusEvent, sayUiEvents } from "@/server/contracts";
+import type { EntryTarget, RunContext, Say } from "@/server/contracts";
 import {
   addMoreCompaniesWidget,
   runDisambiguationResolution,
@@ -41,10 +41,11 @@ const FIND_MORE_NUDGE =
 
 export type TopLevelSubmissionArgs = RunContext & {
   sessionId: string;
+  say: Say;
   userMessage: string;
 };
 
-// What the caller does after this generator drains.
+// What the caller does after this returns.
 export type TopLevelSubmissionOutcome =
   // Not a top-level submission — the message is still the user's to route.
   | { kind: "none" }
@@ -66,9 +67,9 @@ export type TopLevelSubmissionOutcome =
   // nothing to run on, would just re-render what they clicked out of).
   | { kind: "ask"; openingNudge: string };
 
-export async function* dispatchTopLevelSubmission(
+export async function dispatchTopLevelSubmission(
   args: TopLevelSubmissionArgs,
-): AsyncGenerator<TurnEvent, TopLevelSubmissionOutcome> {
+): Promise<TopLevelSubmissionOutcome> {
   const { userId, sessionId, userMessage } = args;
 
   // The user resolved a name collision the URL hunter flagged during a checklist
@@ -77,11 +78,11 @@ export async function* dispatchTopLevelSubmission(
   const disambiguationSubmission =
     parseCompanyDisambiguationSubmission(userMessage);
   if (disambiguationSubmission) {
-    const added = yield* runDisambiguationResolution({
+    const added = await runDisambiguationResolution({
       ...args,
       resolved: disambiguationSubmission.resolved,
     });
-    yield addMoreCompaniesWidget(added, 0);
+    await args.say(addMoreCompaniesWidget(added, 0));
     return { kind: "terminal" };
   }
 
@@ -97,7 +98,8 @@ export async function* dispatchTopLevelSubmission(
       // Move the panel off the surface that just settled — it has nothing left
       // to decide, so leaving it up offers a dead screen. The arm this enters
       // may move it again; this is the one move that has to happen either way.
-      yield* yieldUiEvents(
+      await sayUiEvents(
+        args.say,
         (await buildShowEvents(userId, showTargetFor(entryTarget))).events,
       );
       return { kind: "enter", entryTarget };
@@ -120,7 +122,9 @@ export async function* dispatchTopLevelSubmission(
     if (addMoreSubmission.settled > 0) {
       // Same legibility rule as the company wrap in runChat: the wrap is a
       // ~30s silent stretch, so name the wait without naming the mechanism.
-      yield statusEvent("Filing away what I learned from that round…");
+      await args.say(
+        statusEvent("Filing away what I learned from that round…"),
+      );
       await runWrapSegment({ ...args, subject: "discovery" });
     }
     return { kind: "consumed" };
@@ -140,8 +144,9 @@ export async function* dispatchTopLevelSubmission(
     if (dispatch.kind === "ask") {
       return { kind: "ask", openingNudge: dispatch.openingNudge };
     }
-    yield statusEvent(dispatch.statusText);
-    yield* yieldUiEvents(
+    await args.say(statusEvent(dispatch.statusText));
+    await sayUiEvents(
+      args.say,
       (await buildShowEvents(userId, showTargetFor(dispatch.entryTarget)))
         .events,
     );

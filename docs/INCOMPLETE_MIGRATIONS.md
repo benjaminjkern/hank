@@ -105,7 +105,7 @@ Each survived the sweep because deleting it costs something a reader would want 
 
 ### E2. Barrel re-exports nobody imports through the barrel (9)
 
-`StreamEventOf` · `TurnDone` ([contracts](../src/server/contracts/index.ts)) · `ChatArgs` ([procedures/registry/chat](../src/server/procedures/registry/chat/index.ts)) · `RunScanResult` ([scan](../src/server/procedures/registry/scan/index.ts)) · `ShortlistArgs` ([shortlist](../src/server/procedures/registry/shortlist/index.ts)) · `runEnrichCompanies`, `EnrichCompaniesResult`, `EnrichOutcome`, `EnrichProgressEvent` ([enrichCompanies](../src/server/procedures/registry/enrichCompanies/index.ts)).
+`StreamEventOf` ([contracts](../src/server/contracts/index.ts)) · `ChatArgs` ([procedures/registry/chat](../src/server/procedures/registry/chat/index.ts)) · `RunScanResult` ([scan](../src/server/procedures/registry/scan/index.ts)) · `ShortlistArgs` ([shortlist](../src/server/procedures/registry/shortlist/index.ts)) · `runEnrichCompanies`, `EnrichCompaniesResult`, `EnrichOutcome`, `EnrichProgressEvent` ([enrichCompanies](../src/server/procedures/registry/enrichCompanies/index.ts)).
 
 Left alone on purpose: each of those barrels documents itself as the procedure's **public surface** ("import from here, not a deep path"), so a curated-but-not-yet-imported name is the intended shape, not a tombstone. Trimming them to only what has a caller today would make the surface arbitrary — an entry's args type sitting beside the entry is coherent.
 

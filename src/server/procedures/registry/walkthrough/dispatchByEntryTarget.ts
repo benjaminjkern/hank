@@ -1,5 +1,4 @@
 import { statusEvent } from "@/server/contracts";
-import type { TurnEvent } from "@/server/contracts";
 
 import { runCompanyArm } from "./companyArm";
 import { runDiscoveryArm, runDiscoveryCommitArm } from "./discoveryArm";
@@ -9,22 +8,22 @@ import { runOpportunityArm } from "./opportunityArm";
 import type { WalkthroughArgs, WalkthroughResult } from "./types";
 
 // Route the pass to an arm on the entry target the caller threaded in.
-export async function* dispatchByEntryTarget(
+export async function dispatchByEntryTarget(
   args: WalkthroughArgs,
-): AsyncGenerator<TurnEvent, WalkthroughResult> {
+): Promise<WalkthroughResult> {
   // Dispatch signal: the entity to run the arm on, threaded in-memory from the
   // picker dispatch / handoff tool that triggered this pass (focus is ephemeral —
   // there's no slot to read). Undefined on a fall-through (e.g. an unknown widget
   // submission) → "what's next".
   const target = args.entryTarget;
   if (target?.kind === "job") {
-    return yield* runJobArm({ ...args, jobId: target.id });
+    return await runJobArm({ ...args, jobId: target.id });
   }
   if (target?.kind === "company") {
     // Walk only — the machine is never handed a company it's meant to FINISH.
     // The segment wrap belongs to runUserMessage, which fires it off the
     // endedCompanyId a mutation reports.
-    return yield* runCompanyArm({
+    return await runCompanyArm({
       ...args,
       companyId: target.id,
       direction: target.direction,
@@ -32,17 +31,17 @@ export async function* dispatchByEntryTarget(
     });
   }
   if (target?.kind === "opportunity") {
-    return yield* runOpportunityArm({ ...args, opportunityId: target.id });
+    return await runOpportunityArm({ ...args, opportunityId: target.id });
   }
   if (target?.kind === "discovery") {
-    return yield* runDiscoveryArm({
+    return await runDiscoveryArm({
       ...args,
       direction: target.direction,
       append: target.append,
     });
   }
   if (target?.kind === "discovery_commit") {
-    return yield* runDiscoveryCommitArm(args);
+    return await runDiscoveryCommitArm(args);
   }
   // No focus — typically after a skip/defer/caught-up wrap clears it. The
   // runner will call handleWhatsNext upstream and render the next-company
@@ -56,6 +55,6 @@ export async function* dispatchByEntryTarget(
   // picker (caughtUpCompany / closeCompany / pauseCompany via runCompanyArm)
   // or standalone-status → picker (this branch, when focus was already
   // null at state-machine entry).
-  yield statusEvent("Pulling up what's next…");
+  await args.say(statusEvent("Pulling up what's next…"));
   return { wrappedUp: true };
 }

@@ -8,21 +8,20 @@
 // company is set aside instead of dead-ending the user on an empty page.
 
 import { statusEvent } from "@/server/contracts";
-import type { TurnEvent } from "@/server/contracts";
 import {
   blockCompany,
   caughtUpCompany,
 } from "@/server/entities/companies/setCompanyAside";
 import { CompanyBlockReason } from "@/server/generated/prisma/client";
 import type { ScrapeFailureKind } from "@/server/platform/scrape/types";
-import { streamingProcedure } from "@/server/procedures/lib/procedure";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runReconBoard } from "@/server/procedures/registry/reconBoard";
 import type { ReconBoardResult } from "@/server/procedures/registry/reconBoard";
 import { runSyncCompanyBoard } from "@/server/procedures/registry/syncCompanyBoard";
 import { urlHost } from "@/shared/utils/url";
 
 import { narrateCompanyBlock, narrateCompanyCaughtUp } from "./narration";
-import { yieldStateChange } from "./yieldStateChange";
+import { sayStateChange } from "./sayStateChange";
 
 import type { WalkthroughArgs } from "./types";
 
@@ -52,21 +51,23 @@ type BoardScrapeResult =
   // as a contradiction ("Found 4 new… first pass over 75 new").
   | { wrapped: false; delta: number };
 
-export const runBoardScrape = streamingProcedure(
+export const runBoardScrape = procedure(
   "board_scrape",
-  async function* (
+  async (
     input: WalkthroughArgs & {
       companyId: string;
       sourceUrl: string;
       displayName: string;
       hadRoles: boolean;
     },
-  ): AsyncGenerator<TurnEvent, BoardScrapeResult> {
+  ): Promise<BoardScrapeResult> => {
     const { companyId, sourceUrl, displayName, hadRoles, ...args } = input;
-    yield statusEvent(
-      hadRoles
-        ? `Checking ${displayName}'s board for anything new…`
-        : `Scanning ${urlHost(sourceUrl) ?? sourceUrl} for openings…`,
+    await args.say(
+      statusEvent(
+        hadRoles
+          ? `Checking ${displayName}'s board for anything new…`
+          : `Scanning ${urlHost(sourceUrl) ?? sourceUrl} for openings…`,
+      ),
     );
 
     let fetched = await runSyncCompanyBoard({ ...args, companyId, sourceUrl });
@@ -77,8 +78,10 @@ export const runBoardScrape = streamingProcedure(
     // know what the pause is.
     let reconVerdict: ReconBoardResult["kind"] | null = null;
     if (!fetched.ok && RECON_WORTHY_FAILURES.has(fetched.kind)) {
-      yield statusEvent(
-        `${displayName}'s site isn't one of the usual job boards — working out how to read it…`,
+      await args.say(
+        statusEvent(
+          `${displayName}'s site isn't one of the usual job boards — working out how to read it…`,
+        ),
       );
       const recon = await runReconBoard({
         ...args,
@@ -90,21 +93,27 @@ export const runBoardScrape = streamingProcedure(
       if (recon.kind === "learned") {
         fetched = await runSyncCompanyBoard({ ...args, companyId, sourceUrl });
       } else if (recon.kind === "needs_browser") {
-        yield statusEvent(
-          `${displayName}'s openings only show up once their page fully loads in a browser, which I can't do from here — send me a specific role's link and I can still work it.`,
+        await args.say(
+          statusEvent(
+            `${displayName}'s openings only show up once their page fully loads in a browser, which I can't do from here — send me a specific role's link and I can still work it.`,
+          ),
         );
       }
     }
 
     if (!fetched.ok) {
       if (hadRoles) {
-        yield statusEvent(
-          `Couldn't refresh ${displayName}'s board just now — showing what I already have.`,
+        await args.say(
+          statusEvent(
+            `Couldn't refresh ${displayName}'s board just now — showing what I already have.`,
+          ),
         );
         return { wrapped: false, delta: 0 };
       }
-      yield statusEvent(
-        `I couldn't reach ${displayName}'s board just now — I'll set it aside until it's readable again.`,
+      await args.say(
+        statusEvent(
+          `I couldn't reach ${displayName}'s board just now — I'll set it aside until it's readable again.`,
+        ),
       );
       // A login or bot wall is a different fact from "we couldn't parse it", and
       // only recon can tell them apart — it's the only thing that looked at the
@@ -117,7 +126,8 @@ export const runBoardScrape = streamingProcedure(
         note: `scrape failed: ${fetched.error}`,
       };
       await blockCompany({ userId: args.userId, companyId, ...blocked });
-      yield* yieldStateChange(
+      await sayStateChange(
+        args.say,
         narrateCompanyBlock({
           companyId,
           companyName: displayName,
@@ -128,8 +138,10 @@ export const runBoardScrape = streamingProcedure(
     }
 
     if (fetched.totalJobs === 0 && !hadRoles) {
-      yield statusEvent(
-        `No openings posted at ${displayName} right now — marking caught up.`,
+      await args.say(
+        statusEvent(
+          `No openings posted at ${displayName} right now — marking caught up.`,
+        ),
       );
       // Land the right engagement tail (IN_FLIGHT/IN_PROCESS if apps went out
       // this round, else CAUGHT_UP) instead of forcing CAUGHT_UP.
@@ -138,7 +150,8 @@ export const runBoardScrape = streamingProcedure(
         companyId,
         derive: true,
       });
-      yield* yieldStateChange(
+      await sayStateChange(
+        args.say,
         narrateCompanyCaughtUp({ companyId, companyName: displayName, status }),
       );
       return { wrapped: true, endedCompanyId: companyId };
@@ -146,17 +159,21 @@ export const runBoardScrape = streamingProcedure(
 
     if (hadRoles) {
       if (fetched.newJobInteractions > 0) {
-        yield statusEvent(
-          `Found ${fetched.newJobInteractions} new posting${fetched.newJobInteractions === 1 ? "" : "s"} since last time — taking a look…`,
+        await args.say(
+          statusEvent(
+            `Found ${fetched.newJobInteractions} new posting${fetched.newJobInteractions === 1 ? "" : "s"} since last time — taking a look…`,
+          ),
         );
       }
     } else {
-      yield statusEvent(
-        `Found ${fetched.totalJobs} job posting${fetched.totalJobs === 1 ? "" : "s"}${fetched.newJobInteractions > 0 ? ` (${fetched.newJobInteractions} new)` : ""}${
-          fetched.learned
-            ? " — their site isn't one of the standard job boards, so I'm reading it directly"
-            : ""
-        } — taking a closer look…`,
+      await args.say(
+        statusEvent(
+          `Found ${fetched.totalJobs} job posting${fetched.totalJobs === 1 ? "" : "s"}${fetched.newJobInteractions > 0 ? ` (${fetched.newJobInteractions} new)` : ""}${
+            fetched.learned
+              ? " — their site isn't one of the standard job boards, so I'm reading it directly"
+              : ""
+          } — taking a closer look…`,
+        ),
       );
     }
 
@@ -165,8 +182,10 @@ export const runBoardScrape = streamingProcedure(
     // add roles, not to declare one dead — so the user gets the call instead of
     // the board silently looking frozen.
     if (fetched.missingNotDelisted > 0) {
-      yield statusEvent(
-        `${fetched.missingNotDelisted} role${fetched.missingNotDelisted === 1 ? "" : "s"} I have on file didn't come back in that read. Since I'm reading their site directly I won't mark ${fetched.missingNotDelisted === 1 ? "it" : "them"} gone on my own — say the word if ${fetched.missingNotDelisted === 1 ? "it's" : "they're"} down.`,
+      await args.say(
+        statusEvent(
+          `${fetched.missingNotDelisted} role${fetched.missingNotDelisted === 1 ? "" : "s"} I have on file didn't come back in that read. Since I'm reading their site directly I won't mark ${fetched.missingNotDelisted === 1 ? "it" : "them"} gone on my own — say the word if ${fetched.missingNotDelisted === 1 ? "it's" : "they're"} down.`,
+        ),
       );
     }
 

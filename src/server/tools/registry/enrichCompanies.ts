@@ -16,7 +16,7 @@ import { prisma } from "@/server/db/prisma";
 import { resolveCompaniesBySlug } from "@/server/entities/resolveBySlug";
 import { CompanyStatus } from "@/server/generated/prisma/client";
 import {
-  runEnrichCompaniesCollect,
+  runEnrichCompanies,
   type CompanyEnrichResult,
   type CompanyToEnrich,
 } from "@/server/procedures/registry/enrichCompanies";
@@ -108,7 +108,7 @@ export const enrichCompaniesTool: ToolDef<z.infer<typeof PARSER>> = {
       }));
     }
 
-    const { results } = await runEnrichCompaniesCollect({
+    const { results } = await runEnrichCompanies({
       ...ctx,
       companies,
       force: input.force,

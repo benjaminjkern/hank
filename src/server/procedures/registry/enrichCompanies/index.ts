@@ -11,10 +11,7 @@
 // on-entry backfill. Import from `@/server/procedures/registry/enrichCompanies`
 // — never a deep path, so the internal file split stays free to move.
 
-export {
-  runEnrichCompanies,
-  runEnrichCompaniesCollect,
-} from "./enrichCompanies";
+export { runEnrichCompanies } from "./enrichCompanies";
 export {
   runChecklistAdd,
   runDisambiguationResolution,
