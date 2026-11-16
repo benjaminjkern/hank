@@ -13,11 +13,11 @@
 // would re-pay for it forever.
 
 import { prisma } from "@/server/db/prisma";
-import { reconOnCooldown } from "@/server/entities/boardReaders/readerHealth";
-import { saveBoardReader } from "@/server/entities/boardReaders/recordReaderRun";
+import { saveCompanyBoardReader } from "@/server/entities/companies/saveCompanyBoardReader";
 import { BoardReaderOrigin } from "@/server/generated/prisma/client";
 import type { RunContext } from "@/server/platform/runContext";
 import { boardMatchKey } from "@/server/platform/scrape/recipe/matchKey";
+import { reconOnCooldown } from "@/server/platform/scrape/recipe/readerHealth";
 import { runBoardRecipe } from "@/server/platform/scrape/recipe/runRecipe";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
@@ -97,7 +97,7 @@ export const runReconBoard = procedure(
         boardUrl: args.sourceUrl,
       });
       if (!verified.ok) {
-        await saveBoardReader({
+        await saveCompanyBoardReader({
           companyId: args.companyId,
           sourceUrl: args.sourceUrl,
           recipe: null,
@@ -109,7 +109,7 @@ export const runReconBoard = procedure(
           note: `recipe didn't hold up: ${verified.error}`,
         };
       }
-      const saved = await saveBoardReader({
+      const saved = await saveCompanyBoardReader({
         companyId: args.companyId,
         sourceUrl: args.sourceUrl,
         recipe: outcome.recipe,
@@ -117,7 +117,7 @@ export const runReconBoard = procedure(
         reconNote: outcome.note,
         sampleJobUrls: verified.data.jobs.slice(0, 5).map((j) => j.sourceUrl),
       });
-      // saveBoardReader refuses a board that isn't this company's and stores the
+      // saveCompanyBoardReader refuses a board that isn't this company's and stores the
       // refusal instead, so re-read whether a recipe actually landed rather than
       // reporting success on a row that holds none.
       const stored = saved ? await readerHasRecipe(saved) : false;
@@ -138,7 +138,7 @@ export const runReconBoard = procedure(
     // record — it starts the cooldown, it carries the reason a human will read on
     // /admin/board-readers, and its company count is what says whether this board
     // software is worth a hand-written provider.
-    await saveBoardReader({
+    await saveCompanyBoardReader({
       companyId: args.companyId,
       sourceUrl: args.sourceUrl,
       recipe: null,

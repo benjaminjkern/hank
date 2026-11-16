@@ -17,7 +17,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import type { RunTrace } from "./types";
+import type { RunTrace } from "./trace";
 
 export type TraceSpan = {
   // The trace to hand to everything inside the span — same sink, but children

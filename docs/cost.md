@@ -16,7 +16,7 @@ Most input tokens flow through `cache_read`, which tempts the conclusion "cache 
 
 ## What's tracked
 
-All instrumented via `recordUsage` in [src/server/platform/usage/track.ts](../src/server/platform/usage/track.ts). Tools that touch the network but never call Anthropic (ATS scrapers incl. the headless ones, application-question fetchers, `fetch_url`, all DB-only tools) produce **zero LLM cost** and are correctly absent. If a new tool doesn't call `client.messages.*`, don't add `recordUsage` to it.
+All instrumented via `recordUsage` in [src/server/platform/runs/usage.ts](../src/server/platform/runs/usage.ts). Tools that touch the network but never call Anthropic (ATS scrapers incl. the headless ones, application-question fetchers, `fetch_url`, all DB-only tools) produce **zero LLM cost** and are correctly absent. If a new tool doesn't call `client.messages.*`, don't add `recordUsage` to it.
 
 | Operation                  | Model      | Call site / notes                                                                                              |
 | -------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------- |
@@ -36,7 +36,7 @@ All instrumented via `recordUsage` in [src/server/platform/usage/track.ts](../sr
 | `scan_job`               | sonnet-4-6      | scan pass 2 — per-user match verdict (summary + thesis → SCANNED / CLOSED) |
 | `pre_scan_job_batch`           | sonnet-4-6      | 1–15 per call — PRE_SCAN pt1 (metadata-only bucketing); skipped on cold-start |
 
-**Legacy operations** — old `TokenUsage` rows only, no live emitter: `prescan_deep`, `whats_next`, `eval_fit`, `scrape_html`, `users_distill`, `rescan`, `company_hunter` (alias of `company_basic_info`). The `UsageOperation` union in [track.ts](../src/server/platform/usage/track.ts) keeps them so old rows still price. Harness-side keys (`qa_audit_persona`, `session_audit`, `subagent_runtime_audit`) are dev spend, not product.
+**Legacy operations** — old `TokenUsage` rows only, no live emitter: `prescan_deep`, `whats_next`, `eval_fit`, `scrape_html`, `users_distill`, `rescan`, `company_hunter` (alias of `company_basic_info`). The `UsageOperation` union in [track.ts](../src/server/platform/runs/usage.ts) keeps them so old rows still price. Harness-side keys (`qa_audit_persona`, `session_audit`, `subagent_runtime_audit`) are dev spend, not product.
 
 **Model column caveat (post-DeepSeek migration):** except the two **vision** rows (`parse_resume`, `logo_verifier`, which run on the named Anthropic model), every operation runs on **DeepSeek** — `deepseek-v4-pro` or `-flash` per the `MODEL: LlmModel` each sub-agent declares in its own file. Any `sonnet-4-6` / `haiku-4-5` name on another row is the historical Anthropic tier that op used to run on, before the model became a single declared id; `recordUsage` records what actually ran, so `pnpm usage` prices correctly regardless. See [llm-providers.md](llm-providers.md).
 
@@ -50,7 +50,7 @@ Adding a call site: add `recordUsage`, add the operation string to the `UsageOpe
 
 ## Investigation playbook
 
-Two entry points share one cost calculation (`costOf` in [pricing.ts](../src/server/platform/usage/pricing.ts)) — a disagreement is a same-file bug, not two implementations:
+Two entry points share one cost calculation (`costOf` in [pricing.ts](../src/server/platform/runs/pricing.ts)) — a disagreement is a same-file bug, not two implementations:
 
 - **`pnpm usage`** ([scripts/cost/usage.ts](../scripts/cost/usage.ts)) — CLI, aggregates by `(operation × model)`.
 - **`/admin/usage`** ([src/app/admin/usage/](../src/app/admin/usage/)) — same numbers in the browser.
@@ -59,7 +59,7 @@ When a spike shows up: (1) check the token-type breakdown — high `cache_create
 
 ## Pricing source of truth
 
-[src/server/platform/usage/pricing.ts](../src/server/platform/usage/pricing.ts) holds the rate table, keyed by model-id substring, imported by both entry points. Update it when Anthropic/DeepSeek publish new prices. Claude rates ($/M tokens; web search $10/1k requests):
+[src/server/platform/runs/pricing.ts](../src/server/platform/runs/pricing.ts) holds the rate table, keyed by model-id substring, imported by both entry points. Update it when Anthropic/DeepSeek publish new prices. Claude rates ($/M tokens; web search $10/1k requests):
 
 | Model      | input   | cache_create | cache_read | output  |
 | ---------- | ------- | ------------ | ---------- | ------- |

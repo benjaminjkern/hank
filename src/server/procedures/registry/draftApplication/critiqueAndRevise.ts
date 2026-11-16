@@ -18,7 +18,6 @@
 // Any revision it does make is a Hank overwrite, so it clears that item's reuse
 // flag and moves his baseline.
 
-import type { RunContext } from "@/server/platform/runContext";
 import { prisma } from "@/server/db/prisma";
 import {
   DRAFTED_ROW_SELECT,
@@ -29,6 +28,7 @@ import {
 } from "@/server/entities/jobs/applicationDrafts";
 import { isCoverLetterTarget } from "@/server/entities/jobs/applicationItemId";
 import { persistApplicationAnswer } from "@/server/entities/jobs/applicationQuestions";
+import type { RunContext } from "@/server/platform/runContext";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {

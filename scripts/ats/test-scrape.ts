@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { closeHeadless } from "../../src/server/platform/browser/headless";
 import { scrapeUrl } from "../../src/server/platform/scrape";
+import { closeHeadless } from "../../src/server/platform/scrape/browser/headless";
 
 const url = process.argv[2] ?? "https://job-boards.greenhouse.io/gleanwork";
 

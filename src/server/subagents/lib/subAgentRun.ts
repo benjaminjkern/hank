@@ -1,7 +1,7 @@
 // Persist one row per real sub-agent invocation — the input we sent and the
 // structured output we got back.
 //
-// TokenUsage (src/server/platform/usage/track.ts) records that a sub-agent ran and what
+// TokenUsage (src/server/platform/runs/usage.ts) records that a sub-agent ran and what
 // it cost. This records WHAT it actually returned, which TokenUsage/traces
 // never captured (traces hold intermediate read-tool calls only, never the
 // output-schema emission). The sub-agent runtime audit
@@ -17,8 +17,8 @@
 
 import { prisma } from "@/server/db/prisma";
 import { Prisma } from "@/server/generated/prisma/client";
-import { currentCaptureContext } from "@/server/platform/usage/captureContext";
-import type { UsageOperation } from "@/server/platform/usage/track";
+import { currentCaptureContext } from "@/server/platform/runs/captureContext";
+import type { UsageOperation } from "@/server/platform/runs/usage";
 
 // Derived by `runSubAgent` from whether the run got read tools — the only
 // mechanical difference the two "classes" have ever had. Kept as a column

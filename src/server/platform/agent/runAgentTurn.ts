@@ -28,17 +28,6 @@ import {
   isTransientStreamError,
   emptyAbortedMessage,
 } from "@/server/platform/agent/streamingCore";
-import { newRunTreeId } from "@/server/platform/agent/ids";
-import {
-  createTraceAccumulator,
-  type TraceMap,
-} from "@/server/platform/trace/traceAccumulator";
-import type { RunContext } from "@/server/platform/runContext";
-import type { StreamEventOf } from "@/shared/chatStream";
-import type { Reasoning } from "@/server/platform/llm/reasoning";
-import type { TraceEvent } from "@/server/platform/trace/types";
-import { withCaptureContext } from "@/server/platform/usage/captureContext";
-import { toolInputSchema } from "@/server/platform/agent/toolInputSchema";
 import type {
   AgentToolDef,
   AgentToolResult,
@@ -46,6 +35,17 @@ import type {
   ToolContext,
 } from "@/server/platform/agent/tool";
 import { toolErrorContent } from "@/server/platform/agent/toolError";
+import { toolInputSchema } from "@/server/platform/agent/toolInputSchema";
+import type { Reasoning } from "@/server/platform/llm/reasoning";
+import type { RunContext } from "@/server/platform/runContext";
+import { withCaptureContext } from "@/server/platform/runs/captureContext";
+import { newRunTreeId } from "@/server/platform/runs/ids";
+import type { TraceEvent } from "@/server/platform/runs/trace";
+import {
+  createTraceAccumulator,
+  type TraceMap,
+} from "@/server/platform/runs/traceAccumulator";
+import type { StreamEventOf } from "@/shared/chatStream";
 import { isUserAbortError } from "@/shared/utils/abort";
 
 import type Anthropic from "@anthropic-ai/sdk";

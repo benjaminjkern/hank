@@ -8,7 +8,7 @@
 // site that forgets half of it either crashes or invents a parent id that nests
 // nowhere.
 
-import type { RunTrace } from "./types";
+import type { RunTrace } from "./trace";
 
 export function traceText(trace: RunTrace | undefined, text: string): void {
   if (!trace?.onTrace || !trace.parentToolUseId) return;

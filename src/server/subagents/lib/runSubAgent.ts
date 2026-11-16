@@ -23,12 +23,9 @@ import {
   type ResolvedLlm,
 } from "@/server/platform/llm/resolveClient";
 import type { RunContext, RunTrace } from "@/server/platform/runContext";
-import { traceText } from "@/server/platform/trace/traceText";
-import type { TraceEvent } from "@/server/platform/trace/types";
-import {
-  recordUsage,
-  type UsageOperation,
-} from "@/server/platform/usage/track";
+import type { TraceEvent } from "@/server/platform/runs/trace";
+import { traceText } from "@/server/platform/runs/traceText";
+import { recordUsage, type UsageOperation } from "@/server/platform/runs/usage";
 import type { AnyToolDef } from "@/server/tools/lib/types";
 import { isUserAbortError } from "@/shared/utils/abort";
 

@@ -1,11 +1,11 @@
 import "dotenv/config";
-import { browserCapability } from "../../src/server/platform/browser/browserCapability";
-import { closeHeadless } from "../../src/server/platform/browser/headless";
 import { scrapeUrl } from "../../src/server/platform/scrape";
 import {
   extractGreenhouseSlugFromBoardUrl,
   fetchApplicationQuestions,
 } from "../../src/server/platform/scrape/ats";
+import { browserCapability } from "../../src/server/platform/scrape/browser/browserCapability";
+import { closeHeadless } from "../../src/server/platform/scrape/browser/headless";
 
 // One sample board per ATS — picked because each has live openings as of
 // 2026-06-08 and has been used to smoke-test the scraper. Swap a slug here

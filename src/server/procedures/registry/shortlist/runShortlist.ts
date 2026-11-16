@@ -14,11 +14,11 @@
 // the ranker's extraContext for a fresh ranking on those terms.
 
 import { statusEvent, sayUiEvents } from "@/server/contracts";
-import type { RunContext } from "@/server/platform/runContext";
 import type { Say } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 import { markCompanyShortlisting } from "@/server/entities/companies/markCompanyStatus";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
+import type { RunContext } from "@/server/platform/runContext";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {
@@ -27,8 +27,8 @@ import {
   type ShortlistJobsOutput,
 } from "@/server/subagents/registry/shortlistJobs";
 import { countBoard, type BoardCounts } from "@/server/views/shortlistBoard";
-import type { ShortlistBoardView } from "@/shared/views/shortlistBoard";
 import { buildShortlistBoardEvents } from "@/server/views/showEvents";
+import type { ShortlistBoardView } from "@/shared/views/shortlistBoard";
 
 import { loadShortlistJobsInput } from "./loadShortlistJobsInput";
 import { seedBoardStances } from "./seedBoardStances";

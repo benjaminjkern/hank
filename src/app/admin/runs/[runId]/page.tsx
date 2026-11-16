@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { prisma } from "@/server/db/prisma";
 import { requireAdmin } from "@/server/platform/auth/requireAdmin";
-import { costOf } from "@/server/platform/usage/pricing";
+import { costOf } from "@/server/platform/runs/pricing";
 import { asArray, asString, isRecord } from "@/shared/utils/guards";
 
 import { RunTreeView } from "./RunTreeView";

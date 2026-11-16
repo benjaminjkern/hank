@@ -12,7 +12,7 @@
 // re-enters the drafter's own voice corpus until the user opts it in.
 
 import type { RunContext } from "@/server/platform/runContext";
-import { withTraceSpan } from "@/server/platform/trace/span";
+import { withTraceSpan } from "@/server/platform/runs/span";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {
   applicationDraftingSubAgent,

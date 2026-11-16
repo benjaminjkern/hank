@@ -9,7 +9,6 @@
 //
 //   pnpm ats:jobshape
 
-import { boardIdentifiesCompany } from "../../src/server/entities/boardReaders/boardIdentity";
 import { harvestBlobs } from "../../src/server/platform/scrape/generic/blobs";
 import { parseFeedItems } from "../../src/server/platform/scrape/generic/feed";
 import {
@@ -18,6 +17,7 @@ import {
   type JobKeyMapping,
 } from "../../src/server/platform/scrape/generic/jobShape";
 import { boardPathScope } from "../../src/server/platform/scrape/generic/sitemap";
+import { boardIdentifiesCompany } from "../../src/server/platform/scrape/recipe/boardIdentity";
 
 type Case = {
   name: string;

@@ -1,4 +1,4 @@
-import { browserCapability } from "@/server/platform/browser/browserCapability";
+import { browserCapability } from "@/server/platform/scrape/browser/browserCapability";
 
 import { currentScrapeSignal } from "../../scrapeSignal";
 
@@ -74,9 +74,9 @@ async function fetchAllGoogle(inputUrl: string): Promise<ScrapeResult> {
       error: `google: this board only lists its postings once the page renders in a browser, which this deployment can't run`,
     };
   }
-  let headless: typeof import("@/server/platform/browser/headless");
+  let headless: typeof import("@/server/platform/scrape/browser/headless");
   try {
-    headless = await import("@/server/platform/browser/headless");
+    headless = await import("@/server/platform/scrape/browser/headless");
   } catch (err) {
     return {
       ok: false,

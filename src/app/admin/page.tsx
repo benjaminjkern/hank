@@ -1,7 +1,7 @@
 import { prisma } from "@/server/db/prisma";
 import { Prisma } from "@/server/generated/prisma/client";
 import { requireAdmin } from "@/server/platform/auth/requireAdmin";
-import { costOf } from "@/server/platform/usage/pricing";
+import { costOf } from "@/server/platform/runs/pricing";
 import { money } from "@/shared/utils/format";
 
 import { AdminIndexView } from "./AdminIndexView";

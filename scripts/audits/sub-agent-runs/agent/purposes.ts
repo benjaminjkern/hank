@@ -1,6 +1,6 @@
 // One-line "what this sub-agent is supposed to do" per operation, used to frame
 // the auditor's judgement. Kept terse and user-neutral (no internal file
-// paths). Sourced from the UsageOperation comments in src/server/platform/usage/track.ts
+// paths). Sourced from the UsageOperation comments in src/server/platform/runs/usage.ts
 // and docs/sub-agents.md. Operations absent here (e.g. whats_next, eval_fit if
 // they appear) fall back to a generic note and are treated as zero-coverage.
 

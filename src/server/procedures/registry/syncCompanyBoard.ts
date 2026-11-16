@@ -19,15 +19,13 @@
 // call, which is reconBoard's job.
 
 import { prisma } from "@/server/db/prisma";
-import { reconOnCooldown } from "@/server/entities/boardReaders/readerHealth";
-import {
-  recordReaderRun,
-  saveBoardReader,
-} from "@/server/entities/boardReaders/recordReaderRun";
+import { saveCompanyBoardReader } from "@/server/entities/companies/saveCompanyBoardReader";
 import { upsertScrapedJobs } from "@/server/entities/jobs/upsertScrapedJobs";
 import { BoardReaderOrigin } from "@/server/generated/prisma/client";
 import type { RunContext } from "@/server/platform/runContext";
 import { scrapeUrl } from "@/server/platform/scrape";
+import { reconOnCooldown } from "@/server/platform/scrape/recipe/readerHealth";
+import { recordReaderRun } from "@/server/platform/scrape/recipe/recordReaderRun";
 import type { BoardRecipe } from "@/server/platform/scrape/recipe/types";
 import { isLearnedSource } from "@/server/platform/scrape/types";
 import type { ScrapeFailureKind } from "@/server/platform/scrape/types";
@@ -133,7 +131,7 @@ export const runSyncCompanyBoard = procedure(
     // fetch instead of the whole candidate fan-out.
     const learnedRecipe = scrape.data.diagnostics?.learnedRecipe;
     const readerId = learnedRecipe
-      ? await saveBoardReader({
+      ? await saveCompanyBoardReader({
           companyId: args.companyId,
           sourceUrl: args.sourceUrl,
           recipe: learnedRecipe,

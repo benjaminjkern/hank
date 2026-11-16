@@ -4,11 +4,11 @@
 // changes a Job's title does NOT re-slug it (the slug is a stable permalink).
 // Mirror of companySlug.ts; jobs need the alternate candidates (company/opportunity/
 // contact slugs are single-candidate), so the candidate-building lives here and the
-// generic retry loop lives in slug/mintSlug.ts.
+// generic retry loop lives in db/mintSlug.ts.
 
 import { bulkUpdate } from "@/server/db/bulkUpdate";
+import { mintSlug, slugCandidateAt } from "@/server/db/mintSlug";
 import { prisma } from "@/server/db/prisma";
-import { mintSlug, slugCandidateAt } from "@/server/platform/slug/mintSlug";
 import { capSlug, slugify } from "@/shared/utils/slugify";
 
 // Named candidates in priority order: `{company}-{title}`, then `…-{location}`

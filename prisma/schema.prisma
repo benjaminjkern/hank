@@ -908,12 +908,12 @@ enum Role {
 
 // -- Token usage (one row per LLM API call) -------------------------------
 // Where tokens go + cost-regression tracking. Recorded by
-// src/server/platform/usage/track.ts; summarized by `pnpm usage`. See docs/cost.md.
+// src/server/platform/runs/usage.ts; summarized by `pnpm usage`. See docs/cost.md.
 model TokenUsage {
   id                       String   @id @default(cuid())
   userId                   String
   createdAt                DateTime @default(now())
-  // A `UsageOperation` value — the closed union in src/server/platform/usage/track.ts
+  // A `UsageOperation` value — the closed union in src/server/platform/runs/usage.ts
   // is authoritative (it carries the retired values too, with why each is kept).
   // Don't re-list them here; this comment went stale twice already.
   operation                String

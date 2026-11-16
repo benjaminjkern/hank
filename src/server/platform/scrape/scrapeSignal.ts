@@ -7,7 +7,7 @@
 // wrong failure mode: a site that doesn't get one still compiles and still
 // scrapes — it just silently ignores Stop, which is the bug being fixed. So the
 // signal is set ONCE at the `scrapeUrl` boundary and read at each fetch, the
-// same trade platform/usage/captureContext.ts makes for run-tree capture. A
+// same trade platform/runs/captureContext.ts makes for run-tree capture. A
 // provider added later is covered without doing anything.
 //
 // ALS caveat (same as captureContext): only wrap non-generator async boundaries.

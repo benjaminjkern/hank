@@ -77,6 +77,6 @@ export function validatePath(path: string): PathInfo {
 }
 
 // Kebab-case slugifier for contacts/{slug}.md. Re-exported from the canonical
-// slugifier (src/server/platform/slug); the no-option default is byte-identical
+// slugifier (src/shared/utils/slugify.ts); the no-option default is byte-identical
 // to the previous local implementation.
 export { slugify } from "@/shared/utils/slugify";

@@ -18,10 +18,10 @@
 
 import { appendPipelineActivity } from "@/server/agent/session/appendMessages";
 import { sayUiEvents } from "@/server/contracts";
-import type { RunContext } from "@/server/platform/runContext";
 import type { Say } from "@/server/contracts";
 import { settleSuggestionBatch } from "@/server/entities/companies/suggestionMark";
 import { CompanySuggestionVerdict } from "@/server/generated/prisma/client";
+import type { RunContext } from "@/server/platform/runContext";
 import { procedure } from "@/server/procedures/lib/procedure";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
 import {

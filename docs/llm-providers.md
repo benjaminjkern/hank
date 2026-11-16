@@ -100,7 +100,7 @@ grep -rn -B4 "MODEL: LlmModel" src/server/subagents/registry src/server/agent/ha
 
 ## Cost
 
-DeepSeek prices live in [pricing.ts](../src/server/platform/usage/pricing.ts) (`deepseek-v4-pro` / `-flash`). Rough ladder: v4-pro ≈ 7–18× cheaper than Sonnet; v4-flash ≈ 3× cheaper again than pro. Because the factory returns the DeepSeek id, `recordUsage` / `pnpm usage` / the cost dashboard attribute correctly. See [cost.md](cost.md).
+DeepSeek prices live in [pricing.ts](../src/server/platform/runs/pricing.ts) (`deepseek-v4-pro` / `-flash`). Rough ladder: v4-pro ≈ 7–18× cheaper than Sonnet; v4-flash ≈ 3× cheaper again than pro. Because the factory returns the DeepSeek id, `recordUsage` / `pnpm usage` / the cost dashboard attribute correctly. See [cost.md](cost.md).
 
 ## Settings & audit affordances
 

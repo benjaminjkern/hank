@@ -6,15 +6,21 @@
 // params + the volatile prompt pieces — so the inspector can reconstruct the
 // exact request (skeleton + volatile) and see the params the turn actually used.
 
-import type { HankSystemPrompt } from "@/server/agent/hank";
 import type { Prisma } from "@/server/generated/prisma/client";
-import type { AgentTurnResult } from "@/server/platform/agent/runAgentTurn";
-import { upsertPromptSnapshot } from "@/server/platform/usage/promptSnapshot";
+import { upsertPromptSnapshot } from "@/server/platform/runs/promptSnapshot";
+
+// The prompt as the inspector stores it: the static skeleton once per hash, and
+// the per-turn pieces on the row.
+export type CapturedPrompt = {
+  staticHash: string;
+  staticText: string;
+  volatile: unknown;
+};
 
 export async function captureTurn(
   flow: string,
-  sys: HankSystemPrompt,
-  turn: AgentTurnResult<unknown>,
+  sys: CapturedPrompt,
+  turn: { requestParams: Record<string, unknown> },
 ): Promise<{
   systemPromptHash: string;
   requestParams: Prisma.InputJsonValue;

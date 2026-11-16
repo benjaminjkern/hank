@@ -31,29 +31,29 @@
 // through the procedure → sub-agents.
 
 import {
-  clearActiveRun,
-  claimSessionForNewRun,
-  registerActiveRun,
-} from "@/server/platform/agent/stopRegistry";
-import { newRunTreeId } from "@/server/platform/agent/ids";
-import {
   appendRunError,
   getOrCreateActiveSession,
   recordTranscript,
 } from "@/server/agent/session";
-import type { LoopEvent } from "@/shared/chatStream";
 import type { Say } from "@/server/contracts";
+import {
+  clearActiveRun,
+  claimSessionForNewRun,
+  registerActiveRun,
+} from "@/server/platform/agent/stopRegistry";
 import { classifyLlmError } from "@/server/platform/llm/classifyLlmError";
-import { withCaptureContext } from "@/server/platform/usage/captureContext";
 import {
   NoAnthropicKeyError,
   NoDeepseekKeyError,
 } from "@/server/platform/llm/resolveClient";
+import { withCaptureContext } from "@/server/platform/runs/captureContext";
+import { newRunTreeId } from "@/server/platform/runs/ids";
 // The one sanctioned runtime→domain edge: runUserMessage opens THE RUN and
 // hands the message to runChat. This import IS the handoff — see AGENTS.md
 // "runtime/ is the one part of agent/ that may not know what a company is".
 // eslint-disable-next-line boundaries/dependencies -- documented handoff exception
 import { runChat } from "@/server/procedures/registry/chat";
+import type { LoopEvent } from "@/shared/chatStream";
 import { isUserAbortError } from "@/shared/utils/abort";
 import { nowMs } from "@/shared/utils/now";
 

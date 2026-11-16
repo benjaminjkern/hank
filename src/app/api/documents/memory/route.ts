@@ -2,8 +2,8 @@ import { z } from "zod";
 
 import {
   isEditableDocKind,
-  saveUserDoc,
-} from "@/server/entities/narrativeDocs";
+  saveEditableDoc,
+} from "@/server/entities/profile/editableDocs";
 import { rejectImpersonatedWrite } from "@/server/platform/admin/viewerScope";
 import { getCurrentUser } from "@/server/platform/auth/currentUser";
 
@@ -39,6 +39,6 @@ export async function PUT(req: Request) {
     );
   }
 
-  await saveUserDoc(user.id, parsed.data.doc, parsed.data.content);
+  await saveEditableDoc(user.id, parsed.data.doc, parsed.data.content);
   return Response.json({ ok: true });
 }

@@ -1,5 +1,5 @@
-import { sayTo } from "@/server/contracts";
 import { runUserMessage } from "@/server/agent/runtime/runUserMessage";
+import { sayTo } from "@/server/contracts";
 import { prisma } from "@/server/db/prisma";
 
 import { TEST_SESSION_ID, USER_ID } from "../lib";
