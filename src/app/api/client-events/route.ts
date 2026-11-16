@@ -1,6 +1,6 @@
-import { getCurrentUser } from "@/server/auth/currentUser";
-import { rejectImpersonatedWrite } from "@/server/auth/viewerScope";
 import { prisma } from "@/server/db/prisma";
+import { rejectImpersonatedWrite } from "@/server/platform/admin/viewerScope";
+import { getCurrentUser } from "@/server/platform/auth/currentUser";
 import { recordClientEvent } from "@/server/platform/clientEvents/record";
 import { ClientEventInputSchema } from "@/server/platform/clientEvents/types";
 

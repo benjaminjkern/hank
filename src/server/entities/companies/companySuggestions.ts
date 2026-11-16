@@ -21,8 +21,8 @@
 
 import { CompanySuggestionVerdict } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
-import { slugify } from "@/server/platform/slug/slugify";
-import { nowMs } from "@/utils/now";
+import { nowMs } from "@/shared/utils/now";
+import { slugify } from "@/shared/utils/slugify";
 
 export type SuggestionToRecord = {
   name: string;

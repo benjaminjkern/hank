@@ -15,17 +15,12 @@ export const showApplicationTool: ToolDef<{ job?: string }> = {
   affectsViewedState: false,
   description:
     "Put a role's application page on the user's screen (right panel) — every question the form asks, with what's written for each and what's still blank. Use it when the user wants to see, read, or work on their application, or to point them at a draft you've just made. Pure display: starts no drafting, changes nothing. To actually write an answer use draft_application_question; to draft the whole thing use draft_application. `job` (the role's slug) — pass the role the user means.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: {
-        type: "string",
-        description: "The role's slug — the role the user means.",
-      },
-    },
-    required: [],
-  },
-  parser: z.object({ job: z.string().optional() }),
+  parser: z.object({
+    job: z
+      .string()
+      .optional()
+      .describe("The role's slug — the role the user means."),
+  }),
   async handle({ job: jobSlug }, ctx) {
     const jobResolved = await resolveJobArg(ctx, jobSlug, {
       source: "show_application",

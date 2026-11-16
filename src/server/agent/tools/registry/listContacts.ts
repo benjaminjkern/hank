@@ -17,24 +17,21 @@ export const listContactsTool: ToolDef<{ company?: string; page?: number }> = {
   name: "list_contacts",
   description:
     "List the user's contacts, most-recently-updated first. Pass a company slug to filter to in-house contacts at one company, or omit to list all (including agency-based external recruiters with no company). Results are paginated, 30 per page; pass `page` (1-indexed) for more. Each row shows the contact's slug.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      company: {
-        type: "string",
-        description:
-          "Optional filter (company slug) — only contacts in-house at that company. Excludes agency-based contacts (which have no company).",
-      },
-      page: {
-        type: "number",
-        description:
-          "1-indexed page number (default 1). 30 contacts per page, ordered most-recently-updated first. If the footer says more pages exist, pass page:N+1 for the next.",
-      },
-    },
-  },
   parser: z.object({
-    company: z.string().optional(),
-    page: z.number().int().positive().optional(),
+    company: z
+      .string()
+      .optional()
+      .describe(
+        "Optional filter (company slug) — only contacts in-house at that company. Excludes agency-based contacts (which have no company).",
+      ),
+    page: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(
+        "1-indexed page number (default 1). 30 contacts per page, ordered most-recently-updated first. If the footer says more pages exist, pass page:N+1 for the next.",
+      ),
   }),
   async handle({ company, page }, ctx) {
     let companyId: string | undefined;

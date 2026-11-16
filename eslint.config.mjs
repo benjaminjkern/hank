@@ -184,7 +184,7 @@ const eslintConfig = defineConfig([
     // whose next cursor comes from the previous response, headless scroll/settle
     // steps, provider probes that stop at the first match. (Not exempt: anything
     // touching our own DB — none of that lives here.)
-    files: ["src/server/scrape/**/*.ts"],
+    files: ["src/server/platform/scrape/**/*.ts"],
     rules: { "no-await-in-loop": "off" },
   },
 
@@ -263,16 +263,6 @@ const eslintConfig = defineConfig([
           pattern: "src/server/procedures/**",
         },
         {
-          type: "memory",
-          partialMatch: false,
-          pattern: "src/server/memory/**",
-        },
-        {
-          type: "scrape",
-          partialMatch: false,
-          pattern: "src/server/scrape/**",
-        },
-        {
           type: "widgets",
           partialMatch: false,
           pattern: "src/server/widgets/**",
@@ -283,15 +273,15 @@ const eslintConfig = defineConfig([
           pattern: "src/server/platform/**",
         },
         { type: "db", partialMatch: false, pattern: "src/server/db/**" },
-        { type: "auth", partialMatch: false, pattern: "src/server/auth/**" },
         { type: "app", partialMatch: false, pattern: "src/app/**" },
         {
           type: "components",
           partialMatch: false,
-          pattern: "src/components/**",
+          pattern: "src/client/components/**",
         },
-        { type: "lib", partialMatch: false, pattern: "src/lib/**" },
-        { type: "utils", partialMatch: false, pattern: "src/utils/**" },
+        { type: "client", partialMatch: false, pattern: "src/client/**" },
+        { type: "utils", partialMatch: false, pattern: "src/shared/utils/**" },
+        { type: "shared", partialMatch: false, pattern: "src/shared/**" },
       ],
     },
     rules: {
@@ -308,19 +298,17 @@ const eslintConfig = defineConfig([
                   element: {
                     types: {
                       anyOf: [
-                        "lib",
+                        "shared",
+                        "client",
                         "app",
                         "components",
                         "db",
-                        "auth",
                         "platform",
                         "entities",
                         "views",
                         "procedures",
                         "subagents-lib",
                         "subagents-registry",
-                        "memory",
-                        "scrape",
                         "widgets",
                         "agent-contracts",
                         "agent-tools",
@@ -335,7 +323,7 @@ const eslintConfig = defineConfig([
                 },
               },
               message:
-                "src/utils is app- and domain-blind — it may import only other utils/ modules (and external packages). Move an app-aware helper to src/lib; a server-only one to the owning layer.",
+                "src/shared/utils is app- and domain-blind — it may import only other utils/ modules (and external packages). Move an app-aware helper to src/shared; a server-only one to the owning layer.",
             },
             {
               // entities/ is a leaf: nothing above it may be imported back in.
@@ -359,7 +347,8 @@ const eslintConfig = defineConfig([
                         "agent-runtree",
                         "app",
                         "components",
-                        "lib",
+                        "shared",
+                        "client",
                       ],
                     },
                   },
@@ -407,8 +396,6 @@ const eslintConfig = defineConfig([
                         "procedures",
                         "subagents-lib",
                         "subagents-registry",
-                        "memory",
-                        "scrape",
                         "widgets",
                         "agent-contracts",
                         "agent-tools",
@@ -423,7 +410,7 @@ const eslintConfig = defineConfig([
                 },
               },
               message:
-                "platform/ is domain-blind infrastructure — it may not import entities/views/procedures/subagents/memory/scrape/widgets or agent code. A module that names a company/job/opportunity/contact belongs on the domain side.",
+                "platform/ is domain-blind infrastructure — it may not import entities/views/procedures/subagents/widgets or agent code. A module that names a company/job/opportunity/contact belongs on the domain side.",
             },
             {
               // agent/runtime is domain-blind machinery. The ONE sanctioned
@@ -434,20 +421,13 @@ const eslintConfig = defineConfig([
                 to: {
                   element: {
                     types: {
-                      anyOf: [
-                        "entities",
-                        "views",
-                        "procedures",
-                        "memory",
-                        "scrape",
-                        "widgets",
-                      ],
+                      anyOf: ["entities", "views", "procedures", "widgets"],
                     },
                   },
                 },
               },
               message:
-                "agent/runtime is domain-blind machinery — no imports from entities/views/procedures/memory/scrape/widgets. If you need domain here, the code belongs in procedures/registry/chat.",
+                "agent/runtime is domain-blind machinery — no imports from entities/views/procedures/widgets. If you need domain here, the code belongs in procedures/registry/chat.",
             },
             {
               // A sub-agent DEF is LLM I/O only — no DB. (The run-capture that

@@ -24,31 +24,22 @@ export const blockCompanyTool: ToolDef<{
   // NOT handoff — see close_company. Blocking is a mutation; it wraps inline.
   description:
     "Set a company aside because its job board can't be read — NOT a judgment about fit. Use when you genuinely couldn't load/scrape the company's careers page (after trying, incl. a board behind a login/SPA), or it's a sub-brand that hires under a parent. A revive re-checks the board later, so this is recoverable. **`company` is the company's slug — pass the one the user means.** To the user, frame it plainly (\"I couldn't read their careers page, so I've set them aside for now — I can re-check anytime\"); never say \"closed\" (that means a real dead-end) or use internal words. **If the issue is that the name matches multiple companies, do NOT block — ask the user which one they mean and look that one up.**",
-  inputSchema: {
-    type: "object",
-    properties: {
-      company: {
-        type: "string",
-        description: "The company's slug — the company the user means.",
-      },
-      reason: {
-        type: "string",
-        enum: COMPANY_BLOCK_REASONS as readonly string[] as string[],
-        description:
-          "CANNOT_SCRAPE = couldn't read the careers page after trying (includes a board behind a login/SPA — note that in the note). NO_OWN_BOARD = a sub-brand that hires under a parent (name the parent in the note so we can track that instead). OTHER = anything else technical. (An ambiguous name is NOT a block reason — ask the user which company they mean instead.)",
-      },
-      note: {
-        type: "string",
-        description:
-          "One sentence on what blocked the read (and, for NO_OWN_BOARD, the parent company name). Recommended.",
-      },
-    },
-    required: ["reason"],
-  },
   parser: z.object({
-    company: z.string().optional(),
-    reason: z.enum(COMPANY_BLOCK_REASONS),
-    note: z.string().optional(),
+    company: z
+      .string()
+      .optional()
+      .describe("The company's slug — the company the user means."),
+    reason: z
+      .enum(COMPANY_BLOCK_REASONS)
+      .describe(
+        "CANNOT_SCRAPE = couldn't read the careers page after trying (includes a board behind a login/SPA — note that in the note). NO_OWN_BOARD = a sub-brand that hires under a parent (name the parent in the note so we can track that instead). OTHER = anything else technical. (An ambiguous name is NOT a block reason — ask the user which company they mean instead.)",
+      ),
+    note: z
+      .string()
+      .optional()
+      .describe(
+        "One sentence on what blocked the read (and, for NO_OWN_BOARD, the parent company name). Recommended.",
+      ),
   }),
   async handle(input, ctx) {
     const resolved = await resolveCompanyArg(ctx, input.company, {

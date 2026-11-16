@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireAdmin } from "@/server/auth/requireAdmin";
+import { requireAdmin } from "@/server/platform/auth/requireAdmin";
 import { notifyAdmin } from "@/server/platform/notifications/pushAdmin";
 
 export async function POST() {

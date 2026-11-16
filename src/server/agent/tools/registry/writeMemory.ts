@@ -5,7 +5,7 @@ import {
   writeMemory,
   appendMemory,
   mergeMemorySection,
-} from "@/server/memory/store";
+} from "@/server/entities/memory/store";
 
 import { toolError } from "../lib/toolError";
 
@@ -32,37 +32,27 @@ export const writeMemoryTool: ToolDef<{
   name: "write_memory",
   description:
     'Write a memory note. To UPDATE part of an existing note (especially profile.md / resume.md), pass `section` = the `##` heading you\'re changing and `content` = the new text for just that section — every other section is preserved. Use `mode: "append"` to add to the end. A plain `replace` (the default) overwrites the WHOLE note; on a profile note it will be refused if it would discard most of the existing content (use section/append instead).',
-  inputSchema: {
-    type: "object",
-    properties: {
-      path: {
-        type: "string",
-        description: "Memory path (see read_memory for allowed patterns).",
-      },
-      content: {
-        type: "string",
-        description:
-          "Markdown content to write. With `section`, this is the body for that one section (the `## heading` line is added for you).",
-      },
-      mode: {
-        type: "string",
-        enum: ["replace", "append"],
-        description:
-          "Default 'replace' (overwrites the whole note). 'append' adds to the end. To edit one section without touching the rest, use `section` instead of either.",
-      },
-      section: {
-        type: "string",
-        description:
-          "The `##` heading to replace/insert (e.g. 'What I care about most'). Replaces just that section and keeps the others — the safe way to update a profile note. Adds the section if it doesn't exist yet.",
-      },
-    },
-    required: ["path", "content"],
-  },
   parser: z.object({
-    path: z.string(),
-    content: z.string(),
-    mode: z.enum(["replace", "append"]).optional(),
-    section: z.string().optional(),
+    path: z
+      .string()
+      .describe("Memory path (see read_memory for allowed patterns)."),
+    content: z
+      .string()
+      .describe(
+        "Markdown content to write. With `section`, this is the body for that one section (the `## heading` line is added for you).",
+      ),
+    mode: z
+      .enum(["replace", "append"])
+      .optional()
+      .describe(
+        "Default 'replace' (overwrites the whole note). 'append' adds to the end. To edit one section without touching the rest, use `section` instead of either.",
+      ),
+    section: z
+      .string()
+      .optional()
+      .describe(
+        "The `##` heading to replace/insert (e.g. 'What I care about most'). Replaces just that section and keeps the others — the safe way to update a profile note. Adds the section if it doesn't exist yet.",
+      ),
   }),
   async handle({ path, content, mode, section }, ctx) {
     if (section?.trim()) {

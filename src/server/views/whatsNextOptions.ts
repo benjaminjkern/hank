@@ -17,9 +17,9 @@ import {
   OpportunityStatus,
 } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
-import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { OWED_JOB_STATUSES } from "@/server/entities/jobs/attention";
-import { nowDate, nowMs } from "@/utils/now";
+import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
+import { nowDate, nowMs } from "@/shared/utils/now";
 
 // Per-row shape rendered in the widget. Subtitles are activity-based — what
 // the user would be DOING if they pick this row — not status labels. See the

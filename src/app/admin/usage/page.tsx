@@ -1,7 +1,7 @@
-import { requireAdmin } from "@/server/auth/requireAdmin";
 import { prisma } from "@/server/db/prisma";
+import { requireAdmin } from "@/server/platform/auth/requireAdmin";
 import { costOf, priceFor } from "@/server/platform/usage/pricing";
-import { nowMs } from "@/utils/now";
+import { nowMs } from "@/shared/utils/now";
 
 import { AdminUsageView, type UsageSummary } from "./AdminUsageView";
 

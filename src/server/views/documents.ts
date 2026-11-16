@@ -5,9 +5,9 @@
 
 import { prisma } from "@/server/db/prisma";
 import type { ShortAnswer } from "@/server/entities/jobs/types";
+import { readMemory } from "@/server/entities/memory/store";
 import { NARRATIVE_DOC_PATHS } from "@/server/entities/narrativeDocs";
 import { RESUME_PATH } from "@/server/entities/resume/store";
-import { readMemory } from "@/server/memory/store";
 
 export type DocumentArtifact = {
   jobId: string;

@@ -15,17 +15,12 @@ export const untrackJobTool: ToolDef<{ job?: string }> = {
   affectsViewedState: true,
   description:
     'Hard-delete this user\'s tracking of a role — removes the interaction and its whole event history. The underlying posting stays on file, so if it gets scraped again it comes back as a fresh new role. Use for true cleanup when the user wants it gone entirely ("forget about this one", "I added this by mistake", "that was junk from the scraper"). For a normal "not applying to this one" — which keeps the history — use close_job instead; that\'s the right tool almost every time. `job` is the role\'s slug — pass the role the user means; don\'t ask "which one" when "this" is clear.',
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: {
-        type: "string",
-        description: "The role's slug — the role the user means.",
-      },
-    },
-    required: [],
-  },
-  parser: z.object({ job: z.string().optional() }),
+  parser: z.object({
+    job: z
+      .string()
+      .optional()
+      .describe("The role's slug — the role the user means."),
+  }),
   async handle({ job }, ctx) {
     const resolved = await resolveJobArg(ctx, job, {
       source: "untrack_job",

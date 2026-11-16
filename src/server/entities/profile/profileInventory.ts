@@ -14,7 +14,7 @@
 // enrichment gate already holds the slots it loaded for the sub-agent and only
 // needs the rule applied to them.
 
-import { readMemory } from "@/server/memory/store";
+import { readMemory } from "@/server/entities/memory/store";
 
 // Length floor for the deterministic pre-gate. Mirrors the threshold the
 // pre-overhaul runWhatsNext used in its memory-gap heuristic: "obviously not a

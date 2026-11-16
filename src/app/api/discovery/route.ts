@@ -1,7 +1,7 @@
 // The discovery list the panel renders. Read-only; every write goes through
 // ./edit.
 
-import { resolveViewedUser } from "@/server/auth/viewerScope";
+import { resolveViewedUser } from "@/server/platform/admin/viewerScope";
 import { loadDiscoveryList } from "@/server/views/discoveryList";
 
 export const dynamic = "force-dynamic";

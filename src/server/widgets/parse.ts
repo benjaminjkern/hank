@@ -13,7 +13,7 @@
 // Marker extraction + JSON.parse is shared via extractWidgetMarker; each parser
 // only owns its per-kind field validation.
 
-import { extractWidgetMarker } from "@/lib/widgetMarker";
+import { extractWidgetMarker } from "@/shared/widgetMarker";
 
 // ---------------------------------------------------------------------------
 // Top-level: settling a negotiation panel. Emitted by the panel's own

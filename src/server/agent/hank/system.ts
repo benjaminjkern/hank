@@ -10,8 +10,8 @@
 
 import { createHash } from "node:crypto";
 
-import { formatNowInZone } from "@/server/platform/time/localTime";
-import { nowDate } from "@/utils/now";
+import { formatNowInZone } from "@/shared/utils/localTime";
+import { nowDate } from "@/shared/utils/now";
 
 type BuildHankSystemArgs = {
   // Compact rendering of the user's OPEN shortlist negotiation(s) — stances +

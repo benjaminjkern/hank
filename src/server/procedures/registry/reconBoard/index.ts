@@ -17,12 +17,12 @@ import type { RunContext } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
 import { reconOnCooldown } from "@/server/entities/boardReaders/readerHealth";
 import { saveBoardReader } from "@/server/entities/boardReaders/recordReaderRun";
-import { withTraceSpan } from "@/server/platform/trace/span";
-import { boardMatchKey } from "@/server/scrape/recipe/matchKey";
-import { runBoardRecipe } from "@/server/scrape/recipe/runRecipe";
+import { boardMatchKey } from "@/server/platform/scrape/recipe/matchKey";
+import { runBoardRecipe } from "@/server/platform/scrape/recipe/runRecipe";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import { boardRecipeSubAgent } from "@/server/subagents/registry/boardRecipe";
-import { nowDate } from "@/utils/now";
+import { nowDate } from "@/shared/utils/now";
 
 import { loadBoardRecipeInput } from "./loadBoardRecipeInput";
 
@@ -56,97 +56,96 @@ async function readerHasRecipe(readerId: string): Promise<boolean> {
   return row?.recipe != null;
 }
 
-export async function runReconBoard(
-  args: ReconBoardArgs,
-): Promise<ReconBoardResult> {
-  const matchKey = boardMatchKey(args.sourceUrl);
-  if (!matchKey) return { kind: "skipped", why: "no_match_key" };
+export const runReconBoard = procedure(
+  "recon_board",
+  async (args: ReconBoardArgs): Promise<ReconBoardResult> => {
+    const matchKey = boardMatchKey(args.sourceUrl);
+    if (!matchKey) return { kind: "skipped", why: "no_match_key" };
 
-  // The cooldown is keyed on the BOARD, so a second company on the same board
-  // inherits the verdict instead of re-buying it.
-  if (!args.force) {
-    const existing = await prisma.boardReader.findUnique({
-      where: { matchKey },
-      select: { reconnedAt: true },
-    });
-    if (reconOnCooldown(existing?.reconnedAt ?? null, nowDate())) {
-      return { kind: "skipped", why: "cooldown" };
+    // The cooldown is keyed on the BOARD, so a second company on the same board
+    // inherits the verdict instead of re-buying it.
+    if (!args.force) {
+      const existing = await prisma.boardReader.findUnique({
+        where: { matchKey },
+        select: { reconnedAt: true },
+      });
+      if (reconOnCooldown(existing?.reconnedAt ?? null, nowDate())) {
+        return { kind: "skipped", why: "cooldown" };
+      }
     }
-  }
 
-  const input = await loadBoardRecipeInput({
-    companyName: args.companyName,
-    sourceUrl: args.sourceUrl,
-    probeTried: args.probeTried ?? [],
-  });
-
-  const run = await withTraceSpan("recon_board", args.trace, () =>
-    runSubAgent(boardRecipeSubAgent, input, args),
-  );
-  if (!run.ok) {
-    // A crashed recon is NOT a verdict about the board — persisting one would
-    // start a 14-day cooldown off a transient failure. Leave no row.
-    return { kind: "skipped", why: "failed" };
-  }
-
-  const outcome = run.output;
-  if (outcome.outcome === "recipe") {
-    // Run it ONCE, in full, before it's stored. The sub-agent verified with a
-    // SAMPLING `test_recipe`, which is the right trade inside its loop but is
-    // not proof the stored plan reads the board — and a recipe that only works
-    // in sample mode would fail silently on every future scrape.
-    const verified = await runBoardRecipe(outcome.recipe, {
-      boardUrl: args.sourceUrl,
+    const input = await loadBoardRecipeInput({
+      companyName: args.companyName,
+      sourceUrl: args.sourceUrl,
+      probeTried: args.probeTried ?? [],
     });
-    if (!verified.ok) {
-      await saveBoardReader({
+
+    const run = await runSubAgent(boardRecipeSubAgent, input, args);
+    if (!run.ok) {
+      // A crashed recon is NOT a verdict about the board — persisting one would
+      // start a 14-day cooldown off a transient failure. Leave no row.
+      return { kind: "skipped", why: "failed" };
+    }
+
+    const outcome = run.output;
+    if (outcome.outcome === "recipe") {
+      // Run it ONCE, in full, before it's stored. The sub-agent verified with a
+      // SAMPLING `test_recipe`, which is the right trade inside its loop but is
+      // not proof the stored plan reads the board — and a recipe that only works
+      // in sample mode would fail silently on every future scrape.
+      const verified = await runBoardRecipe(outcome.recipe, {
+        boardUrl: args.sourceUrl,
+      });
+      if (!verified.ok) {
+        await saveBoardReader({
+          companyId: args.companyId,
+          sourceUrl: args.sourceUrl,
+          recipe: null,
+          origin: BoardReaderOrigin.RECON,
+          reconNote: `recipe failed its full run: ${verified.error}`,
+        });
+        return {
+          kind: "exhausted",
+          note: `recipe didn't hold up: ${verified.error}`,
+        };
+      }
+      const saved = await saveBoardReader({
         companyId: args.companyId,
         sourceUrl: args.sourceUrl,
-        recipe: null,
+        recipe: outcome.recipe,
         origin: BoardReaderOrigin.RECON,
-        reconNote: `recipe failed its full run: ${verified.error}`,
+        reconNote: outcome.note,
+        sampleJobUrls: verified.data.jobs.slice(0, 5).map((j) => j.sourceUrl),
       });
+      // saveBoardReader refuses a board that isn't this company's and stores the
+      // refusal instead, so re-read whether a recipe actually landed rather than
+      // reporting success on a row that holds none.
+      const stored = saved ? await readerHasRecipe(saved) : false;
+      if (!stored) {
+        return {
+          kind: "exhausted",
+          note: "the board it found isn't this company's — see /admin/board-readers",
+        };
+      }
       return {
-        kind: "exhausted",
-        note: `recipe didn't hold up: ${verified.error}`,
+        kind: "learned",
+        jobCount: verified.data.jobs.length,
+        note: outcome.note,
       };
     }
-    const saved = await saveBoardReader({
+
+    // A verdict, not a crash: write the row with no recipe. That row IS the
+    // record — it starts the cooldown, it carries the reason a human will read on
+    // /admin/board-readers, and its company count is what says whether this board
+    // software is worth a hand-written provider.
+    await saveBoardReader({
       companyId: args.companyId,
       sourceUrl: args.sourceUrl,
-      recipe: outcome.recipe,
+      recipe: null,
       origin: BoardReaderOrigin.RECON,
+      needsBrowser: outcome.outcome === "needs_browser",
       reconNote: outcome.note,
-      sampleJobUrls: verified.data.jobs.slice(0, 5).map((j) => j.sourceUrl),
     });
-    // saveBoardReader refuses a board that isn't this company's and stores the
-    // refusal instead, so re-read whether a recipe actually landed rather than
-    // reporting success on a row that holds none.
-    const stored = saved ? await readerHasRecipe(saved) : false;
-    if (!stored) {
-      return {
-        kind: "exhausted",
-        note: "the board it found isn't this company's — see /admin/board-readers",
-      };
-    }
-    return {
-      kind: "learned",
-      jobCount: verified.data.jobs.length,
-      note: outcome.note,
-    };
-  }
-
-  // A verdict, not a crash: write the row with no recipe. That row IS the
-  // record — it starts the cooldown, it carries the reason a human will read on
-  // /admin/board-readers, and its company count is what says whether this board
-  // software is worth a hand-written provider.
-  await saveBoardReader({
-    companyId: args.companyId,
-    sourceUrl: args.sourceUrl,
-    recipe: null,
-    origin: BoardReaderOrigin.RECON,
-    needsBrowser: outcome.outcome === "needs_browser",
-    reconNote: outcome.note,
-  });
-  return { kind: outcome.outcome, note: outcome.note };
-}
+    return { kind: outcome.outcome, note: outcome.note };
+  },
+);

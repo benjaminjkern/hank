@@ -27,8 +27,18 @@ import { slugLookupError } from "../lib/slugLookupError";
 import type { ToolDef } from "../lib/types";
 
 const PARSER = z.object({
-  companies: z.array(z.string().min(1)).optional(),
-  force: z.boolean().optional(),
+  companies: z
+    .array(z.string().min(1))
+    .optional()
+    .describe(
+      "Company slugs (e.g. ['stripe']). Omit to look up every newly-added company.",
+    ),
+  force: z
+    .boolean()
+    .optional()
+    .describe(
+      "Redo the lookup even if it's already been done. Use when the details on file look wrong.",
+    ),
 });
 
 // Agent-facing, so it names what happened rather than how it read.
@@ -62,22 +72,6 @@ export const enrichCompaniesTool: ToolDef<z.infer<typeof PARSER>> = {
   affectsViewedState: true,
   description:
     "Look up who a company is: its careers/ATS page, canonical name, one-line description, and logo. Call with NO arguments when the user is done adding companies (e.g. they clicked \"no\" on the add-more widget, or said they're finished) — it looks up every newly-added company and then shows the \"what next?\" picker. Call with `companies` (slugs) to look up specific ones, plus `force: true` to redo it from scratch when a company's details look wrong (wrong careers page, garbled name, wrong logo). Safe to call when there's nothing to look up. This reads live careers pages a few at a time (~5-30s each), so BEFORE calling, narrate what's happening in plain English so the wait makes sense. NOTE: this does not pull in open roles — roles come in when the user walks the company, or via scrape_jobs_for_company.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      companies: {
-        type: "array",
-        items: { type: "string" },
-        description:
-          "Company slugs (e.g. ['stripe']). Omit to look up every newly-added company.",
-      },
-      force: {
-        type: "boolean",
-        description:
-          "Redo the lookup even if it's already been done. Use when the details on file look wrong.",
-      },
-    },
-  },
   parser: PARSER,
   async handle(input, ctx) {
     const targeted = input.companies && input.companies.length > 0;

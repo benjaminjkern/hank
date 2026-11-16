@@ -16,15 +16,15 @@
 //     save_application_answer so that tool and draft_application_question share
 //     exactly one persistence path.
 
-import { Prisma } from "@/generated/prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import {
   isCoverLetterQuestion,
   type ApplicationQuestion,
   type ApplicationQuestionsEnvelope,
-} from "@/server/scrape/types";
-import { nowDate } from "@/utils/now";
-import { normalizeForCompare } from "@/utils/text";
+} from "@/server/platform/scrape/types";
+import { nowDate } from "@/shared/utils/now";
+import { normalizeForCompare } from "@/shared/utils/text";
 
 import {
   setDraftEntry,

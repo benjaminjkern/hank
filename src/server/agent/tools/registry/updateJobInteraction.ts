@@ -35,54 +35,45 @@ export const updateJobInteractionTool: ToolDef<{
   affectsViewedState: true,
   description:
     "**REPAIR TOOL — NOT the normal way to change a role's status. It writes the row and logs NOTHING to the timeline, so the role's history will have no record of the change.** Reach for it ONLY when the stored record is simply WRONG and you're fixing a bookkeeping error: the user says a role you have as passed is actually just on hold, or as closed is actually still live, or the reason on it is off. **If the thing is happening NOW — the user is passing, holding, applying, or telling you an employer moved — that is the standard flow and MUST go through the event tools so the history has it: mark_job_applied (applied), close_job (passing now), defer_job (holding now), log_job_events (rejected / interview / response / note).** Ask yourself which it is before calling: 'the record is wrong' → here; 'this just happened' → an event tool. What it corrects: status, the structured why behind a pass (`closeReason` + `closeNote`) or a hold (`deferReason` + `deferNote`), and whether it hangs off an inbound lead (`opportunity` = the lead's slug to attach, null to detach). If the correction should ALSO leave a trace on the role's timeline, log a NOTE event with log_job_events — NOTE records without moving the status, so it won't undo the fix you just made. Cover letters and short answers are NOT here — those are save_application_answer (the user's own words) and draft_application_question / draft_application (Hank-written). This is for JOBS — never pass a company slug to it; for a company use the company tools.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: { type: "string", description: "The role's slug." },
-      status: {
-        type: "string",
-        enum: SETTABLE_JOB_STATUSES as readonly string[] as string[],
-        description:
-          "Set the role's status directly. Setting CLOSED requires closeReason; setting DEFERRED requires deferReason. Any other status clears both reason pairs (a revived role keeps no stale 'why').",
-      },
-      closeReason: {
-        type: "string",
-        enum: ALL_JOB_CLOSE_REASONS,
-        description:
-          "Structured reason this role is passed on. WITHDRAWN = applied then pulled the application; NOT_A_MATCH = doesn't fit the search thesis; OTHER = none of the above. Only valid alongside status CLOSED, or on its own to fix the reason on an already-closed role.",
-      },
-      closeNote: {
-        type: "string",
-        description:
-          "Freeform explanation for the pass — the specific 'why' beyond the bucket, in the user's own words where possible.",
-      },
-      deferReason: {
-        type: "string",
-        enum: JOB_DEFER_REASONS as readonly string[] as string[],
-        description:
-          "Structured reason this role is on hold. OUTRANKED = could apply, but other roles rank higher right now (the usual case); OTHER = some other 'not now'. Only valid alongside status DEFERRED, or on its own to fix the reason on an already-deferred role.",
-      },
-      deferNote: {
-        type: "string",
-        description:
-          "Freeform explanation for the hold, in the user's own words where possible — one sentence.",
-      },
-      opportunity: {
-        type: ["string", "null"],
-        description:
-          "Attach (lead slug) or detach (null) the role to/from an inbound Opportunity. Use at intake when a recruiter pitches a role whose `sourceUrl` already matches a role we track — reuse the existing record and set this field to wire it into the lead.",
-      },
-    },
-    required: ["job"],
-  },
   parser: z.object({
-    job: z.string(),
-    status: z.enum(SETTABLE_JOB_STATUSES).optional(),
-    closeReason: z.enum(ALL_JOB_CLOSE_REASONS).optional(),
-    closeNote: z.string().optional(),
-    deferReason: z.enum(JOB_DEFER_REASONS).optional(),
-    deferNote: z.string().optional(),
-    opportunity: z.string().nullable().optional(),
+    job: z.string().describe("The role's slug."),
+    status: z
+      .enum(SETTABLE_JOB_STATUSES)
+      .optional()
+      .describe(
+        "Set the role's status directly. Setting CLOSED requires closeReason; setting DEFERRED requires deferReason. Any other status clears both reason pairs (a revived role keeps no stale 'why').",
+      ),
+    closeReason: z
+      .enum(ALL_JOB_CLOSE_REASONS)
+      .optional()
+      .describe(
+        "Structured reason this role is passed on. WITHDRAWN = applied then pulled the application; NOT_A_MATCH = doesn't fit the search thesis; OTHER = none of the above. Only valid alongside status CLOSED, or on its own to fix the reason on an already-closed role.",
+      ),
+    closeNote: z
+      .string()
+      .optional()
+      .describe(
+        "Freeform explanation for the pass — the specific 'why' beyond the bucket, in the user's own words where possible.",
+      ),
+    deferReason: z
+      .enum(JOB_DEFER_REASONS)
+      .optional()
+      .describe(
+        "Structured reason this role is on hold. OUTRANKED = could apply, but other roles rank higher right now (the usual case); OTHER = some other 'not now'. Only valid alongside status DEFERRED, or on its own to fix the reason on an already-deferred role.",
+      ),
+    deferNote: z
+      .string()
+      .optional()
+      .describe(
+        "Freeform explanation for the hold, in the user's own words where possible — one sentence.",
+      ),
+    opportunity: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        "Attach (lead slug) or detach (null) the role to/from an inbound Opportunity. Use at intake when a recruiter pitches a role whose `sourceUrl` already matches a role we track — reuse the existing record and set this field to wire it into the lead.",
+      ),
   }),
   async handle(
     {

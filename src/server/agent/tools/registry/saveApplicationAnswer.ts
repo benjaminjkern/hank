@@ -17,36 +17,30 @@ export const saveApplicationAnswerTool: ToolDef<{
   affectsViewedState: true,
   description:
     "Persist a user's OWN VERBATIM application text — ONLY when they hand you the exact words to save (\"just put exactly this: …\"). It transcribes; it does not compose, and it does not shape what they said into an answer. Anything you write or refine — including an answer built from what they just told you in chat — goes through draft_application_question with their input as `extraContext`. Pass `coverLetter` to save/replace the cover letter, and/or `question` + `answer` to save one short answer (pass the question text exactly as the form shows it — it's matched to the form's question). `job` (the role's slug) — pass the role the user means. Merges (won't wipe sibling short answers) and saves early so the user sees it in the side panel right away.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: {
-        type: "string",
-        description: "The role's slug — the role the user means.",
-      },
-      coverLetter: {
-        type: "string",
-        description:
-          "Full cover-letter content (markdown ok). Replaces any existing cover letter.",
-      },
-      question: {
-        type: "string",
-        description:
-          "The application question text, exactly as shown on the form. Required when saving a short answer.",
-      },
-      answer: {
-        type: "string",
-        description:
-          "The answer to `question`. Required when saving a short answer.",
-      },
-    },
-  },
   parser: z
     .object({
-      job: z.string().optional(),
-      coverLetter: z.string().optional(),
-      question: z.string().optional(),
-      answer: z.string().optional(),
+      job: z
+        .string()
+        .optional()
+        .describe("The role's slug — the role the user means."),
+      coverLetter: z
+        .string()
+        .optional()
+        .describe(
+          "Full cover-letter content (markdown ok). Replaces any existing cover letter.",
+        ),
+      question: z
+        .string()
+        .optional()
+        .describe(
+          "The application question text, exactly as shown on the form. Required when saving a short answer.",
+        ),
+      answer: z
+        .string()
+        .optional()
+        .describe(
+          "The answer to `question`. Required when saving a short answer.",
+        ),
     })
     .refine((v) => !!v.coverLetter || (!!v.question && !!v.answer), {
       message: "provide coverLetter and/or (question AND answer)",

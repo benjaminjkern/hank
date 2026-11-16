@@ -18,21 +18,28 @@ export async function* dispatchByEntryTarget(
   // submission) → "what's next".
   const target = args.entryTarget;
   if (target?.kind === "job") {
-    return yield* runJobArm(target.id, args);
+    return yield* runJobArm({ ...args, jobId: target.id });
   }
   if (target?.kind === "company") {
     // Walk only — the machine is never handed a company it's meant to FINISH.
     // The segment wrap belongs to runUserMessage, which fires it off the
     // endedCompanyId a mutation reports.
-    return yield* runCompanyArm(target.id, args, target.direction, {
+    return yield* runCompanyArm({
+      ...args,
+      companyId: target.id,
+      direction: target.direction,
       continuation: target.continuation,
     });
   }
   if (target?.kind === "opportunity") {
-    return yield* runOpportunityArm(target.id, args);
+    return yield* runOpportunityArm({ ...args, opportunityId: target.id });
   }
   if (target?.kind === "discovery") {
-    return yield* runDiscoveryArm(target, args);
+    return yield* runDiscoveryArm({
+      ...args,
+      direction: target.direction,
+      append: target.append,
+    });
   }
   if (target?.kind === "discovery_commit") {
     return yield* runDiscoveryCommitArm(args);

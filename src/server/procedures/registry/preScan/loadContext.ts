@@ -13,8 +13,8 @@ import {
   ROLE_ATTR_SELECT,
   toRoleAttrs,
 } from "@/server/entities/jobs/roleAttrs";
+import { readMemory } from "@/server/entities/memory/store";
 import { readResumeBackground } from "@/server/entities/resume/store";
-import { readMemory } from "@/server/memory/store";
 import type { PreScanLeanJob } from "@/server/subagents/registry/preScanJobBatch";
 
 import { preScanPoolWhere } from "./pool";

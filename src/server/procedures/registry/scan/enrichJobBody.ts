@@ -10,6 +10,7 @@ import {
   toRoleAttrs,
   ROLE_ATTR_SELECT,
 } from "@/server/entities/jobs/roleAttrs";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import { enrichJobSubAgent } from "@/server/subagents/registry/enrichJob";
 
@@ -17,48 +18,51 @@ import { applyJobEnrichment } from "./applyJobEnrichment";
 
 export type EnrichJobBodyOutcome = "enriched" | "cached" | "no_body" | "error";
 
-export async function runEnrichJobBody(
-  args: RunContext & { jobId: string },
-): Promise<EnrichJobBodyOutcome> {
-  const job = await prisma.job.findUnique({
-    where: { id: args.jobId },
-    select: {
-      id: true,
-      title: true,
-      ...ROLE_ATTR_SELECT,
-      attributes: true,
-      enrichedSummary: true,
-      rawContent: true,
-    },
-  });
-  if (!job) return "error";
-  if (job.enrichedSummary && job.enrichedSummary.trim().length > 0) {
-    return "cached";
-  }
-  const body = (job.rawContent ?? "").trim();
-  if (body.length === 0) return "no_body";
+export const runEnrichJobBody = procedure(
+  "enrich_job_body",
+  async (
+    args: RunContext & { jobId: string },
+  ): Promise<EnrichJobBodyOutcome> => {
+    const job = await prisma.job.findUnique({
+      where: { id: args.jobId },
+      select: {
+        id: true,
+        title: true,
+        ...ROLE_ATTR_SELECT,
+        attributes: true,
+        enrichedSummary: true,
+        rawContent: true,
+      },
+    });
+    if (!job) return "error";
+    if (job.enrichedSummary && job.enrichedSummary.trim().length > 0) {
+      return "cached";
+    }
+    const body = (job.rawContent ?? "").trim();
+    if (body.length === 0) return "no_body";
 
-  const enr = await runSubAgent(
-    enrichJobSubAgent,
-    {
-      title: job.title,
-      ...toRoleAttrs(job),
-      attributes: job.attributes,
-      body,
-    },
-    args,
-  );
-  if (!enr.ok) return "error";
-  await applyJobEnrichment({
-    job: {
-      id: job.id,
-      locationAndArrangement: job.locationAndArrangement,
-      compensation: job.compensation,
-      employmentType: job.employmentType,
-      department: job.department,
-    },
-    summary: enr.output.summary,
-    scalars: enr.output.scalars,
-  });
-  return "enriched";
-}
+    const enr = await runSubAgent(
+      enrichJobSubAgent,
+      {
+        title: job.title,
+        ...toRoleAttrs(job),
+        attributes: job.attributes,
+        body,
+      },
+      args,
+    );
+    if (!enr.ok) return "error";
+    await applyJobEnrichment({
+      job: {
+        id: job.id,
+        locationAndArrangement: job.locationAndArrangement,
+        compensation: job.compensation,
+        employmentType: job.employmentType,
+        department: job.department,
+      },
+      summary: enr.output.summary,
+      scalars: enr.output.scalars,
+    });
+    return "enriched";
+  },
+);

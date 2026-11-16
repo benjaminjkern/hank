@@ -15,13 +15,13 @@ import {
   ROLE_ATTR_SELECT,
   toRoleAttrs,
 } from "@/server/entities/jobs/roleAttrs";
+import { readMemory } from "@/server/entities/memory/store";
 import { readResumeBackground } from "@/server/entities/resume/store";
-import { readMemory } from "@/server/memory/store";
 import {
   isStockFieldType,
   isCoverLetterQuestion,
   type ApplicationQuestion,
-} from "@/server/scrape/types";
+} from "@/server/platform/scrape/types";
 import type {
   ApplicationDeciderInput,
   QuestionDecision,

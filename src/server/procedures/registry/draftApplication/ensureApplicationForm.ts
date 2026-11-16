@@ -10,8 +10,8 @@
 
 import { prisma } from "@/server/db/prisma";
 import { needsQuestionsRefresh } from "@/server/entities/jobs/questionsRefresh";
-import { fetchApplicationQuestions } from "@/server/scrape/ats";
-import type { ApplicationQuestionsEnvelope } from "@/server/scrape/types";
+import { fetchApplicationQuestions } from "@/server/platform/scrape/ats";
+import type { ApplicationQuestionsEnvelope } from "@/server/platform/scrape/types";
 
 type EnsureApplicationFormResult =
   | { status: "not_found" }

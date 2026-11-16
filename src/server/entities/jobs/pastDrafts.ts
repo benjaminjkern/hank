@@ -19,7 +19,7 @@ import {
   toRoleAttrs,
   type RoleAttrs,
 } from "@/server/entities/jobs/roleAttrs";
-import { indent, normalizeForCompare, truncate } from "@/utils/text";
+import { indent, normalizeForCompare, truncate } from "@/shared/utils/text";
 
 const PAST_COVER_LETTER_LIMIT = 30;
 const PAST_SHORT_ANSWER_LIMIT = 60;

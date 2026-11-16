@@ -60,66 +60,59 @@ export const updateCompanyInteractionTool: ToolDef<{
   affectsViewedState: true,
   description:
     "**REPAIR TOOL — NOT the normal way to change a company's status. It writes the row and logs NOTHING to their activity feed, so the company's history will have no record of the change. It also does NOT touch their roles and does NOT re-scan the board.** Reach for it ONLY when the stored record is simply WRONG and you're fixing a bookkeeping error: the user says a company you have as passed is actually just on hold, or as closed is actually still live, or the reason on it is off. **If the thing is happening NOW — the user is passing on them, setting them aside, or done with what they have — that is the standard flow and MUST go through the real levers so it lands in the history: close_company (passing on them now — also closes their open roles), pause_company (setting them aside now), block_company (you couldn't read their board), caught_up_company (worked through what they have), company_walkthrough (revive a closed/blocked company and re-check the board).** Ask yourself which it is before calling: 'the record is wrong' → here; 'this just happened' → one of those. What it corrects: status, plus the structured why behind a pass (`closeReason` + `closeNote`), a hold (`pauseReason` + `pauseNote`) or an unreadable board (`blockReason` + `blockNote`). Fixing a handful of companies in one go is fine — this tool does NOT end your turn, so call it once per company. If the correction should ALSO be visible in their activity feed, log it separately with log_company_events (that tool writes the feed and nothing else) — do that when the user would want a trace, not by reflex. This is for COMPANIES — never pass a role's slug to it; for a role use update_job_interaction.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      company: { type: "string", description: "The company's slug." },
-      status: {
-        type: "string",
-        enum: SETTABLE_COMPANY_STATUSES as readonly string[] as string[],
-        description:
-          "Set the company's status directly. CLOSED requires closeReason, PAUSED requires pauseReason, BLOCKED requires blockReason; any other status clears all three reason pairs (a revived company keeps no stale 'why'). Setting a status REWRITES the why — pass the note again if it should survive. IN_FLIGHT / IN_PROCESS / CAUGHT_UP are normally derived from the company's roles, so a wrong one there is usually a wrong ROLE status underneath — fix that instead.",
-      },
-      closeReason: {
-        type: "string",
-        enum: COMPANY_CLOSE_REASONS as readonly string[] as string[],
-        description:
-          "Structured reason this company is a dead-end. Only valid alongside status CLOSED, or on its own to fix the reason on an already-closed company.",
-      },
-      closeNote: {
-        type: "string",
-        description:
-          "Freeform explanation for the pass — the specific 'why' beyond the bucket, in the user's own words where possible.",
-      },
-      pauseReason: {
-        type: "string",
-        enum: COMPANY_PAUSE_REASONS as readonly string[] as string[],
-        description:
-          "Structured reason this company is set aside. Only valid alongside status PAUSED, or on its own to fix the reason on an already-paused company.",
-      },
-      pauseNote: {
-        type: "string",
-        description:
-          "Freeform explanation for the hold, in the user's own words where possible — one sentence.",
-      },
-      blockReason: {
-        type: "string",
-        enum: COMPANY_BLOCK_REASONS as readonly string[] as string[],
-        description:
-          "Structured reason their board couldn't be read — a TECHNICAL set-aside, never a fit judgment. Only valid alongside status BLOCKED, or on its own to fix the reason on an already-blocked company.",
-      },
-      blockNote: {
-        type: "string",
-        description:
-          "Freeform detail on what went wrong reading the board — one sentence.",
-      },
-    },
-    required: ["company"],
-  },
   parser: z.object({
-    company: z.string(),
-    status: z.enum(SETTABLE_COMPANY_STATUSES).optional(),
+    company: z.string().describe("The company's slug."),
+    status: z
+      .enum(SETTABLE_COMPANY_STATUSES)
+      .optional()
+      .describe(
+        "Set the company's status directly. CLOSED requires closeReason, PAUSED requires pauseReason, BLOCKED requires blockReason; any other status clears all three reason pairs (a revived company keeps no stale 'why'). Setting a status REWRITES the why — pass the note again if it should survive. IN_FLIGHT / IN_PROCESS / CAUGHT_UP are normally derived from the company's roles, so a wrong one there is usually a wrong ROLE status underneath — fix that instead.",
+      ),
     // The three reason params stay loose strings and are validated in the
     // handler: all three offered lists contain OTHER, so the agent reaches for
     // the wrong param often enough that a stock "Invalid enum value" from the
     // dispatcher (which fires before the handler can explain) is worse than an
-    // error naming the param the value belongs to.
-    closeReason: z.string().optional(),
-    closeNote: z.string().optional(),
-    pauseReason: z.string().optional(),
-    pauseNote: z.string().optional(),
-    blockReason: z.string().optional(),
-    blockNote: z.string().optional(),
+    // error naming the param the value belongs to. `.meta({ enum })` still shows
+    // the model the offered list; it only shapes the schema, never validation.
+    closeReason: z
+      .string()
+      .optional()
+      .meta({ enum: [...COMPANY_CLOSE_REASONS] })
+      .describe(
+        "Structured reason this company is a dead-end. Only valid alongside status CLOSED, or on its own to fix the reason on an already-closed company.",
+      ),
+    closeNote: z
+      .string()
+      .optional()
+      .describe(
+        "Freeform explanation for the pass — the specific 'why' beyond the bucket, in the user's own words where possible.",
+      ),
+    pauseReason: z
+      .string()
+      .optional()
+      .meta({ enum: [...COMPANY_PAUSE_REASONS] })
+      .describe(
+        "Structured reason this company is set aside. Only valid alongside status PAUSED, or on its own to fix the reason on an already-paused company.",
+      ),
+    pauseNote: z
+      .string()
+      .optional()
+      .describe(
+        "Freeform explanation for the hold, in the user's own words where possible — one sentence.",
+      ),
+    blockReason: z
+      .string()
+      .optional()
+      .meta({ enum: [...COMPANY_BLOCK_REASONS] })
+      .describe(
+        "Structured reason their board couldn't be read — a TECHNICAL set-aside, never a fit judgment. Only valid alongside status BLOCKED, or on its own to fix the reason on an already-blocked company.",
+      ),
+    blockNote: z
+      .string()
+      .optional()
+      .describe(
+        "Freeform detail on what went wrong reading the board — one sentence.",
+      ),
   }),
   async handle(input, ctx) {
     const {

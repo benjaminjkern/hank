@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-import { formatFocusRefToken } from "@/lib/focusRefToken";
 import { resolveCompanyBySlug } from "@/server/entities/resolveBySlug";
 import { buildShowEvents } from "@/server/views/showEvents";
+import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import { slugLookupError } from "../lib/slugLookupError";
 import { toolError } from "../lib/toolError";
@@ -20,14 +20,7 @@ export const showCompanyTool: ToolDef<{ company: string }> = {
   affectsViewedState: false,
   description:
     "Put a company's page on the user's screen (right panel) and drop a clickable chip in the chat — a pure display action that starts no work and changes nothing. Use it when you're referring to a company and want the user to see it ('here's what I have on Stripe'). NOT for walking its roles — that's company_walkthrough. `company` is the company's slug.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      company: { type: "string", description: "The company's slug." },
-    },
-    required: ["company"],
-  },
-  parser: z.object({ company: z.string() }),
+  parser: z.object({ company: z.string().describe("The company's slug.") }),
   async handle(input, ctx) {
     const r = await resolveCompanyBySlug(ctx.userId, input.company);
     if (!r.ok) return slugLookupError(r);

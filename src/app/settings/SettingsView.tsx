@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import styled from "styled-components";
 
-import { relativeTime } from "@/utils/date";
-import { initial } from "@/utils/text";
+import { relativeTime } from "@/shared/utils/date";
+import { initial } from "@/shared/utils/text";
 
 import {
   saveApiKey,

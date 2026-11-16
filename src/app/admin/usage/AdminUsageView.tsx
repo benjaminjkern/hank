@@ -3,7 +3,7 @@
 import Link from "next/link";
 import styled from "styled-components";
 
-import { count, money } from "@/utils/format";
+import { count, money } from "@/shared/utils/format";
 
 type AggCommon = {
   calls: number;

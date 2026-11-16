@@ -158,7 +158,7 @@ model Company {
   // Greenhouse board slug (null off-Greenhouse / un-hunted). Reused to rebuild
   // the canonical embed URL at apply-form time — see docs/ats-scrapers.md.
   greenhouseSlug String?
-  // Logo override; null ⇒ derived from sourceUrl by src/lib/companyLogo.ts, set
+  // Logo override; null ⇒ derived from sourceUrl by src/shared/companyLogo.ts, set
   // by the logo verifier when the derivation is wrong. See docs/architecture.md.
   logoUrl   String?
   description String? // one-line factual blurb from the hunter; panel header
@@ -199,7 +199,7 @@ model Company {
 // `companies` count, IS the artifact that says which board software has earned
 // a hand-written provider under scrape/ats/providers/.
 //
-// `recipe` holds a BoardRecipe (src/server/scrape/recipe/types.ts). It is DATA,
+// `recipe` holds a BoardRecipe (src/server/platform/scrape/recipe/types.ts). It is DATA,
 // never code: only runRecipe.ts executes it, which is what keeps a learned
 // board from being an execution surface.
 model BoardReader {
@@ -748,7 +748,7 @@ model CompanyEvent {
 }
 
 // Company-level event vocab. Semantics in docs/lifecycle.md; the no-raw-enum
-// label map is companyEventLabel() in src/lib/statusColors.ts.
+// label map is companyEventLabel() in src/shared/statusColors.ts.
 enum CompanyEventType {
   // Collapsed mechanical batches
   JOBS_CLOSED // "Closed 45 roles: not a match"
@@ -774,7 +774,7 @@ enum CompanyEventType {
 
 model MemoryNote {
   userId        String
-  path          String // see src/server/memory/paths.ts for the allowed path patterns
+  path          String // see src/server/entities/memory/paths.ts for the allowed path patterns
   content       String
   companyId     String?
   jobId         String?

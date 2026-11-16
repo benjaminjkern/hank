@@ -9,15 +9,15 @@
 //
 //   pnpm ats:jobshape
 
+import { boardIdentifiesCompany } from "../../src/server/entities/boardReaders/boardIdentity";
+import { harvestBlobs } from "../../src/server/platform/scrape/generic/blobs";
+import { parseFeedItems } from "../../src/server/platform/scrape/generic/feed";
 import {
   findJobArray,
   looksLikeJobArray,
   type JobKeyMapping,
-} from "../../src/server/scrape/generic/jobShape";
-import { parseFeedItems } from "../../src/server/scrape/generic/feed";
-import { harvestBlobs } from "../../src/server/scrape/generic/blobs";
-import { boardIdentifiesCompany } from "../../src/server/entities/boardReaders/boardIdentity";
-import { boardPathScope } from "../../src/server/scrape/generic/sitemap";
+} from "../../src/server/platform/scrape/generic/jobShape";
+import { boardPathScope } from "../../src/server/platform/scrape/generic/sitemap";
 
 type Case = {
   name: string;

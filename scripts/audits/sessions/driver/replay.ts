@@ -13,12 +13,12 @@
 import { buildRenderedWidget } from "@/../scripts/regression/conversations/driver/widgetRender";
 import type { Prisma } from "@/generated/prisma/client";
 import { Role } from "@/generated/prisma/client";
-import type { WidgetKind } from "@/lib/widgetKinds";
 import { detectFabricatedUiRender } from "@/server/agent/session/uiProvenance";
 import {
   parseToolErrorMarker,
   stripToolErrorMarker,
-} from "@/server/agent/tools/lib/toolError";
+} from "@/shared/toolErrorMarker";
+import type { WidgetKind } from "@/shared/widgetKinds";
 
 // Each persisted ChatMessage.content block is one of these. Reflects the
 // shape Hank's streamingCore persists via mergeAssistantSegments and

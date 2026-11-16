@@ -4,7 +4,7 @@ import {
   getCompanyEventById,
   deleteCompanyEvent,
 } from "@/server/entities/companies/companyEventEdits";
-import { formatEventStamp } from "@/server/platform/time/localTime";
+import { formatEventStamp } from "@/shared/utils/localTime";
 
 import { toolError } from "../lib/toolError";
 
@@ -20,18 +20,14 @@ export const deleteCompanyEventTool: ToolDef<{ eventId: string }> = {
   affectsViewedState: true,
   description:
     "Delete ONE company feed event you logged — targeted by the event's `id` (from list_company_events) — when it was logged in error and the user wants it off the company's activity feed. Removes only that one row. **It does NOT touch the company's status** — a company's status is never driven by its feed, so removing a CLOSED/PAUSED feed row does not reopen them; to correct the stored status use update_company_interaction. It also does not touch any paired role event: if a milestone (e.g. APPLIED) also has a JobEvent on the role's timeline and the user wants that gone too, remove it with delete_job_event.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      eventId: {
-        type: "string",
-        description:
-          "The id of the event to delete (from list_company_events, shown as `id=…`).",
-      },
-    },
-    required: ["eventId"],
-  },
-  parser: z.object({ eventId: z.string().min(1) }),
+  parser: z.object({
+    eventId: z
+      .string()
+      .min(1)
+      .describe(
+        "The id of the event to delete (from list_company_events, shown as `id=…`).",
+      ),
+  }),
   async handle({ eventId }, ctx) {
     const target = await getCompanyEventById(ctx.userId, eventId);
     if (!target) {

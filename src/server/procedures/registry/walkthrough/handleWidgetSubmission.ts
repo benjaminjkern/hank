@@ -6,7 +6,6 @@
 // shortlist gates, company_checklist, next_company_picker — live in
 // widgets/dispatchTopLevelSubmission.ts.)
 
-import { formatFocusRefToken } from "@/lib/focusRefToken";
 import { statusEvent, yieldUiEvents } from "@/server/agent/contracts";
 import type { TurnEvent } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
@@ -16,6 +15,7 @@ import { promoteJobForWork } from "@/server/entities/jobs/setJobAside";
 import { runCommitApplication } from "@/server/procedures/registry/commitApplication";
 import { buildShowEvents } from "@/server/views/showEvents";
 import type { parseWidgetSubmission } from "@/server/widgets/parse";
+import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import { runCompanyArm } from "./companyArm";
 import { dispatchByEntryTarget } from "./dispatchByEntryTarget";
@@ -65,7 +65,7 @@ export async function* handleWidgetSubmission(
         }),
         events,
       );
-      return yield* runCompanyArm(submission.companyId, args);
+      return yield* runCompanyArm({ ...args, companyId: submission.companyId });
     }
     // "no" — leave it set aside; bounce back to the next-company picker.
     return { wrappedUp: true };
@@ -103,7 +103,9 @@ export async function* handleWidgetSubmission(
         (await buildShowEvents(args.userId, { companyId: job.companyId }))
           .events,
       );
-      return yield* runCompanyArm(job.companyId, args, undefined, {
+      return yield* runCompanyArm({
+        ...args,
+        companyId: job.companyId,
         continuation: true,
       });
     }
@@ -172,7 +174,11 @@ async function* handleNextJobPicker(
     (await buildShowEvents(args.userId, { jobId: submission.jobId })).events,
   );
   yield* narrateJobFocus(submission.jobId);
-  return yield* runJobArm(submission.jobId, args, { freshEntry: true });
+  return yield* runJobArm({
+    ...args,
+    jobId: submission.jobId,
+    freshEntry: true,
+  });
 }
 
 // Narrate the transition into a job arm so the user sees "Working on

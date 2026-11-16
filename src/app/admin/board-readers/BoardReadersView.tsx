@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import styled from "styled-components";
 
-import { relativeTime } from "@/utils/date";
+import { relativeTime } from "@/shared/utils/date";
 
 export type BoardReaderRow = {
   id: string;

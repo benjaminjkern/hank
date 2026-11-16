@@ -6,10 +6,10 @@
 import { z } from "zod";
 
 import { ProposedVerdict } from "@/generated/prisma/client";
-import { getCurrentUser } from "@/server/auth/currentUser";
-import { rejectImpersonatedWrite } from "@/server/auth/viewerScope";
 import { prisma } from "@/server/db/prisma";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
+import { rejectImpersonatedWrite } from "@/server/platform/admin/viewerScope";
+import { getCurrentUser } from "@/server/platform/auth/currentUser";
 import { runReconsiderJob } from "@/server/procedures/registry/reconsiderJob";
 import { loadShortlistBoard } from "@/server/views/shortlistBoard";
 

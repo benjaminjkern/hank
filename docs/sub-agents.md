@@ -89,7 +89,7 @@ Home follows the normal rule: inside the procedure's folder when one procedure c
 
 **A harness never hand-builds a field the loader computes.** It either calls the loader against seeded rows, or supplies the loader's own inputs. With rendering in the def that's nearly free: what's left in a `TInput` is raw data a fixture can just state.
 
-**`scrapeUrl` is NOT a sub-agent.** It's a deterministic ATS fetch — a single HTTPS call to a recognized ATS's JSON API, no LLM ([scrape/index.ts](../src/server/scrape/index.ts)). The old generic-HTML LLM fallback is gone; non-ATS URLs fail with an actionable error. It still accepts a `trace` arg and emits a one-line "ATS scrape: …" trace, but there's no inner LLM to surface.
+**`scrapeUrl` is NOT a sub-agent.** It's a deterministic ATS fetch — a single HTTPS call to a recognized ATS's JSON API, no LLM ([scrape/index.ts](../src/server/platform/scrape/index.ts)). The old generic-HTML LLM fallback is gone; non-ATS URLs fail with an actionable error. It still accepts a `trace` arg and emits a one-line "ATS scrape: …" trace, but there's no inner LLM to surface.
 
 Every sub-agent runs through the one entry point, [`runSubAgent`](../src/server/subagents/lib/runSubAgent.ts) — it absorbs the API-key check, client setup, trace span, per-turn usage tracking, truncation detection, abort propagation, and the `SubAgentRun` capture. **A caller never resolves a client, names a model, or calls `recordUsage`/`recordSubAgentRun` itself** — if a procedure is doing that, the sub-agent isn't carrying its own weight yet. **There is no bespoke tier and no per-class variant.** Vision is not an exception either: `userContent` can return content blocks, so an image/document parser only differs by naming a `claude-*` model.
 

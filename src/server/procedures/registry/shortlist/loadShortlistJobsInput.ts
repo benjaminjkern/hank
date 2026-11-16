@@ -25,8 +25,8 @@ import {
   onBoardWhere,
   shortlistPoolStatusWhere,
 } from "@/server/entities/jobs/shortlistPool";
+import { readMemory } from "@/server/entities/memory/store";
 import { readResumeBackground } from "@/server/entities/resume/store";
-import { readMemory } from "@/server/memory/store";
 import type {
   ShortlistJobsInput,
   ShortlistCandidate,

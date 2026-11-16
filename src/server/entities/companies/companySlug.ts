@@ -3,7 +3,7 @@
 // third `slugify` wrapper in tools/lib/watchlist.ts); delegates to the canonical
 // slugifier, behavior preserved via options.
 
-import { slugify } from "@/server/platform/slug/slugify";
+import { slugify } from "@/shared/utils/slugify";
 
 export function companySlug(name: string): string {
   return slugify(name, { stripUrl: true, maxLength: 64 });

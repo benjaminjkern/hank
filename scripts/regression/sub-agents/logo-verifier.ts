@@ -86,13 +86,11 @@ async function runOneCase(fx: Fixture, ctx: AuditCtx): Promise<CaseReport> {
   // Through the procedure, not the sub-agent directly: fetching the candidate
   // image is half of what this path does, and a fixture URL that 404s should
   // grade the same "uncertain" prod would return.
-  const result = await runVerifyCompanyLogo(
-    {
-      companyName: fx.companyName,
-      candidateLogoUrl: fx.candidateLogoUrl,
-    },
-    ctx,
-  );
+  const result = await runVerifyCompanyLogo({
+    ...ctx,
+    companyName: fx.companyName,
+    candidateLogoUrl: fx.candidateLogoUrl,
+  });
 
   const contextMarkdown = [
     `### Company: ${fx.companyName}`,

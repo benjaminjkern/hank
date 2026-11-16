@@ -48,25 +48,18 @@ export const companyWalkthroughTool: ToolDef<{
   handoff: true,
   description:
     'Start (or resume) a walkthrough on a specific company. Pass `company` (its slug, from list_companies / the watchlist block). Hands off to the deterministic layer, which surfaces that company\'s roles — reading its board and shortlisting first if that hasn\'t happened yet. Use when the user names a specific company ("let\'s do Mistral", "pull up Stripe", "go back to Airbnb") — resolve its slug first (from the watchlist block / list_companies). This tool does NOT search by name: if you don\'t have a slug, use list_companies (or find_companies for a new one). It also covers companies that were set aside earlier: just call it as normal and the user gets asked whether to bring the company back — you never need a separate un-skip step. This is ALSO how you bring up the roles remaining at a company the user is already working ("what else is open there?", "show me the other roles"): call it on that company and the role list comes up. **And it is how you shortlist or re-shortlist** — "which of these should I go for?", "rerun the shortlist", "I updated my thesis, redo this": call it on that company, adding `direction` if the user said what to change. The picks come from a sub-agent that weighs every read role against what you know the user wants — you do NOT choose or type them out. Acknowledge in your text reply BEFORE calling — don\'t act silently.',
-  inputSchema: {
-    type: "object",
-    properties: {
-      company: {
-        type: "string",
-        description:
-          "Company slug, as shown in list_companies / the watchlist block.",
-      },
-      direction: {
-        type: "string",
-        description:
-          "Optional steer for the role picks this round, in the user's own terms ('infra roles only', 'I really need remote'). Passing it forces a FRESH round: prior picks are re-ranked on these terms instead of the user being asked whether to keep them. Omit to resume where the company left off — with no direction, an already-decided shortlist is left alone and its roles come straight up.",
-      },
-    },
-    required: ["company"],
-  },
   parser: z.object({
-    company: z.string(),
-    direction: z.string().optional(),
+    company: z
+      .string()
+      .describe(
+        "Company slug, as shown in list_companies / the watchlist block.",
+      ),
+    direction: z
+      .string()
+      .optional()
+      .describe(
+        "Optional steer for the role picks this round, in the user's own terms ('infra roles only', 'I really need remote'). Passing it forces a FRESH round: prior picks are re-ranked on these terms instead of the user being asked whether to keep them. Omit to resume where the company left off — with no direction, an already-decided shortlist is left alone and its roles come straight up.",
+      ),
   }),
   async handle(input, ctx) {
     const r = await resolveCompanyBySlug(ctx.userId, input.company);

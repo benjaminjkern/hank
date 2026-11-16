@@ -1,5 +1,5 @@
-import { requireAdmin } from "@/server/auth/requireAdmin";
 import { prisma } from "@/server/db/prisma";
+import { requireAdmin } from "@/server/platform/auth/requireAdmin";
 
 import { AdminDeletionsView, type DeletionRow } from "./AdminDeletionsView";
 

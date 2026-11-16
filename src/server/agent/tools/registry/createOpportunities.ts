@@ -9,20 +9,46 @@ import {
   resolveContactsBySlug,
   resolveJobInteractionsFromJobSlugs,
 } from "@/server/entities/resolveBySlug";
-import { parseEventDateTime } from "@/server/platform/time/localTime";
+import { parseEventDateTime } from "@/shared/utils/localTime";
 
 import { slugLookupError } from "../lib/slugLookupError";
 
 import type { ToolDef } from "../lib/types";
 
 const CreateOpportunityItemSchema = z.object({
-  label: z.string().min(1),
-  status: z.enum(ALL_LEAD_STATUSES).optional(),
-  primaryContact: z.string().optional(),
-  contacts: z.array(z.string()).optional(),
-  nextStepAt: z.string().optional(),
-  notes: z.string().optional(),
-  sourceJob: z.string().optional(),
+  label: z
+    .string()
+    .min(1)
+    .describe(
+      "User-facing label for the lead/conversation. Write it like '<recruiter> at <agency>' or '<referrer> intro' or '<recruiter> → <hiring company>'.",
+    ),
+  status: z
+    .enum(ALL_LEAD_STATUSES)
+    .optional()
+    .describe(
+      "Lead-level conversation status. Defaults to OPEN. Pass SCREENING explicitly only if a call is already on the calendar.",
+    ),
+  primaryContact: z
+    .string()
+    .optional()
+    .describe("Optional contact slug for the headline recruiter/referrer."),
+  contacts: z
+    .array(z.string())
+    .optional()
+    .describe("Additional contact slugs beyond the primary one."),
+  nextStepAt: z
+    .string()
+    .optional()
+    .describe(
+      "ISO datetime of the next scheduled moment (call, meeting), in the user's local time — INCLUDE the clock time (e.g. '2026-06-14T14:00' for a 2pm call) so it isn't treated as already-past. Auto-emits CALL_SCHEDULED and moves lead status to SCREENING.",
+    ),
+  notes: z.string().optional().describe("Freeform notes about the lead."),
+  sourceJob: z
+    .string()
+    .optional()
+    .describe(
+      "Set ONLY when this inbound was triggered by an existing tracked role (its slug) — e.g. user applied direct, recruiter from same company reached out. For agency-posting inbounds (Arcadia case), leave null.",
+    ),
 });
 
 type CreateOpportunityItem = z.infer<typeof CreateOpportunityItemSchema>;
@@ -34,57 +60,6 @@ export const createOpportunitiesTool: ToolDef<{
   affectsViewedState: true,
   description:
     "Create one or more Opportunities — each is a **lead** for one inbound conversation (recruiter outreach, referral, intro). Batched — pass an array; one transaction. The pitched/discussed roles inside each lead are regular Jobs: after creating the opportunities, call `create_jobs([{opportunity, ...}, ...])` once per pitched role (pass the returned lead slug). Per-item `label` describes the lead, not a single role — e.g. 'McKenley Talent → Arcadia'. Auto-emits INBOUND_RECEIVED for each. If `nextStepAt` is set on an item, also auto-emits CALL_SCHEDULED and bumps status to SCREENING. Default status is OPEN. `sourceJob` is for when the inbound was triggered by a real existing tracked role (its slug); leave null for agency-posting inbounds.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      opportunities: {
-        type: "array",
-        minItems: 1,
-        items: {
-          type: "object",
-          properties: {
-            label: {
-              type: "string",
-              description:
-                "User-facing label for the lead/conversation. Write it like '<recruiter> at <agency>' or '<referrer> intro' or '<recruiter> → <hiring company>'.",
-            },
-            status: {
-              type: "string",
-              enum: ALL_LEAD_STATUSES as readonly string[] as string[],
-              description:
-                "Lead-level conversation status. Defaults to OPEN. Pass SCREENING explicitly only if a call is already on the calendar.",
-            },
-            primaryContact: {
-              type: "string",
-              description:
-                "Optional contact slug for the headline recruiter/referrer.",
-            },
-            contacts: {
-              type: "array",
-              items: { type: "string" },
-              description: "Additional contact slugs beyond the primary one.",
-            },
-            nextStepAt: {
-              type: "string",
-              description:
-                "ISO datetime of the next scheduled moment (call, meeting), in the user's local time — INCLUDE the clock time (e.g. '2026-06-14T14:00' for a 2pm call) so it isn't treated as already-past. Auto-emits CALL_SCHEDULED and moves lead status to SCREENING.",
-            },
-            notes: {
-              type: "string",
-              description: "Freeform notes about the lead.",
-            },
-            sourceJob: {
-              type: "string",
-              description:
-                "Set ONLY when this inbound was triggered by an existing tracked role (its slug) — e.g. user applied direct, recruiter from same company reached out. For agency-posting inbounds (Arcadia case), leave null.",
-            },
-          },
-          required: ["label"],
-        },
-      },
-    },
-    required: ["opportunities"],
-  },
   parser: z.object({
     opportunities: z.array(CreateOpportunityItemSchema).min(1),
   }),

@@ -20,25 +20,21 @@ export const listOpportunitiesTool: ToolDef<{
   name: "list_opportunities",
   description:
     "List the user's opportunities (leads), sorted by nextStepAt (soonest first). Each lead's pitched roles (= linked JobInteractions) are summarized inline. Pass status to filter; default omits CLOSED. Results are paginated, 30 leads per page; pass `page` (1-indexed) for more. Use to remind yourself what's pending before kicking off work, or when the user asks 'what's on the inbound side'.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      status: {
-        type: "string",
-        enum: ALL_LEAD_STATUSES as readonly string[] as string[],
-        description:
-          "Filter to a single status. Omit to list active leads (OPEN + SCREENING + AWAITING).",
-      },
-      page: {
-        type: "number",
-        description:
-          "1-indexed page number (default 1). 30 leads per page, ordered soonest-next-step first. If the footer says more pages exist, pass page:N+1 for the next.",
-      },
-    },
-  },
   parser: z.object({
-    status: z.enum(ALL_LEAD_STATUSES).optional(),
-    page: z.number().int().positive().optional(),
+    status: z
+      .enum(ALL_LEAD_STATUSES)
+      .optional()
+      .describe(
+        "Filter to a single status. Omit to list active leads (OPEN + SCREENING + AWAITING).",
+      ),
+    page: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe(
+        "1-indexed page number (default 1). 30 leads per page, ordered soonest-next-step first. If the footer says more pages exist, pass page:N+1 for the next.",
+      ),
   }),
   async handle({ status, page }, ctx) {
     const where = status

@@ -4,7 +4,18 @@ Things to know before adding or modifying a tool: the flat one-file-per-tool reg
 
 Every callable tool is one `ToolDef` in **one file** under [src/server/agent/tools/registry/](../src/server/agent/tools/registry/). Hank's live set is assembled by [`hankTools()`](../src/server/agent/hank/toolset.ts) (one import per tool).
 
-**The registry holds every ToolDef, not just Hank's.** A handful are handed only to sub-agents and are deliberately absent from `hankTools` — currently `fetch_url`, `test_scrape`, `probe_ats`, `read_reusable_application`. They live here anyway: they're the same `ToolDef` contract, dispatched by the same loop, and a reader grepping a tool name should find one file wherever it's used. To enumerate them: every `registry/*.ts` with no matching import in `toolset.ts`. (Note `toolAffectsViewedState` derives from `hankTools`, not from the registry, so a sub-agent-only tool never appears there — correct, since nothing re-fetches the panel off a sub-agent's read.)
+**The registry holds every ToolDef, not just Hank's — and five are SUB-AGENT ONLY, on purpose.** Hank never sees them; each is handed to the sub-agents that need it through their `readTools`:
+
+| Tool | Used by |
+| --- | --- |
+| `probe_ats`, `test_scrape` | `company_basic_info` (the board hunt) |
+| `test_recipe` | `board_recipe` (recon) |
+| `fetch_url` | `company_basic_info`, `board_recipe`, `find_companies` |
+| `read_reusable_application` | `application_drafting` (voice match) |
+
+Each file says so in its header, and [toolset.ts](../src/server/agent/hank/toolset.ts) lists them as deliberately absent — don't add them to `hankTools`. They live in the registry anyway: same `ToolDef` contract, same dispatch loop, and a reader grepping a tool name should find one file wherever it's used. (`toolAffectsViewedState` derives from `hankTools`, so a sub-agent-only tool never appears there — correct, since nothing re-fetches the panel off a sub-agent's read.)
+
+**The zod `parser` is a tool's ONLY schema.** It validates the model's input AND is what the model sees: [`toolInputSchema`](../src/server/agent/tools/lib/inputSchema.ts) derives the JSON schema from it (`z.toJSONSchema`, `io: "input"`). Field prose for the model goes on each zod node with `.describe(…)`. When a parser is deliberately looser than what the model should be shown (a reason param taken as a bare string so the handler can name the right sibling list in its error), add the model-facing constraint with `.meta({ enum: [...] })` — it shapes the schema, never validation.
 
 **Filename, const, and `name:` are one name in three casings** (AGENTS.md → "One name per concept"): `markJobApplied.ts` exports `markJobAppliedTool` whose `name` is `"mark_job_applied"`. The camelCase file and const are the camelCase of the snake_case tool name; the const suffix is always `Tool` (never `ToolDef` — that's the *type* in [tools/lib/types.ts](../src/server/agent/tools/lib/types.ts)). A mismatch (a `promoteResume.ts` that defines `attach_resume_to_profile`, a `url.ts` that defines `fetch_url`) means a reader grepping the tool name can't find its file — don't introduce one. Shared tool infra lives in the sibling [`tools/lib/`](../src/server/agent/tools/lib/) — `types.ts`, `toolError.ts`, `resolveEntityArg.ts`, and `index.ts` (which exposes only `toolAffectsViewedState`, derived from the live `hankTools` set so there's no parallel array to drift — not the registry). `tools/` itself is just `registry/` + `lib/`. **`tools/lib/` is abstract infra ONLY** — no domain-specific constant, schema, rule, or write (see the "Tool handlers are thin" section below).
 
@@ -58,7 +69,7 @@ Every LLM-facing tool param that identifies a company / job / opportunity / cont
 
 ## Normalize fixable URL inputs at the parser boundary
 
-The cheapest "better error" is no error at all. Agents routinely hand URL params a bare hostname with no scheme; `z.string().url()` rejects that generically and `detectAts()` anchors on `^https?://` anyway. Every agent-facing URL param normalizes through [`normalizeUrlInput`](../src/utils/url.ts) before validating:
+The cheapest "better error" is no error at all. Agents routinely hand URL params a bare hostname with no scheme; `z.string().url()` rejects that generically and `detectAts()` anchors on `^https?://` anyway. Every agent-facing URL param normalizes through [`normalizeUrlInput`](../src/shared/utils/url.ts) before validating:
 
 ```ts
 url: z.string().transform(normalizeUrlInput).pipe(z.string().url()),
@@ -138,12 +149,12 @@ Every field is optional on `RunContext` and the sub-agent runner null-checks, so
 
 1. **The tool returns JSON with a discriminator** (`{ kind: "shortlist_proposal", … }`). Keep field names stable — the widget zod-parses on every render, and the same string is what the model sees on replay. Version the discriminator (`_v2`) for breaking changes.
 2. **A `tryParse<Kind>` helper** next to the widget: `JSON.parse` in try/catch, zod-validate, return `null` on failure.
-3. **A scan in [ChatPanel.tsx](../src/components/Chat/ChatPanel.tsx)** finds the most-recent matching tool segment and mounts the widget once above the Composer; in scrollback the same segment renders as a compact chip.
+3. **A scan in [ChatPanel/MessageList.tsx](../src/client/components/Chat/ChatPanel/MessageList.tsx)** finds the most-recent matching tool segment and mounts the widget once above the Composer; in scrollback the same segment renders as a compact chip.
 
 Companion rules for interactive widgets:
 
 - **Lock-state from live DB, not the immutable tool result** — the widget GETs a state endpoint keyed by `tool_use_id` and unmounts (returns `null`) when the underlying entities leave their interactive status. Re-probe on chat activity (gate on `messages.length` increase, not array identity; mirror `locked` into a ref).
-- **Commit via marker, not a custom endpoint** — the widget builds a `<!--widget-response:{kind,…}-->` marker via [`buildWidgetSubmissionMessage`](../src/components/Chat/widgets/types.ts) and calls `send(marker)`; it arrives as an ordinary user message that a widget handler ([`src/server/widgets/`](../src/server/widgets/) — parsed by `parse.ts`, dispatched by [`dispatchTopLevelSubmission`](../src/server/widgets/dispatchTopLevelSubmission.ts) or, for the walkthrough's own widgets, inside its state machine) applies deterministically before any LLM routing.
+- **Commit via marker, not a custom endpoint** — the widget builds a `<!--widget-response:{kind,…}-->` marker via [`buildWidgetSubmissionMessage`](../src/client/components/Chat/widgets/types.ts) and calls `send(marker)`; it arrives as an ordinary user message that a widget handler ([`src/server/widgets/`](../src/server/widgets/) — parsed by `parse.ts`, dispatched by [`dispatchTopLevelSubmission`](../src/server/widgets/dispatchTopLevelSubmission.ts) or, for the walkthrough's own widgets, inside its state machine) applies deterministically before any LLM routing.
 - **Own action button, not the Composer's Send** — the widget renders its own primary button; Send is never routed into a widget.
 - **Mid-stream clicks queue, they don't drop** — widget buttons are not gated on `streaming`; a click during a streaming turn is captured into `chatStore.queuedSend` and auto-fires on the turn's `done` (same path handles the `ALREADY_STREAMING` refusal). Don't reintroduce a `streaming`-conditional early-return in a widget action handler.
 - **System-prompt cue:** tell the agent to stop after emitting the widget so the user reaches the decision point without competing UI noise.
@@ -152,4 +163,4 @@ Companion rules for interactive widgets:
 
 - **Event-to-status denormalization** (`EVENT_TO_STATUS` / `OPPORTUNITY_EVENT_TO_STATUS`, and the APPLIED-is-its-own-write-path via `mark_job_applied`) → [docs/lifecycle.md](lifecycle.md).
 - **Opportunity + contact tool catalog** (`create_contact`, `create_opportunities`, `create_jobs`, `update_job_interaction`, `read_application_drafts`, etc. — all simple `ToolDef`s assembled by [`hankTools`](../src/server/agent/hank/toolset.ts), ownership-scoped by `ctx.userId` with find-then-mutate) → [docs/flows.md → Inbound opportunity](flows.md).
-- **Hidden tools:** the `HIDDEN_TOOLS` suppression mechanism (two in-sync sets in [streamingCore.ts](../src/server/agent/runtime/streamingCore.ts) + [session/route.ts](../src/app/api/session/route.ts)) is still wired but the sets are empty — every tool surface is currently visible. Keep it for a future admin-telemetry tool; don't delete the sets.
+- **Hidden tools:** the `HIDDEN_TOOLS` suppression mechanism (two in-sync sets in [streamingCore.ts](../src/server/agent/runtime/streamingCore.ts) + [views/chatTranscript.ts](../src/server/views/chatTranscript.ts)) is still wired but the sets are empty — every tool surface is currently visible. Keep it for a future admin-telemetry tool; don't delete the sets.

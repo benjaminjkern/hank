@@ -2,7 +2,6 @@
 // the loader that builds it.
 
 import { JobInteractionStatus } from "@/generated/prisma/client";
-import { companyLogoUrl } from "@/lib/companyLogo";
 import { prisma } from "@/server/db/prisma";
 import { loadMergedQuestions } from "@/server/entities/jobs/applicationQuestions";
 import { liveVerdict, placedVerdict } from "@/server/entities/jobs/boardStance";
@@ -19,7 +18,8 @@ import type { ShortAnswer } from "@/server/entities/jobs/types";
 import type {
   ApplicationQuestion,
   ApplicationQuestionsEnvelope,
-} from "@/server/scrape/types";
+} from "@/server/platform/scrape/types";
+import { companyLogoUrl } from "@/shared/companyLogo";
 
 export type EventView = {
   id: string;

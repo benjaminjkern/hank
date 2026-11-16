@@ -58,7 +58,7 @@ import type {
 import type {
   ApplicationQuestion,
   ApplicationQuestionsEnvelope,
-} from "../../../src/server/scrape/types";
+} from "../../../src/server/platform/scrape/types";
 
 // The two former profile notes (a "search thesis" + an "about me") are one
 // profile.md now. Fixtures still author the halves separately — they're

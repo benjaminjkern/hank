@@ -1,4 +1,4 @@
-import StyledComponentsRegistry from "@/lib/registry";
+import StyledComponentsRegistry from "@/client/registry";
 
 import type { Metadata, Viewport } from "next";
 import "./globals.css";

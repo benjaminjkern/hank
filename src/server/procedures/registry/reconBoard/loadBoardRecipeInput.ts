@@ -4,8 +4,7 @@
 // synchronous, which is what keeps a harness able to grade the prompt
 // production actually sends).
 
-import { buildPageEvidence } from "@/server/scrape/generic/pageEvidence";
-
+import { buildPageEvidence } from "@/server/platform/scrape/generic/pageEvidence";
 import type { BoardRecipeInput } from "@/server/subagents/registry/boardRecipe";
 
 export async function loadBoardRecipeInput(args: {

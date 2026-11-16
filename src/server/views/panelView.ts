@@ -6,13 +6,13 @@
 // application (hence its own sibling builders). A URL names the mode outright,
 // so this dispatches on the route and reuses the same leaf loaders.
 
-import type { DocumentsSubPage, PanelMode } from "@/lib/panelMode";
-import type { PanelPath } from "@/lib/panelUrl";
 import {
   resolveCompanyBySlug,
   resolveJobBySlug,
   resolveOpportunityBySlug,
 } from "@/server/entities/resolveBySlug";
+import type { DocumentsSubPage, PanelMode } from "@/shared/panelMode";
+import type { PanelPath } from "@/shared/panelUrl";
 
 import { loadApplicationView, type ApplicationView } from "./application";
 import { loadDiscoveryList, type DiscoveryListView } from "./discoveryList";

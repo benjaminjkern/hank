@@ -9,7 +9,7 @@
 //     tearing down the in-flight Anthropic stream + tool call immediately;
 //     the runner degrades to the partial and persists it — see agentRunner.ts)
 
-import { nowMs } from "@/utils/now";
+import { nowMs } from "@/shared/utils/now";
 
 type StopState = {
   controller: AbortController;

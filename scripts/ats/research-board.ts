@@ -18,20 +18,20 @@
 
 import "dotenv/config";
 
-import { findJobArray } from "../../src/server/scrape/generic/jobShape";
-import {
-  buildRecipe,
-  planSourceUrl,
-  withPageDetail,
-} from "../../src/server/scrape/generic/fieldMap";
 import {
   browserCapability,
   withBrowser,
 } from "../../src/server/platform/browser/browserCapability";
 import { closeHeadless } from "../../src/server/platform/browser/headless";
-import { runBoardRecipe } from "../../src/server/scrape/recipe/runRecipe";
+import {
+  buildRecipe,
+  planSourceUrl,
+  withPageDetail,
+} from "../../src/server/platform/scrape/generic/fieldMap";
+import { findJobArray } from "../../src/server/platform/scrape/generic/jobShape";
+import { runBoardRecipe } from "../../src/server/platform/scrape/recipe/runRecipe";
 
-import type { BoardRecipe } from "../../src/server/scrape/recipe/types";
+import type { BoardRecipe } from "../../src/server/platform/scrape/recipe/types";
 
 const SETTLE_MS = 5_000;
 const SCROLL_ROUNDS = 4;

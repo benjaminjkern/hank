@@ -5,7 +5,7 @@
 // trace_text / trace_tool_start / trace_tool_complete events with a
 // parentToolUseId chain. runAgentTurn feeds every one of them here and persists
 // the snapshot onto the assistant row's `traces` column, which
-// `buildAssistantSegments` in src/app/api/session/route.ts renders (recursive
+// `buildAssistantSegments` in src/server/views/chatTranscript.ts renders (recursive
 // `{ [parentToolUseId]: { steps } }`, tool steps carry a nested
 // `children: { steps }`). Keep this shape in lockstep with `convertTrace` there.
 //

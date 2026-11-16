@@ -1,4 +1,4 @@
-import { resolveViewedUser } from "@/server/auth/viewerScope";
+import { resolveViewedUser } from "@/server/platform/admin/viewerScope";
 import { loadUserDocuments } from "@/server/views/documents";
 
 export const dynamic = "force-dynamic";

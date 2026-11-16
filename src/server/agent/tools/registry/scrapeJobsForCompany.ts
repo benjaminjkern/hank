@@ -31,8 +31,13 @@ import { toolError } from "../lib/toolError";
 import type { ToolDef, ToolResult } from "../lib/types";
 
 const PARSER = z.object({
-  company: z.string().min(1),
-  context: z.string().optional(),
+  company: z.string().min(1).describe("Company slug (e.g. 'stripe')."),
+  context: z
+    .string()
+    .optional()
+    .describe(
+      "Optional one-sentence steering for the new postings' first-pass filter (e.g. 'user just said IC only this round').",
+    ),
 });
 
 export const scrapeJobsForCompanyTool: ToolDef<z.infer<typeof PARSER>> = {
@@ -42,18 +47,6 @@ export const scrapeJobsForCompanyTool: ToolDef<z.infer<typeof PARSER>> = {
 
   handoff: true,
   affectsViewedState: true,
-  inputSchema: {
-    type: "object",
-    properties: {
-      company: { type: "string", description: "Company slug (e.g. 'stripe')." },
-      context: {
-        type: "string",
-        description:
-          "Optional one-sentence steering for the new postings' first-pass filter (e.g. 'user just said IC only this round').",
-      },
-    },
-    required: ["company"],
-  },
   parser: PARSER,
   async handle(input, ctx): Promise<ToolResult> {
     const r = await resolveCompanyBySlug(ctx.userId, input.company);

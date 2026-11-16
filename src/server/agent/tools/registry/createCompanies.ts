@@ -6,8 +6,18 @@ import type { ToolDef } from "../lib/types";
 
 // The create_companies input shape (name + optional disambiguating context).
 const CreateCompanyItemSchema = z.object({
-  name: z.string().min(1),
-  context: z.string().optional(),
+  name: z
+    .string()
+    .min(1)
+    .describe(
+      'Canonical company name as the user said it (e.g. "Cognition Labs").',
+    ),
+  context: z
+    .string()
+    .optional()
+    .describe(
+      'Optional disambiguating hint stored for the URL hunter (e.g. "the data-infra one, not the marketing platform"). Don\'t dump conversation history.',
+    ),
 });
 type CreateCompanyItem = z.infer<typeof CreateCompanyItemSchema>;
 
@@ -24,32 +34,6 @@ export const createCompaniesTool: ToolDef<{
   affectsViewedState: true,
   description:
     "Add one or more companies the user NAMED to their watchlist. Batched — pass an array; one transaction. For each name, creates a Company row (stub, no URL yet) plus a CompanyInteraction at status=NEW. Doesn't run the URL/ATS hunt — call enrich_companies after to look up each careers page, name and logo. Names that already correspond to existing watchlisted companies are skipped silently. `context` is an optional disambiguating hint (e.g. \"the data-infra one, not the marketing platform\") stored for the URL hunter sub-agent. Use this for 'add Stripe and Anthropic to my list' — the user gave NAMES. If they want ideas instead ('find me some companies', 'who else should I track?'), use find_companies.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      companies: {
-        type: "array",
-        minItems: 1,
-        items: {
-          type: "object",
-          properties: {
-            name: {
-              type: "string",
-              description:
-                'Canonical company name as the user said it (e.g. "Cognition Labs").',
-            },
-            context: {
-              type: "string",
-              description:
-                'Optional disambiguating hint stored for the URL hunter (e.g. "the data-infra one, not the marketing platform"). Don\'t dump conversation history.',
-            },
-          },
-          required: ["name"],
-        },
-      },
-    },
-    required: ["companies"],
-  },
   parser: z.object({
     companies: z.array(CreateCompanyItemSchema).min(1),
   }),

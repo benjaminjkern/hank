@@ -19,6 +19,7 @@ import type {
   TurnEvent,
 } from "@/server/agent/contracts";
 import { flipDueInterviewsToDebrief } from "@/server/entities/jobs/flipDueInterviews";
+import { streamingProcedure } from "@/server/procedures/lib/procedure";
 import { runWrapSegment } from "@/server/procedures/registry/wrapSegment";
 import { buildShowEvents } from "@/server/views/showEvents";
 import { dispatchTopLevelSubmission } from "@/server/widgets/dispatchTopLevelSubmission";
@@ -40,151 +41,154 @@ export type ChatArgs = RunContext & {
   attachmentIds: string[];
 };
 
-export async function* runChat(args: ChatArgs): AsyncGenerator<TurnEvent> {
-  // 0. The user's message, before any work that can fail. Anything that throws
-  // from here on still leaves what they said in the transcript, next to the
-  // `run_error` row the failure writes — see openUserTurn for why that ordering
-  // is load-bearing rather than tidy.
-  const opened = await openUserTurn(args);
+export const runChat = streamingProcedure(
+  "chat",
+  async function* (args: ChatArgs): AsyncGenerator<TurnEvent> {
+    // 0. The user's message, before any work that can fail. Anything that throws
+    // from here on still leaves what they said in the transcript, next to the
+    // `run_error` row the failure writes — see openUserTurn for why that ordering
+    // is load-bearing rather than tidy.
+    const opened = await openUserTurn(args);
 
-  // Promote any INTERVIEW_SCHEDULED whose interview date has passed to
-  // INTERVIEW_DEBRIEF before any routing, so "user owes a debrief" surfaces on
-  // THIS message (renderWhatsNext's Immediate section) rather than only when the
-  // user happens to open the dashboard / a detail panel.
-  // Best-effort + idempotent (see flipDueInterviews.ts).
-  await flipDueInterviewsToDebrief();
+    // Promote any INTERVIEW_SCHEDULED whose interview date has passed to
+    // INTERVIEW_DEBRIEF before any routing, so "user owes a debrief" surfaces on
+    // THIS message (renderWhatsNext's Immediate section) rather than only when the
+    // user happens to open the dashboard / a detail panel.
+    // Best-effort + idempotent (see flipDueInterviews.ts).
+    await flipDueInterviewsToDebrief();
 
-  let userMessage = args.userMessage;
-  // The entity a picker dispatch wants the ensuing silent-entry turn to dispatch
-  // on — threaded in-memory (not via a focus slot). Consumed by the first
-  // runChatTurn call below, then cleared so later silent transitions in the same
-  // message don't re-use it.
-  let pendingEntryTarget: EntryTarget | undefined;
-  // Set whenever renderWhatsNext reports the rung-0 profile gate is still open;
-  // consumed by the very next runChatTurn call so Hank opens on the flagged gaps
-  // rather than cold, then reset to undefined.
-  let pendingProfileGaps: ProfileGaps | undefined;
-  // A pick whose meaning was "ask me about this" (add-companies, find-more):
-  // the instruction Hank opens the next turn on. Same one-shot handling as the
-  // two above.
-  let pendingOpeningNudge: string | undefined;
+    let userMessage = args.userMessage;
+    // The entity a picker dispatch wants the ensuing silent-entry turn to dispatch
+    // on — threaded in-memory (not via a focus slot). Consumed by the first
+    // runChatTurn call below, then cleared so later silent transitions in the same
+    // message don't re-use it.
+    let pendingEntryTarget: EntryTarget | undefined;
+    // Set whenever renderWhatsNext reports the rung-0 profile gate is still open;
+    // consumed by the very next runChatTurn call so Hank opens on the flagged gaps
+    // rather than cold, then reset to undefined.
+    let pendingProfileGaps: ProfileGaps | undefined;
+    // A pick whose meaning was "ask me about this" (add-companies, find-more):
+    // the instruction Hank opens the next turn on. Same one-shot handling as the
+    // two above.
+    let pendingOpeningNudge: string | undefined;
 
-  // 1. Widget submission. The user's message is a structured choice rather than
-  // free text, so it commits deterministically — no LLM routing.
-  const submission = yield* dispatchTopLevelSubmission({
-    ...args,
-    userMessage,
-  });
-  if (submission.kind === "terminal") return;
-  if (submission.kind !== "none") {
-    // The submission WAS the message; whatever runs below is a silent
-    // continuation of it.
-    userMessage = "";
-  }
-  if (submission.kind === "enter") {
-    pendingEntryTarget = submission.entryTarget;
-  }
-  if (submission.kind === "ask") {
-    pendingOpeningNudge = submission.openingNudge;
-  }
-
-  // The user hit send with an empty composer because their panel marks are the
-  // message. That's a real turn to answer, not the "nothing to run on" case
-  // below — the marks ARE the user row openUserTurn just wrote.
-  const carriesPanelEdits =
-    submission.kind === "none" && !userMessage && opened.carriedPanelEdits;
-
-  // 2. Nothing to run on — no text typed, nothing marked, no destination
-  // picked, nothing to ask about. Ask what's next: either the rung-0 profile
-  // gate is still open (gaps thread into the turn, which greets and elicits) or
-  // the picker renders and stops.
-  if (
-    submission.kind !== "enter" &&
-    submission.kind !== "ask" &&
-    !userMessage &&
-    !carriesPanelEdits
-  ) {
-    const r = yield* renderWhatsNext({
-      ...args,
-      narrateProfileSwitch: false,
-    });
-    if (r.kind === "rendered") return;
-    pendingProfileGaps = r.gaps;
-    yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
-  }
-
-  // 3. Run chat turns until one returns wrappedUp=false (waiting on user input).
-  // Each wrappedUp=true fires renderWhatsNext, which either reports the profile
-  // gate is open (loop continues, Hank elicits) or renders the picker and stops
-  // the loop.
-  for (let i = 0; i < MAX_SILENT_TRANSITIONS; i++) {
-    // Consume the picker's entry target on the first turn only; later silent
-    // transitions in this loop derive their own state.
-    const iterEntryTarget = pendingEntryTarget;
-    pendingEntryTarget = undefined;
-    const iterOpeningNudge = pendingOpeningNudge;
-    pendingOpeningNudge = undefined;
-    let wrappedUp = false;
-    // Set when this turn ended a company. The segment wrap runs HERE, once,
-    // rather than inside each bundled mutation — see
-    // procedures/registry/wrapSegment.ts for why.
-    let endedCompanyId: string | undefined;
-    let stopped = false;
-    // eslint-disable-next-line no-await-in-loop -- streaming a turn's events as they happen — the point is to relay each one before the next
-    for await (const ev of runChatTurn({
+    // 1. Widget submission. The user's message is a structured choice rather than
+    // free text, so it commits deterministically — no LLM routing.
+    const submission = yield* dispatchTopLevelSubmission({
       ...args,
       userMessage,
-      // Only the FIRST pass carries them — openUserTurn settled the marks into
-      // that pass's user row, so a silent transition after it has none.
-      carriesPanelEdits: carriesPanelEdits && i === 0,
-      profileGaps: pendingProfileGaps,
-      entryTarget: iterEntryTarget,
-      openingNudge: iterOpeningNudge,
-    })) {
-      if (ev.type === "done") {
-        wrappedUp = ev.wrappedUp;
-        endedCompanyId = ev.endedCompanyId;
-      } else {
-        if (ev.type === "stopped") stopped = true;
-        yield ev;
-      }
-    }
-    // One-shot: gaps belong only to the turn just triggered.
-    pendingProfileGaps = undefined;
-    if (stopped) return;
-    // A company ended this pass: consolidate memory, compact the transcript, and
-    // drop the right panel back to the dashboard. Runs after the reply is on
-    // screen (it's slow and the user has nothing to wait for), and exactly once
-    // no matter how many companies were closed.
-    if (endedCompanyId) {
-      // Panel FIRST: it's showing the company that just ended, and the wrap
-      // below takes seconds (two LLM passes). Dropping it back to the dashboard
-      // after would leave a closed company on screen for the whole wait.
-      // eslint-disable-next-line no-await-in-loop -- a silent transition only exists because the previous turn wrapped
-      yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
-      // The wrap is a ~30s silent stretch at the end of an already-answered
-      // message — say what the wait is, in the user's language (never the
-      // mechanism: no "notes", no "summary", no compaction talk).
-      yield statusEvent("Filing away what I learned from that stretch…");
-      // eslint-disable-next-line no-await-in-loop -- the wrap reads the state the turn above it just wrote
-      await runWrapSegment({ ...args, subject: "company" });
-    }
-    if (!wrappedUp) return;
-    // Wrapped — a company segment closed, an application finished, or profile
-    // intake completed. Render the picker widget and stop the loop; the user
-    // picks, and their submission re-enters as a new message. The one case that
-    // keeps the loop going is the profile gate still being open — we narrate
-    // that switch (a brief "grabbing a couple details" cue) because the user
-    // just wrapped something else and we owe them a transition cue.
-    const r = yield* renderWhatsNext({
-      ...args,
-      narrateProfileSwitch: true,
     });
-    if (r.kind === "rendered") return;
-    pendingProfileGaps = r.gaps;
-    // eslint-disable-next-line no-await-in-loop -- same: this pass is a continuation of the one before it
-    yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
-    // Silent re-entry — no new user message.
-    userMessage = "";
-  }
-}
+    if (submission.kind === "terminal") return;
+    if (submission.kind !== "none") {
+      // The submission WAS the message; whatever runs below is a silent
+      // continuation of it.
+      userMessage = "";
+    }
+    if (submission.kind === "enter") {
+      pendingEntryTarget = submission.entryTarget;
+    }
+    if (submission.kind === "ask") {
+      pendingOpeningNudge = submission.openingNudge;
+    }
+
+    // The user hit send with an empty composer because their panel marks are the
+    // message. That's a real turn to answer, not the "nothing to run on" case
+    // below — the marks ARE the user row openUserTurn just wrote.
+    const carriesPanelEdits =
+      submission.kind === "none" && !userMessage && opened.carriedPanelEdits;
+
+    // 2. Nothing to run on — no text typed, nothing marked, no destination
+    // picked, nothing to ask about. Ask what's next: either the rung-0 profile
+    // gate is still open (gaps thread into the turn, which greets and elicits) or
+    // the picker renders and stops.
+    if (
+      submission.kind !== "enter" &&
+      submission.kind !== "ask" &&
+      !userMessage &&
+      !carriesPanelEdits
+    ) {
+      const r = yield* renderWhatsNext({
+        ...args,
+        narrateProfileSwitch: false,
+      });
+      if (r.kind === "rendered") return;
+      pendingProfileGaps = r.gaps;
+      yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
+    }
+
+    // 3. Run chat turns until one returns wrappedUp=false (waiting on user input).
+    // Each wrappedUp=true fires renderWhatsNext, which either reports the profile
+    // gate is open (loop continues, Hank elicits) or renders the picker and stops
+    // the loop.
+    for (let i = 0; i < MAX_SILENT_TRANSITIONS; i++) {
+      // Consume the picker's entry target on the first turn only; later silent
+      // transitions in this loop derive their own state.
+      const iterEntryTarget = pendingEntryTarget;
+      pendingEntryTarget = undefined;
+      const iterOpeningNudge = pendingOpeningNudge;
+      pendingOpeningNudge = undefined;
+      let wrappedUp = false;
+      // Set when this turn ended a company. The segment wrap runs HERE, once,
+      // rather than inside each bundled mutation — see
+      // procedures/registry/wrapSegment.ts for why.
+      let endedCompanyId: string | undefined;
+      let stopped = false;
+      // eslint-disable-next-line no-await-in-loop -- streaming a turn's events as they happen — the point is to relay each one before the next
+      for await (const ev of runChatTurn({
+        ...args,
+        userMessage,
+        // Only the FIRST pass carries them — openUserTurn settled the marks into
+        // that pass's user row, so a silent transition after it has none.
+        carriesPanelEdits: carriesPanelEdits && i === 0,
+        profileGaps: pendingProfileGaps,
+        entryTarget: iterEntryTarget,
+        openingNudge: iterOpeningNudge,
+      })) {
+        if (ev.type === "done") {
+          wrappedUp = ev.wrappedUp;
+          endedCompanyId = ev.endedCompanyId;
+        } else {
+          if (ev.type === "stopped") stopped = true;
+          yield ev;
+        }
+      }
+      // One-shot: gaps belong only to the turn just triggered.
+      pendingProfileGaps = undefined;
+      if (stopped) return;
+      // A company ended this pass: consolidate memory, compact the transcript, and
+      // drop the right panel back to the dashboard. Runs after the reply is on
+      // screen (it's slow and the user has nothing to wait for), and exactly once
+      // no matter how many companies were closed.
+      if (endedCompanyId) {
+        // Panel FIRST: it's showing the company that just ended, and the wrap
+        // below takes seconds (two LLM passes). Dropping it back to the dashboard
+        // after would leave a closed company on screen for the whole wait.
+        // eslint-disable-next-line no-await-in-loop -- a silent transition only exists because the previous turn wrapped
+        yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
+        // The wrap is a ~30s silent stretch at the end of an already-answered
+        // message — say what the wait is, in the user's language (never the
+        // mechanism: no "notes", no "summary", no compaction talk).
+        yield statusEvent("Filing away what I learned from that stretch…");
+        // eslint-disable-next-line no-await-in-loop -- the wrap reads the state the turn above it just wrote
+        await runWrapSegment({ ...args, subject: "company" });
+      }
+      if (!wrappedUp) return;
+      // Wrapped — a company segment closed, an application finished, or profile
+      // intake completed. Render the picker widget and stop the loop; the user
+      // picks, and their submission re-enters as a new message. The one case that
+      // keeps the loop going is the profile gate still being open — we narrate
+      // that switch (a brief "grabbing a couple details" cue) because the user
+      // just wrapped something else and we owe them a transition cue.
+      const r = yield* renderWhatsNext({
+        ...args,
+        narrateProfileSwitch: true,
+      });
+      if (r.kind === "rendered") return;
+      pendingProfileGaps = r.gaps;
+      // eslint-disable-next-line no-await-in-loop -- same: this pass is a continuation of the one before it
+      yield* yieldUiEvents((await buildShowEvents(args.userId)).events);
+      // Silent re-entry — no new user message.
+      userMessage = "";
+    }
+  },
+);

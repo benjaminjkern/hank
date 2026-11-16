@@ -9,7 +9,7 @@ import {
   resolveCompaniesBySlug,
   resolveOpportunitiesBySlug,
 } from "@/server/entities/resolveBySlug";
-import { normalizeUrlInput } from "@/utils/url";
+import { normalizeUrlInput } from "@/shared/utils/url";
 
 import { slugLookupError } from "../lib/slugLookupError";
 import { toolError } from "../lib/toolError";
@@ -24,64 +24,55 @@ import type { ToolDef } from "../lib/types";
 // design — one tool call → one Postgres transaction, one narration line.
 // Title is the only required field per item.
 
-const CREATE_JOB_ITEM_FIELDS = {
-  company: {
-    type: "string",
-    description:
-      "Hiring company slug (e.g. 'stripe'), as shown in list_jobs / list_companies. If omitted, falls back to the session's focused company. Leave blank only when there's genuinely no company yet (agency-pitched role with an undisclosed client) — in that case pass `companyName` for the human-readable fallback.",
-  },
-  companyName: {
-    type: "string",
-    description:
-      "Human-readable company name when `company` is null (e.g. 'undisclosed fintech'). Ignored if `company` is set. Becomes a real Company later via create_companies + update_job({company}).",
-  },
-  opportunity: {
-    type: "string",
-    description:
-      "Slug of an existing lead (Opportunity) to link this Job to. The new role is created at status=PITCHED (no SURFACED event) and shows up under the lead in the right panel. Scan-flow / referral / email-only jobs leave this blank.",
-  },
-  title: {
-    type: "string",
-    description:
-      'Role title. If the user didn\'t give one verbatim, infer one from context (e.g. "Senior Engineer (referral)"). Required.',
-  },
-  sourceUrl: {
-    type: "string",
-    description:
-      "Optional. URL to the public posting. Omit if the job is a referral / email-only / private.",
-  },
-  rawContent: {
-    type: "string",
-    description:
-      "Optional. Posting body or whatever description the user gave you. Markdown ok. Use update_job later to refine.",
-  },
-  location: { type: "string", description: "Optional. e.g. 'NYC (Remote)'." },
-  department: { type: "string", description: "Optional. e.g. 'Engineering'." },
-  compensation: {
-    type: "string",
-    description: "Optional. e.g. '$180K – $240K'.",
-  },
-  employmentType: {
-    type: "string",
-    description: "Optional. 'Full-time' / 'Contract' / 'Part-time' etc.",
-  },
-} as const;
-
 const CreateJobItemSchema = z.object({
-  company: z.string().optional(),
-  companyName: z.string().optional(),
-  opportunity: z.string().optional(),
-  title: z.string().min(1),
+  company: z
+    .string()
+    .optional()
+    .describe(
+      "Hiring company slug (e.g. 'stripe'), as shown in list_jobs / list_companies. If omitted, falls back to the session's focused company. Leave blank only when there's genuinely no company yet (agency-pitched role with an undisclosed client) — in that case pass `companyName` for the human-readable fallback.",
+    ),
+  companyName: z
+    .string()
+    .optional()
+    .describe(
+      "Human-readable company name when `company` is null (e.g. 'undisclosed fintech'). Ignored if `company` is set. Becomes a real Company later via create_companies + update_job({company}).",
+    ),
+  opportunity: z
+    .string()
+    .optional()
+    .describe(
+      "Slug of an existing lead (Opportunity) to link this Job to. The new role is created at status=PITCHED (no SURFACED event) and shows up under the lead in the right panel. Scan-flow / referral / email-only jobs leave this blank.",
+    ),
+  title: z
+    .string()
+    .min(1)
+    .describe(
+      'Role title. If the user didn\'t give one verbatim, infer one from context (e.g. "Senior Engineer (referral)"). Required.',
+    ),
   sourceUrl: z
     .string()
     .transform(normalizeUrlInput)
     .pipe(z.string().url())
-    .optional(),
-  rawContent: z.string().optional(),
-  location: z.string().optional(),
-  department: z.string().optional(),
-  compensation: z.string().optional(),
-  employmentType: z.string().optional(),
+    .optional()
+    .describe(
+      "Optional. URL to the public posting. Omit if the job is a referral / email-only / private.",
+    ),
+  rawContent: z
+    .string()
+    .optional()
+    .describe(
+      "Optional. Posting body or whatever description the user gave you. Markdown ok. Use update_job later to refine.",
+    ),
+  location: z.string().optional().describe("Optional. e.g. 'NYC (Remote)'."),
+  department: z.string().optional().describe("Optional. e.g. 'Engineering'."),
+  compensation: z
+    .string()
+    .optional()
+    .describe("Optional. e.g. '$180K – $240K'."),
+  employmentType: z
+    .string()
+    .optional()
+    .describe("Optional. 'Full-time' / 'Contract' / 'Part-time' etc."),
 });
 
 type CreateJobItem = z.infer<typeof CreateJobItemSchema>;
@@ -91,21 +82,6 @@ export const createJobsTool: ToolDef<{ jobs: CreateJobItem[] }> = {
   affectsViewedState: true,
   description:
     "Create one or more Job records manually from chat. Batched — pass an array; everything lands in one transaction (all-or-nothing). Per-item flavors: (1) scan-flow / referral / email-only — pass `companyId` (or rely on focused company), creates JobInteraction(NEW) + SURFACED event; (2) recruiter pitch — pass `opportunityId` to link to a lead, creates JobInteraction(PITCHED) and no SURFACED event. Each item's title is required — infer from context if the user didn't give one verbatim. Use this for the 'log 5 historical applications' case: call create_jobs once with all 5, then mark_job_applied or log_job_events per jobId. For a single create, still pass an array of length 1.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      jobs: {
-        type: "array",
-        minItems: 1,
-        items: {
-          type: "object",
-          properties: CREATE_JOB_ITEM_FIELDS,
-          required: ["title"],
-        },
-      },
-    },
-    required: ["jobs"],
-  },
   parser: z.object({ jobs: z.array(CreateJobItemSchema).min(1) }),
   async handle({ jobs }, ctx) {
     // Pre-validate each item against the live DB before opening a transaction.

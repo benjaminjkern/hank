@@ -35,7 +35,7 @@ import {
   applicationCriticSubAgent,
   type CritiqueIssue,
 } from "@/server/subagents/registry/applicationCritic";
-import { normalizeForCompare } from "@/utils/text";
+import { normalizeForCompare } from "@/shared/utils/text";
 
 import { draftSingleApplicationItem } from "./draftSingleApplicationItem";
 import { loadApplicationCriticInput } from "./loadApplicationCriticInput";

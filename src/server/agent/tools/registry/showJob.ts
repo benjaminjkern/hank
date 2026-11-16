@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-import { formatFocusRefToken } from "@/lib/focusRefToken";
 import { resolveJobBySlug } from "@/server/entities/resolveBySlug";
 import { buildShowEvents } from "@/server/views/showEvents";
+import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import { slugLookupError } from "../lib/slugLookupError";
 import { toolError } from "../lib/toolError";
@@ -18,14 +18,7 @@ export const showJobTool: ToolDef<{ job: string }> = {
   affectsViewedState: false,
   description:
     "Put a role's page on the user's screen (right panel) and drop a clickable chip in the chat — a pure display action that starts no work and changes nothing. Use it when you're referring to a role and want the user to see it. NOT for starting an application — that's work_on_job. `job` is the role's slug.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: { type: "string", description: "The role's slug." },
-    },
-    required: ["job"],
-  },
-  parser: z.object({ job: z.string() }),
+  parser: z.object({ job: z.string().describe("The role's slug.") }),
   async handle(input, ctx) {
     const r = await resolveJobBySlug(ctx.userId, input.job);
     if (!r.ok) return slugLookupError(r);

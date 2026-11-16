@@ -4,24 +4,23 @@
 //
 // What's deliberately ABSENT is work the deterministic layer drives itself —
 // application drafting runs from the walkthrough job-arm, not from a Hank tool.
+//
+// Also absent, on purpose: the five SUB-AGENT ONLY tools. They live in the same
+// registry (one file per tool, wherever it's used) but are handed only to the
+// sub-agents that need them, via each SubAgentDef's `readTools`:
+//   probe_ats, test_scrape      — company_basic_info's board hunt
+//   test_recipe                 — board_recipe's recon
+//   fetch_url                   — company_basic_info, board_recipe, find_companies
+//   read_reusable_application   — application_drafting's voice match
+// Don't add them here.
 
 // One import per tool — the flat registry lives in @/server/agent/tools/, one
 // file per callable tool. Shared helper modules beside it in lib/ are infra,
 // not tools.
 import type { AnyToolDef } from "@/server/agent/tools/lib/types";
 import { addApplicationQuestionTool } from "@/server/agent/tools/registry/addApplicationQuestion";
-import { createOpportunitiesTool } from "@/server/agent/tools/registry/createOpportunities";
-import { updateOpportunityTool } from "@/server/agent/tools/registry/updateOpportunity";
-import { logOpportunityEventsTool } from "@/server/agent/tools/registry/logOpportunityEvents";
-import { listOpportunityEventsTool } from "@/server/agent/tools/registry/listOpportunityEvents";
-import { editOpportunityEventTool } from "@/server/agent/tools/registry/editOpportunityEvent";
-import { deleteOpportunityEventTool } from "@/server/agent/tools/registry/deleteOpportunityEvent";
 import { attachContactToOpportunityTool } from "@/server/agent/tools/registry/attachContactToOpportunity";
 import { attachResumeToProfileTool } from "@/server/agent/tools/registry/attachResumeToProfile";
-import { listOpportunitiesTool } from "@/server/agent/tools/registry/listOpportunities";
-import { updateContactTool } from "@/server/agent/tools/registry/updateContact";
-import { listContactsTool } from "@/server/agent/tools/registry/listContacts";
-import { listCompaniesTool } from "@/server/agent/tools/registry/listCompanies";
 import { createCompaniesTool } from "@/server/agent/tools/registry/createCompanies";
 import { updateCompanyTool } from "@/server/agent/tools/registry/updateCompany";
 import { blockCompanyTool } from "@/server/agent/tools/registry/blockCompany";
@@ -51,19 +50,27 @@ import { recommendCompanyForDeletionTool } from "@/server/agent/tools/registry/r
 import { commitProfileTool } from "@/server/agent/tools/registry/commitProfile";
 import { createContactTool } from "@/server/agent/tools/registry/createContact";
 import { createJobsTool } from "@/server/agent/tools/registry/createJobs";
+import { createOpportunitiesTool } from "@/server/agent/tools/registry/createOpportunities";
 import { deleteCompanyEventTool } from "@/server/agent/tools/registry/deleteCompanyEvent";
 import { deleteJobEventTool } from "@/server/agent/tools/registry/deleteJobEvent";
+import { deleteOpportunityEventTool } from "@/server/agent/tools/registry/deleteOpportunityEvent";
 import { draftApplicationTool } from "@/server/agent/tools/registry/draftApplication";
 import { draftApplicationQuestionTool } from "@/server/agent/tools/registry/draftApplicationQuestion";
 import { editCompanyEventTool } from "@/server/agent/tools/registry/editCompanyEvent";
 import { editJobEventTool } from "@/server/agent/tools/registry/editJobEvent";
+import { editOpportunityEventTool } from "@/server/agent/tools/registry/editOpportunityEvent";
 import { enrichCompaniesTool } from "@/server/agent/tools/registry/enrichCompanies";
+import { listCompaniesTool } from "@/server/agent/tools/registry/listCompanies";
 import { listCompanyEventsTool } from "@/server/agent/tools/registry/listCompanyEvents";
+import { listContactsTool } from "@/server/agent/tools/registry/listContacts";
 import { listJobEventsTool } from "@/server/agent/tools/registry/listJobEvents";
 import { listJobsTool } from "@/server/agent/tools/registry/listJobs";
 import { listMemoriesTool } from "@/server/agent/tools/registry/listMemories";
+import { listOpportunitiesTool } from "@/server/agent/tools/registry/listOpportunities";
+import { listOpportunityEventsTool } from "@/server/agent/tools/registry/listOpportunityEvents";
 import { logCompanyEventsTool } from "@/server/agent/tools/registry/logCompanyEvents";
 import { logJobEventsTool } from "@/server/agent/tools/registry/logJobEvents";
+import { logOpportunityEventsTool } from "@/server/agent/tools/registry/logOpportunityEvents";
 import { markJobAppliedTool } from "@/server/agent/tools/registry/markJobApplied";
 import { readApplicationDraftsTool } from "@/server/agent/tools/registry/readApplicationDrafts";
 import { readJobDescriptionTool } from "@/server/agent/tools/registry/readJobDescription";
@@ -72,8 +79,10 @@ import { reviewApplicationTool } from "@/server/agent/tools/registry/reviewAppli
 import { saveApplicationAnswerTool } from "@/server/agent/tools/registry/saveApplicationAnswer";
 import { scrapeJobsForCompanyTool } from "@/server/agent/tools/registry/scrapeJobsForCompany";
 import { updateCompanyInteractionTool } from "@/server/agent/tools/registry/updateCompanyInteraction";
+import { updateContactTool } from "@/server/agent/tools/registry/updateContact";
 import { updateJobTool } from "@/server/agent/tools/registry/updateJob";
 import { updateJobInteractionTool } from "@/server/agent/tools/registry/updateJobInteraction";
+import { updateOpportunityTool } from "@/server/agent/tools/registry/updateOpportunity";
 import { viewApplicationQuestionsTool } from "@/server/agent/tools/registry/viewApplicationQuestions";
 import { writeMemoryTool } from "@/server/agent/tools/registry/writeMemory";
 

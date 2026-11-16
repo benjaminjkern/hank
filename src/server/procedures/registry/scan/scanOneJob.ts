@@ -8,7 +8,7 @@ import {
   ROLE_ATTR_SELECT,
   toRoleAttrs,
 } from "@/server/entities/jobs/roleAttrs";
-import { readMemory } from "@/server/memory/store";
+import { readMemory } from "@/server/entities/memory/store";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import { enrichJobSubAgent } from "@/server/subagents/registry/enrichJob";
 import { scanJobSubAgent } from "@/server/subagents/registry/scanJob";

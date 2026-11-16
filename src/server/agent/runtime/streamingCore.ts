@@ -11,7 +11,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 // Tools whose invocation should not appear in the chat UI. They still run
 // and their tool_use/tool_result blocks are still persisted so the model's
 // next-turn replay sees them — we just don't stream chips to the client.
-// The set + its companion in src/app/api/session/route.ts remain in place as
+// The set + its companion in src/server/views/chatTranscript.ts remain in place as
 // the affordance for a future tool that genuinely warrants suppression
 // (admin-only telemetry, etc.) — don't delete the mechanism, just the
 // entries when they're no longer wanted.

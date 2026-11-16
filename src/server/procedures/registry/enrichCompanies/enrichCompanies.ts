@@ -8,7 +8,7 @@
 // cap and the user's Stop button are the bounds.
 
 import type { RunTrace } from "@/server/agent/contracts";
-import { openTraceSpan } from "@/server/platform/trace/span";
+import { streamingProcedure } from "@/server/procedures/lib/procedure";
 
 import { enrichOne } from "./enrichOne";
 
@@ -26,19 +26,10 @@ import type {
 // advisory and lives in Hank's prompt (it's the user's tokens).
 const ENRICH_CONCURRENCY = 5;
 
-export async function* runEnrichCompanies(
-  outerArgs: EnrichCompaniesArgs,
-): AsyncGenerator<EnrichProgressEvent, EnrichCompaniesResult> {
-  // Generators can't ride withTraceSpan (it would have to drain them), so the
-  // span is opened explicitly and closed in a finally — which also covers a
-  // consumer abandoning the batch early.
-  const span = openTraceSpan("enrich_companies", outerArgs.trace);
-  try {
-    return yield* enrichBatch({ ...outerArgs, trace: span.trace });
-  } finally {
-    span.close();
-  }
-}
+export const runEnrichCompanies = streamingProcedure(
+  "enrich_companies",
+  enrichBatch,
+);
 
 async function* enrichBatch(
   args: EnrichCompaniesArgs & { trace?: RunTrace },

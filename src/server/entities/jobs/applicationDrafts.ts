@@ -13,9 +13,9 @@
 import { JobInteractionStatus, Prisma } from "@/generated/prisma/client";
 import { bulkUpdate } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
-import { diffWords, renderWordDiff, type WordDiff } from "@/utils/diff";
-import { nowDate } from "@/utils/now";
-import { normalizeForCompare } from "@/utils/text";
+import { diffWords, renderWordDiff, type WordDiff } from "@/shared/utils/diff";
+import { nowDate } from "@/shared/utils/now";
+import { normalizeForCompare } from "@/shared/utils/text";
 
 import { COVER_LETTER_ID, questionId } from "./applicationItemId";
 import {

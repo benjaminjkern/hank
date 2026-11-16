@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 import { runUserMessage } from "@/server/agent/runtime/runUserMessage";
-import { getCurrentUser } from "@/server/auth/currentUser";
-import { rejectImpersonatedWrite } from "@/server/auth/viewerScope";
+import { rejectImpersonatedWrite } from "@/server/platform/admin/viewerScope";
+import { getCurrentUser } from "@/server/platform/auth/currentUser";
 import { classifyLlmError } from "@/server/platform/llm/classifyLlmError";
 
 // No message-or-attachments guard: a send with an empty composer is a real

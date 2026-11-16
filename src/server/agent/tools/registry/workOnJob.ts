@@ -1,12 +1,12 @@
 import { z } from "zod";
 
 import { JobInteractionStatus } from "@/generated/prisma/client";
-import { formatFocusRefToken } from "@/lib/focusRefToken";
 import { prisma } from "@/server/db/prisma";
 import { WORKABLE_STATUSES } from "@/server/entities/jobs/jobInteractionInputs";
 import { promoteJobForWork } from "@/server/entities/jobs/setJobAside";
 import { resolveJobBySlug } from "@/server/entities/resolveBySlug";
 import { buildShowEvents } from "@/server/views/showEvents";
+import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import { slugLookupError } from "../lib/slugLookupError";
 
@@ -33,14 +33,7 @@ export const workOnJobTool: ToolDef<{ job: string }> = {
   handoff: true,
   description:
     "Start working on a specific role: focus it and hand off to the application workflow, which fetches the form, works out what it can draft, drafts it, and self-reviews — the same thing that happens when the user taps a role in the next-role picker. Call this whenever the user names a role to work on or apply to ('let's do the AI infra one', 'first one's fine', 'apply to the backend role'), INSTEAD of view_application_questions (that only inspects a form — it can't begin drafting). `job` is the role's slug. A set-aside / deferred role is brought back automatically. Say one natural line first ('Good pick — pulling that up.'), then call this and STOP: the workflow streams its own progress and prompts for submit, so don't narrate the steps yourself.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: { type: "string", description: "The role's slug." },
-    },
-    required: ["job"],
-  },
-  parser: z.object({ job: z.string() }),
+  parser: z.object({ job: z.string().describe("The role's slug.") }),
   async handle(input, ctx) {
     const r = await resolveJobBySlug(ctx.userId, input.job);
     if (!r.ok) return slugLookupError(r);

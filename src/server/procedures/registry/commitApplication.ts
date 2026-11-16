@@ -33,8 +33,9 @@ import {
   type MarkJobAppliedResult,
 } from "@/server/entities/jobs/markJobApplied";
 import type { ShortAnswer } from "@/server/entities/jobs/types";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
-import { renderWordDiff } from "@/utils/diff";
+import { renderWordDiff } from "@/shared/utils/diff";
 
 function submitNote(
   jobTitle: string,
@@ -81,59 +82,62 @@ function submitNote(
     .join("\n");
 }
 
-export async function runCommitApplication(
-  args: RunContext & { sessionId: string; jobId: string },
-): Promise<MarkJobAppliedResult> {
-  // Read the divergences BEFORE the baseline is re-stamped below.
-  const row = await prisma.jobInteraction.findUnique({
-    where: { userId_jobId: { userId: args.userId, jobId: args.jobId } },
-    select: {
-      ...DRAFTED_ROW_SELECT,
-      job: {
-        select: {
-          title: true,
-          companyName: true,
-          company: { select: { name: true } },
+export const runCommitApplication = procedure(
+  "commit_application",
+  async (
+    args: RunContext & { sessionId: string; jobId: string },
+  ): Promise<MarkJobAppliedResult> => {
+    // Read the divergences BEFORE the baseline is re-stamped below.
+    const row = await prisma.jobInteraction.findUnique({
+      where: { userId_jobId: { userId: args.userId, jobId: args.jobId } },
+      select: {
+        ...DRAFTED_ROW_SELECT,
+        job: {
+          select: {
+            title: true,
+            companyName: true,
+            company: { select: { name: true } },
+          },
         },
       },
-    },
-  });
-  const edits = row ? applicationEditsFor(row) : [];
-  const answers = row ? readShortAnswers(row.shortAnswers) : [];
-
-  const result = await markJobApplied({
-    userId: args.userId,
-    jobId: args.jobId,
-  });
-
-  // Runs on every submit that actually sent something, not only on an edited
-  // one: an application that went out exactly as drafted still just proved which
-  // answers work, and the questions it answered are the ones the next form will
-  // ask again.
-  if (row && (edits.length > 0 || answers.length > 0)) {
-    // Settle the baseline first: submitting is the last time these count as
-    // changes, and leaving them diverged would re-relay the whole set on the
-    // user's next message.
-    await prisma.jobInteraction.update({
-      where: { userId_jobId: { userId: args.userId, jobId: args.jobId } },
-      data: { relayedDrafts: draftsSnapshot(row) },
-      select: { id: true },
     });
-    // Hank-only channel: the user already knows what they typed, and this is
-    // here so the consolidation pass below has the change stated plainly (its
-    // quote-grounding rule needs something in the transcript to cite).
-    await appendPipelineActivity(
-      args.sessionId,
-      submitNote(
-        row.job.title,
-        row.job.company?.name ?? row.job.companyName ?? "the company",
-        edits,
-        answers,
-      ),
-      { runId: args.runId },
-    );
-    await runConsolidateSessionMemory(args);
-  }
+    const edits = row ? applicationEditsFor(row) : [];
+    const answers = row ? readShortAnswers(row.shortAnswers) : [];
 
-  return result;
-}
+    const result = await markJobApplied({
+      userId: args.userId,
+      jobId: args.jobId,
+    });
+
+    // Runs on every submit that actually sent something, not only on an edited
+    // one: an application that went out exactly as drafted still just proved which
+    // answers work, and the questions it answered are the ones the next form will
+    // ask again.
+    if (row && (edits.length > 0 || answers.length > 0)) {
+      // Settle the baseline first: submitting is the last time these count as
+      // changes, and leaving them diverged would re-relay the whole set on the
+      // user's next message.
+      await prisma.jobInteraction.update({
+        where: { userId_jobId: { userId: args.userId, jobId: args.jobId } },
+        data: { relayedDrafts: draftsSnapshot(row) },
+        select: { id: true },
+      });
+      // Hank-only channel: the user already knows what they typed, and this is
+      // here so the consolidation pass below has the change stated plainly (its
+      // quote-grounding rule needs something in the transcript to cite).
+      await appendPipelineActivity(
+        args.sessionId,
+        submitNote(
+          row.job.title,
+          row.job.company?.name ?? row.job.companyName ?? "the company",
+          edits,
+          answers,
+        ),
+        { runId: args.runId },
+      );
+      await runConsolidateSessionMemory(args);
+    }
+
+    return result;
+  },
+);

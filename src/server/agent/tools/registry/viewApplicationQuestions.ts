@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-import { isStockItem } from "@/lib/applicationItem";
 import { loadMergedQuestions } from "@/server/entities/jobs/applicationQuestions";
 import { needsQuestionsRefresh } from "@/server/entities/jobs/questionsRefresh";
 import { ensureApplicationForm } from "@/server/procedures/registry/draftApplication/ensureApplicationForm";
@@ -8,6 +7,7 @@ import {
   loadApplicationView,
   type ApplicationItemStatus,
 } from "@/server/views/application";
+import { isStockItem } from "@/shared/applicationItem";
 
 import { resolveJobArg } from "../lib/resolveEntityArg";
 
@@ -45,17 +45,12 @@ export const viewApplicationQuestionsTool: ToolDef<{ job?: string }> = {
   affectsViewedState: true,
   description:
     "List every question this job's application form asks — the scraped ATS questions plus any you added by hand — each with a stable questionId, and where it stands (already drafted, the user has worked on it, still needs input, or nothing to draft). Reads the form on first call if it hasn't been fetched yet (so it never claims a form has no questions without having read it), then caches. Use it to see the form and to get the questionId to pass to draft_application_question. `job` (the role's slug) — pass the role the user means. The questionId is for tool calls ONLY — never say it (or a number) to the user; refer to a question by quoting its text.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: {
-        type: "string",
-        description: "The role's slug — the role the user means.",
-      },
-    },
-    required: [],
-  },
-  parser: z.object({ job: z.string().optional() }),
+  parser: z.object({
+    job: z
+      .string()
+      .optional()
+      .describe("The role's slug — the role the user means."),
+  }),
   async handle({ job: jobSlug }, ctx) {
     const jobResolved = await resolveJobArg(ctx, jobSlug, {
       source: "view_application_questions",

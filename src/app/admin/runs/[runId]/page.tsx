@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 
-import { requireAdmin } from "@/server/auth/requireAdmin";
 import { prisma } from "@/server/db/prisma";
+import { requireAdmin } from "@/server/platform/auth/requireAdmin";
 import { costOf } from "@/server/platform/usage/pricing";
-import { asArray, asString, isRecord } from "@/utils/guards";
+import { asArray, asString, isRecord } from "@/shared/utils/guards";
 
 import { RunTreeView } from "./RunTreeView";
 

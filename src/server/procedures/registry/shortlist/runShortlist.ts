@@ -18,6 +18,7 @@ import type { RunContext, TurnEvent } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
 import { markCompanyShortlisting } from "@/server/entities/companies/markCompanyStatus";
 import { onBoardWhere } from "@/server/entities/jobs/shortlistPool";
+import { streamingProcedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {
   shortlistJobsSubAgent,
@@ -151,108 +152,118 @@ function describeReshow(board: ShortlistBoardView): string {
   return `We left the shortlist at ${board.companyName} open — ${pieces.join(" and ")} on the board. Take a look and tell me what to change, or say the word and I'll lock it in.`;
 }
 
-export async function* runShortlist(
-  args: ShortlistArgs & { companyId: string },
-): AsyncGenerator<TurnEvent> {
-  // No trace span here on purpose: the deterministic layer runs OUTSIDE a tool
-  // dispatch, so there is no parent toolUseId to nest under — a span would
-  // no-op. Spans go on procedures reachable from a tool handler.
-  const { userId, companyId } = args;
+export const runShortlist = streamingProcedure(
+  "shortlist",
+  async function* (
+    args: ShortlistArgs & { companyId: string },
+  ): AsyncGenerator<TurnEvent> {
+    // No trace span here on purpose: the deterministic layer runs OUTSIDE a tool
+    // dispatch, so there is no parent toolUseId to nest under — a span would
+    // no-op. Spans go on procedures reachable from a tool handler.
+    const { userId, companyId } = args;
 
-  // The pool read comes FIRST, even over an open board: a row that entered the
-  // pool after the seed (a fresh scan survivor, an application released back)
-  // would otherwise sit on the board with no stance and no reason, invisible to
-  // the ranker until the round ended. Empty pool + open board is the pure
-  // re-show, and the loader answers that in two cheap queries.
-  const context = await loadShortlistJobsInput({
-    userId,
-    companyId,
-    extraContext: args.direction,
-  });
-  if (!context.ok) {
-    // Nothing left to rank — but the earlier passes have already stanced
-    // everything they ruled out, so the board is on the table either way. From
-    // the user's side prescan, scan and shortlist are one step, and where the
-    // pool happened to empty must not decide whether they get a screen.
-    const stanced = await prisma.jobInteraction.count({
-      where: { userId, job: { companyId }, ...onBoardWhere() },
+    // The pool read comes FIRST, even over an open board: a row that entered the
+    // pool after the seed (a fresh scan survivor, an application released back)
+    // would otherwise sit on the board with no stance and no reason, invisible to
+    // the ranker until the round ended. Empty pool + open board is the pure
+    // re-show, and the loader answers that in two cheap queries.
+    const context = await loadShortlistJobsInput({
+      userId,
+      companyId,
+      extraContext: args.direction,
     });
-    if (stanced === 0) {
-      yield {
-        type: "text",
-        text: `There's nothing read-and-ready to shortlist here right now.`,
-      };
+    if (!context.ok) {
+      // Nothing left to rank — but the earlier passes have already stanced
+      // everything they ruled out, so the board is on the table either way. From
+      // the user's side prescan, scan and shortlist are one step, and where the
+      // pool happened to empty must not decide whether they get a screen.
+      const stanced = await prisma.jobInteraction.count({
+        where: { userId, job: { companyId }, ...onBoardWhere() },
+      });
+      if (stanced === 0) {
+        yield {
+          type: "text",
+          text: `There's nothing read-and-ready to shortlist here right now.`,
+        };
+        return;
+      }
+      // An open board IS the status, however the company got here — a board that
+      // outlives the run that seeded it would otherwise never pick it up.
+      await markCompanyShortlisting(companyId, userId);
+      const { events, board } = await buildShortlistBoardEvents(
+        userId,
+        companyId,
+      );
+      yield* yieldUiEvents(events);
+      if (board) {
+        const counts = countBoard(board);
+        yield {
+          type: "text",
+          text:
+            counts.picked === 0
+              ? describeNothingPicked(board, counts, null)
+              : describeReshow(board),
+        };
+      }
       return;
     }
-    // An open board IS the status, however the company got here — a board that
-    // outlives the run that seeded it would otherwise never pick it up.
+    const n = context.input.candidates.length;
+    yield statusEvent(
+      `Weighing ${n} role${n === 1 ? "" : "s"} against your thesis…`,
+    );
+    const result = await runSubAgent(
+      shortlistJobsSubAgent,
+      context.input,
+      args,
+    );
+    if (!result.ok) {
+      yield { type: "text", text: `Shortlist failed: ${result.error}` };
+      return;
+    }
+    const picks = result.output;
+
+    const openBoard = context.input.openBoard ?? [];
+    await seedBoardStances({
+      userId,
+      companyId,
+      candidates: context.input.candidates,
+      picks,
+      // Picks already standing on the open board share the ceiling with this
+      // call's — the ranker was told so, and the cap enforces it.
+      existingPickCount: openBoard.filter((r) => r.stance === "pick").length,
+    });
+    // The board is now open and waiting on the user — the one stretch of a
+    // company's life where the next move is theirs, so it says so.
     await markCompanyShortlisting(companyId, userId);
+
+    // Describe the BOARD, not the ranker's own tally: the roles the earlier passes
+    // ruled out are on that screen too, and they're what made "1 I'd pass on" sit
+    // above a pile of forty.
     const { events, board } = await buildShortlistBoardEvents(
       userId,
       companyId,
     );
     yield* yieldUiEvents(events);
-    if (board) {
-      const counts = countBoard(board);
-      yield {
-        type: "text",
-        text:
-          counts.picked === 0
-            ? describeNothingPicked(board, counts, null)
-            : describeReshow(board),
-      };
-    }
-    return;
-  }
-  const n = context.input.candidates.length;
-  yield statusEvent(
-    `Weighing ${n} role${n === 1 ? "" : "s"} against your thesis…`,
-  );
-  const result = await runSubAgent(shortlistJobsSubAgent, context.input, args);
-  if (!result.ok) {
-    yield { type: "text", text: `Shortlist failed: ${result.error}` };
-    return;
-  }
-  const picks = result.output;
-
-  const openBoard = context.input.openBoard ?? [];
-  await seedBoardStances({
-    userId,
-    companyId,
-    candidates: context.input.candidates,
-    picks,
-    // Picks already standing on the open board share the ceiling with this
-    // call's — the ranker was told so, and the cap enforces it.
-    existingPickCount: openBoard.filter((r) => r.stance === "pick").length,
-  });
-  // The board is now open and waiting on the user — the one stretch of a
-  // company's life where the next move is theirs, so it says so.
-  await markCompanyShortlisting(companyId, userId);
-
-  // Describe the BOARD, not the ranker's own tally: the roles the earlier passes
-  // ruled out are on that screen too, and they're what made "1 I'd pass on" sit
-  // above a pile of forty.
-  const { events, board } = await buildShortlistBoardEvents(userId, companyId);
-  yield* yieldUiEvents(events);
-  const counts = board
-    ? countBoard(board)
-    : { picked: 0, borderline: 0, closing: 0, total: 0 };
-  // Nothing PICKED is the branch, not nothing kept: a round whose survivors are
-  // all holds has produced nothing to work on either, and saying "here's your
-  // shortlist" over it is the thing that made an empty round feel like a
-  // shrug. Holds get named inside that explanation rather than counted as a
-  // result.
-  const body =
-    board && counts.picked === 0
-      ? describeNothingPicked(board, counts, picks.proposalNote)
-      : describeSeed(
-          picks.proposalNote,
-          counts,
-          openBoard.length > 0 ? n : undefined,
-        );
-  const unfinished = describeUnfinished(context.input.candidates, picks);
-  yield {
-    type: "text",
-    text: unfinished ? `${body}\n\n${unfinished}` : body,
-  };
-}
+    const counts = board
+      ? countBoard(board)
+      : { picked: 0, borderline: 0, closing: 0, total: 0 };
+    // Nothing PICKED is the branch, not nothing kept: a round whose survivors are
+    // all holds has produced nothing to work on either, and saying "here's your
+    // shortlist" over it is the thing that made an empty round feel like a
+    // shrug. Holds get named inside that explanation rather than counted as a
+    // result.
+    const body =
+      board && counts.picked === 0
+        ? describeNothingPicked(board, counts, picks.proposalNote)
+        : describeSeed(
+            picks.proposalNote,
+            counts,
+            openBoard.length > 0 ? n : undefined,
+          );
+    const unfinished = describeUnfinished(context.input.candidates, picks);
+    yield {
+      type: "text",
+      text: unfinished ? `${body}\n\n${unfinished}` : body,
+    };
+  },
+);

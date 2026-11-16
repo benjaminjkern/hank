@@ -14,7 +14,7 @@
 
 import type { RunContext } from "@/server/agent/contracts";
 import { appendPipelineActivity } from "@/server/agent/session";
-import { withTraceSpan } from "@/server/platform/trace/span";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runCompactSession } from "@/server/procedures/registry/compactSession";
 import { runConsolidateSessionMemory } from "@/server/procedures/registry/consolidateSessionMemory";
 import { runProfileEnrichmentGate } from "@/server/procedures/registry/profileEnrichmentGate";
@@ -27,16 +27,15 @@ type CommitProfileResult =
 // a sub-agent call, so it carries the context rather than re-listing its fields.
 type CommitProfileArgs = RunContext & { sessionId: string };
 
-export async function runCommitProfile(
-  args: CommitProfileArgs,
-): Promise<CommitProfileResult> {
-  return await withTraceSpan(
-    "commit_profile",
-    args.trace,
-    (trace) => commitProfile({ ...args, trace }),
-    (r) => (r.wrappedUp ? "profile committed" : "still missing slots"),
-  );
-}
+export const runCommitProfile = procedure(
+  "commit_profile",
+  async (args: CommitProfileArgs): Promise<CommitProfileResult> =>
+    await commitProfile(args),
+  {
+    summarize: (r) =>
+      r.wrappedUp ? "profile committed" : "still missing slots",
+  },
+);
 
 async function commitProfile(
   args: CommitProfileArgs,

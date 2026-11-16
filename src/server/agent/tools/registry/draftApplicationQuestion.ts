@@ -28,30 +28,22 @@ export const draftApplicationQuestionTool: ToolDef<{
   affectsViewedState: true,
   description:
     'Draft or redraft ONE application answer through the drafting workflow — never write the answer prose in chat yourself. Pass the `questionId` from view_application_questions (or "cover_letter" for the cover letter) and, in `extraContext`, whatever the user just told you to build the answer on: a story, an angle, a fact, or a refinement like "make it shorter" / "less formal". The workflow writes it in their voice into the side panel; show it to them and refine by calling again with more context. `job` (the role\'s slug) — pass the role the user means.',
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: {
-        type: "string",
-        description: "The role's slug — the role the user means.",
-      },
-      questionId: {
-        type: "string",
-        description:
-          'The question\'s id from view_application_questions, or "cover_letter" for the cover letter.',
-      },
-      extraContext: {
-        type: "string",
-        description:
-          "What the user told you to build this answer on — their story/angle/fact, or a refinement instruction. Strongly recommended; the workflow leans on it as the primary material.",
-      },
-    },
-    required: ["questionId"],
-  },
   parser: z.object({
-    job: z.string().optional(),
-    questionId: z.string(),
-    extraContext: z.string().optional(),
+    job: z
+      .string()
+      .optional()
+      .describe("The role's slug — the role the user means."),
+    questionId: z
+      .string()
+      .describe(
+        'The question\'s id from view_application_questions, or "cover_letter" for the cover letter.',
+      ),
+    extraContext: z
+      .string()
+      .optional()
+      .describe(
+        "What the user told you to build this answer on — their story/angle/fact, or a refinement instruction. Strongly recommended; the workflow leans on it as the primary material.",
+      ),
   }),
   async handle(input, ctx) {
     const jobResolved = await resolveJobArg(ctx, input.job, {

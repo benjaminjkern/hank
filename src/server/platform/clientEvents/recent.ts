@@ -8,8 +8,8 @@
 
 import { Role } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
-import { relativeTime } from "@/utils/date";
-import { nowMs } from "@/utils/now";
+import { relativeTime } from "@/shared/utils/date";
+import { nowMs } from "@/shared/utils/now";
 
 const MAX_EVENTS = 10;
 // If the session has no assistant reply yet, only look back a short window so a

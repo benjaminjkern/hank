@@ -17,31 +17,22 @@ export const deferJobTool: ToolDef<{
   affectsViewedState: true,
   description:
     "Defer a single role — 'could apply, but other roles rank higher right now.' Use when the user could apply to this but isn't going to any time soon because other jobs make more sense first. It's reversible and holds indefinitely (no revisit timer) until brought back. Reason is OUTRANKED for the usual 'passed over for now', OTHER otherwise. This is an ATOMIC RECORD-ONLY action: it does not bring up the next role — call company_walkthrough on its company afterward to bring up the remaining roles if the user is moving on. **`job` is the role's slug — pass the one the user means.**",
-  inputSchema: {
-    type: "object",
-    properties: {
-      job: {
-        type: "string",
-        description: "The role's slug — the role the user means.",
-      },
-      reason: {
-        type: "string",
-        enum: JOB_DEFER_REASONS as readonly string[] as string[],
-        description:
-          "OUTRANKED = could apply, but other roles rank higher right now (the usual case). OTHER = some other 'not now' reason (put it in the note). JOB-level values: parking a whole company is pause_company, whose reasons are a separate list (USER_PAUSED / OTHER) — the two never overlap, so don't cross-use them.",
-      },
-      note: {
-        type: "string",
-        description:
-          "The user's actual reason for holding this role, in their own words where possible — one sentence. Fill this whenever you have it.",
-      },
-    },
-    required: ["reason"],
-  },
   parser: z.object({
-    job: z.string().optional(),
-    reason: z.enum(JOB_DEFER_REASONS),
-    note: z.string().optional(),
+    job: z
+      .string()
+      .optional()
+      .describe("The role's slug — the role the user means."),
+    reason: z
+      .enum(JOB_DEFER_REASONS)
+      .describe(
+        "OUTRANKED = could apply, but other roles rank higher right now (the usual case). OTHER = some other 'not now' reason (put it in the note). JOB-level values: parking a whole company is pause_company, whose reasons are a separate list (USER_PAUSED / OTHER) — the two never overlap, so don't cross-use them.",
+      ),
+    note: z
+      .string()
+      .optional()
+      .describe(
+        "The user's actual reason for holding this role, in their own words where possible — one sentence. Fill this whenever you have it.",
+      ),
   }),
   async handle(input, ctx) {
     const resolved = await resolveJobArg(ctx, input.job, {

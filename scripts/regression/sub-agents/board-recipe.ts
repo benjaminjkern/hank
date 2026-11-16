@@ -38,9 +38,9 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "../../../src/generated/prisma/client";
 import { resolveAnthropicApiKey } from "../../../src/server/platform/llm/resolveAnthropicKey";
+import { probeGenericBoard } from "../../../src/server/platform/scrape/generic/genericProbe";
+import { runBoardRecipe } from "../../../src/server/platform/scrape/recipe/runRecipe";
 import { loadBoardRecipeInput } from "../../../src/server/procedures/registry/reconBoard/loadBoardRecipeInput";
-import { probeGenericBoard } from "../../../src/server/scrape/generic/genericProbe";
-import { runBoardRecipe } from "../../../src/server/scrape/recipe/runRecipe";
 import { runSubAgent } from "../../../src/server/subagents/lib/runSubAgent";
 import { boardRecipeSubAgent } from "../../../src/server/subagents/registry/boardRecipe";
 

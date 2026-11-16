@@ -8,8 +8,8 @@
 import { Role } from "@/generated/prisma/client";
 import type { RunContext } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
-import { withTraceSpan } from "@/server/platform/trace/span";
 import { traceText } from "@/server/platform/trace/traceText";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import { compactSummarySubAgent } from "@/server/subagents/registry/compactSummary";
 
@@ -17,19 +17,18 @@ type CompactResult =
   | { compacted: false; reason: "too_short" | "summary_failed" }
   | { compacted: true; summarizedMessageCount: number };
 
-export async function runCompactSession(
-  args: RunContext & { sessionId: string; keepLastN?: number },
-): Promise<CompactResult> {
-  return await withTraceSpan(
-    "compact_session",
-    args.trace,
-    (trace) => compactSession({ ...args, trace }),
-    (r) =>
+export const runCompactSession = procedure(
+  "compact_session",
+  async (
+    args: RunContext & { sessionId: string; keepLastN?: number },
+  ): Promise<CompactResult> => await compactSession(args),
+  {
+    summarize: (r) =>
       r.compacted
         ? `summarized ${r.summarizedMessageCount} messages`
         : `not compacted (${r.reason})`,
-  );
-}
+  },
+);
 
 async function compactSession(
   args: RunContext & { sessionId: string; keepLastN?: number },

@@ -11,6 +11,7 @@
 import type { RunContext } from "@/server/agent/contracts";
 import { assertPublicUrl } from "@/server/platform/net/assertPublicUrl";
 import { traceText } from "@/server/platform/trace/traceText";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {
   logoVerifierSubAgent,
@@ -37,49 +38,57 @@ export type VerifyCompanyLogoInput = {
   companyId?: string;
 };
 
-export async function runVerifyCompanyLogo(
-  input: VerifyCompanyLogoInput,
-  ctx: RunContext,
-): Promise<LogoVerifierResult> {
-  const fetched = await fetchImageBlock(input.candidateLogoUrl, ctx.signal);
-  if (!fetched.ok) {
-    // The image couldn't be fetched as a Claude-supported media type. Bail
-    // gracefully — no verdict, and no vision call to pay for.
-    traceText(ctx.trace, `logo verifier: skipped — ${fetched.reason}`);
-    return { verdict: "uncertain", betterUrl: null, analysis: fetched.reason };
-  }
+export const runVerifyCompanyLogo = procedure(
+  "verify_company_logo",
+  async (
+    args: RunContext & VerifyCompanyLogoInput,
+  ): Promise<LogoVerifierResult> => {
+    const fetched = await fetchImageBlock(args.candidateLogoUrl, args.signal);
+    if (!fetched.ok) {
+      // The image couldn't be fetched as a Claude-supported media type. Bail
+      // gracefully — no verdict, and no vision call to pay for.
+      traceText(args.trace, `logo verifier: skipped — ${fetched.reason}`);
+      return {
+        verdict: "uncertain",
+        betterUrl: null,
+        analysis: fetched.reason,
+      };
+    }
 
-  const result = await runSubAgent(
-    logoVerifierSubAgent,
-    {
-      companyName: input.companyName,
-      candidateLogoUrl: input.candidateLogoUrl,
-      companyId: input.companyId,
-      image: fetched.image,
-    },
-    ctx,
-  );
+    const result = await runSubAgent(
+      logoVerifierSubAgent,
+      {
+        companyName: args.companyName,
+        candidateLogoUrl: args.candidateLogoUrl,
+        companyId: args.companyId,
+        image: fetched.image,
+      },
+      args,
+    );
 
-  // A failed verification is never fatal — the UI falls back to the monogram.
-  if (!result.ok) {
-    return { verdict: "uncertain", betterUrl: null, analysis: result.error };
-  }
+    // A failed verification is never fatal — the UI falls back to the monogram.
+    if (!result.ok) {
+      return { verdict: "uncertain", betterUrl: null, analysis: result.error };
+    }
 
-  // Human-readable verdict line, not a tool result — the verdict is the point
-  // of the sub-agent and worth showing, but it is prose in the parent's trace.
-  traceText(
-    ctx.trace,
-    [
-      `logo verdict: ${result.output.verdict}`,
-      result.output.betterUrl ? `better URL ${result.output.betterUrl}` : null,
-      result.output.analysis ? `— ${result.output.analysis}` : null,
-    ]
-      .filter(Boolean)
-      .join(" "),
-  );
+    // Human-readable verdict line, not a tool result — the verdict is the point
+    // of the sub-agent and worth showing, but it is prose in the parent's trace.
+    traceText(
+      args.trace,
+      [
+        `logo verdict: ${result.output.verdict}`,
+        result.output.betterUrl
+          ? `better URL ${result.output.betterUrl}`
+          : null,
+        result.output.analysis ? `— ${result.output.analysis}` : null,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    );
 
-  return result.output;
-}
+    return result.output;
+  },
+);
 
 type FetchResult =
   { ok: true; image: LogoImage } | { ok: false; reason: string };

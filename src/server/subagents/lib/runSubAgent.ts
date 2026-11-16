@@ -12,6 +12,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 import type { RunContext, RunTrace } from "@/server/agent/contracts";
+import { toolInputSchema } from "@/server/agent/tools/lib/inputSchema";
 import type { AnyToolDef, ToolContext } from "@/server/agent/tools/lib/types";
 import {
   SCRATCHPAD_FIELD,
@@ -28,7 +29,7 @@ import {
   recordUsage,
   type UsageOperation,
 } from "@/server/platform/usage/track";
-import { isUserAbortError } from "@/utils/abort";
+import { isUserAbortError } from "@/shared/utils/abort";
 
 import { recordSubAgentRun, redactCaptureContent } from "./subAgentRun";
 
@@ -280,7 +281,7 @@ async function runSubAgentLoop<TOutput>(
     ...call.readTools.map((t) => ({
       name: t.name,
       description: t.description,
-      input_schema: t.inputSchema as Anthropic.Tool["input_schema"],
+      input_schema: toolInputSchema(t),
     })),
     ...call.serverTools,
     ...(call.outputSchema

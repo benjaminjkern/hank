@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/server/auth/config";
+import { auth } from "@/server/platform/auth/config";
 
 // Next.js 16 Proxy runs in the Node.js runtime by default, so the full
 // Auth.js config (with the Prisma adapter) works here — no separate edge

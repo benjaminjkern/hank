@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { fetchApplicationQuestions } from "../../src/server/scrape/ats";
+import { fetchApplicationQuestions } from "../../src/server/platform/scrape/ats";
 
 const url = process.argv[2];
 if (!url) {

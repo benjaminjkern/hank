@@ -26,11 +26,11 @@
 // close it, don't commit to it" — and that is what keeps the null unambiguous,
 // so a user's change can never read as an acceptance.
 
-import { prisma } from "@/server/db/prisma";
-import {
+import type {
   JobInteractionStatus,
   ProposedVerdict,
 } from "@/generated/prisma/client";
+import { prisma } from "@/server/db/prisma";
 
 import { isStanceable } from "./shortlistPool";
 

@@ -3,8 +3,8 @@
 import Link from "next/link";
 import styled from "styled-components";
 
-import { shortDateTime } from "@/utils/date";
-import { money } from "@/utils/format";
+import { shortDateTime } from "@/shared/utils/date";
+import { money } from "@/shared/utils/format";
 
 import type { RunsIndexData, RunSummary } from "./types";
 

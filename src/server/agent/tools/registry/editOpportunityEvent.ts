@@ -4,10 +4,7 @@ import {
   getOpportunityEventById,
   editOpportunityEvent,
 } from "@/server/entities/opportunities/opportunityEventEdits";
-import {
-  parseEventDateTime,
-  formatEventStamp,
-} from "@/server/platform/time/localTime";
+import { parseEventDateTime, formatEventStamp } from "@/shared/utils/localTime";
 
 import { toolError } from "../lib/toolError";
 
@@ -27,32 +24,26 @@ export const editOpportunityEventTool: ToolDef<{
   affectsViewedState: true,
   description:
     "Edit a lead event you already logged — its DATE and/or its NOTES — targeted by the event's `id` (get it from list_opportunity_events). Pass `occurredAt` (ISO date) to fix the date, and/or `notes` to fix the freeform note (empty string clears it). At least one of the two is required. Does NOT change the event's type or the lead's status — to change what KIND of event it is, delete it and log a fresh one.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      eventId: {
-        type: "string",
-        description:
-          "The id of the event to edit (from list_opportunity_events, shown as `id=…`).",
-      },
-      occurredAt: {
-        type: "string",
-        description:
-          "The corrected date/time, ISO 8601 in the user's local time. Include the clock time for a scheduled call. Use the # Today block so the year is right. Omit to leave the date unchanged.",
-      },
-      notes: {
-        type: "string",
-        description:
-          "The corrected freeform note. Pass an empty string to clear it. Omit to leave it unchanged.",
-      },
-    },
-    required: ["eventId"],
-  },
   parser: z
     .object({
-      eventId: z.string().min(1),
-      occurredAt: z.string().optional(),
-      notes: z.string().optional(),
+      eventId: z
+        .string()
+        .min(1)
+        .describe(
+          "The id of the event to edit (from list_opportunity_events, shown as `id=…`).",
+        ),
+      occurredAt: z
+        .string()
+        .optional()
+        .describe(
+          "The corrected date/time, ISO 8601 in the user's local time. Include the clock time for a scheduled call. Use the # Today block so the year is right. Omit to leave the date unchanged.",
+        ),
+      notes: z
+        .string()
+        .optional()
+        .describe(
+          "The corrected freeform note. Pass an empty string to clear it. Omit to leave it unchanged.",
+        ),
     })
     .refine((v) => v.occurredAt !== undefined || v.notes !== undefined, {
       message: "provide occurredAt and/or notes to change",

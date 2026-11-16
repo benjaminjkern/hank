@@ -1,18 +1,18 @@
 import { redirect } from "next/navigation";
 
-import { ApiKeyBlockerModal } from "@/components/ApiKeyBlockerModal";
-import { ChatPanel } from "@/components/Chat/ChatPanel";
-import { ChatHydrator } from "@/components/ChatHydrator";
-import { SplitLayout } from "@/components/Layout/SplitLayout";
-import { TopBar } from "@/components/Layout/TopBar";
-import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { PanelUrlSync } from "@/components/PanelUrlSync";
-import { RightPanel } from "@/components/RightPanel/RightPanel";
-import { parsePanelUrl } from "@/lib/panelUrl";
-import { initial } from "@/utils/text";
-import { auth } from "@/server/auth/config";
+import { ApiKeyBlockerModal } from "@/client/components/ApiKeyBlockerModal";
+import { ChatPanel } from "@/client/components/Chat/ChatPanel";
+import { ChatHydrator } from "@/client/components/ChatHydrator";
+import { SplitLayout } from "@/client/components/Layout/SplitLayout";
+import { TopBar } from "@/client/components/Layout/TopBar";
+import { LoadingOverlay } from "@/client/components/LoadingOverlay";
+import { PanelUrlSync } from "@/client/components/PanelUrlSync";
+import { RightPanel } from "@/client/components/RightPanel/RightPanel";
+import { auth } from "@/server/platform/auth/config";
 import { allowUserApiKeys } from "@/server/platform/deployment";
 import { loadPanelView } from "@/server/views/panelView";
+import { parsePanelUrl } from "@/shared/panelUrl";
+import { initial } from "@/shared/utils/text";
 
 // The app, at whichever panel view `path` names. Shared by `/` and
 // `/dashboard/**` so the two are the same component — Next only re-runs this on

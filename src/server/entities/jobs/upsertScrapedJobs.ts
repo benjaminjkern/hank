@@ -29,8 +29,11 @@ import {
 import { bulkUpdate } from "@/server/db/bulkUpdate";
 import { prisma } from "@/server/db/prisma";
 import { logCompanyEvent } from "@/server/entities/companies/logCompanyEvent";
-import { isLearnedSource } from "@/server/scrape/types";
-import type { ScrapeDiagnostics, ScrapedJob } from "@/server/scrape/types";
+import { isLearnedSource } from "@/server/platform/scrape/types";
+import type {
+  ScrapeDiagnostics,
+  ScrapedJob,
+} from "@/server/platform/scrape/types";
 
 import { mintJobSlugs, type JobSlugParts } from "./jobSlug";
 import { roleAttrColumns } from "./roleAttrs";

@@ -18,31 +18,22 @@ export const pauseCompanyTool: ToolDef<{
   // NOT handoff — see close_company. Pausing is a mutation; it wraps inline.
   description:
     "Pause a company you've started on — set it aside deliberately for now, with a reason. Use when the user wants to stop working a company they've begun but isn't dropping it ('put this on hold', 'set this aside', 'not right now'). It stays off the scan list until revived — there's NO revisit timer; it waits indefinitely until the user brings it back. NOT the same as caught_up_company (that's 'I worked through everything, keep watching for new roles' and stays scannable). Wraps the company up and brings what's next up on its own — don't call show_whats_next after it. **`company` is the company's slug — pass the one the user means.** Say \"pause\" / \"set aside\" to the user.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      company: {
-        type: "string",
-        description: "The company's slug — the company the user means.",
-      },
-      reason: {
-        type: "string",
-        enum: COMPANY_PAUSE_REASONS as readonly string[] as string[],
-        description:
-          "USER_PAUSED when the user asked to set it aside; OTHER otherwise. COMPANY-level values: parking a single role is defer_job, whose reasons are a separate list (OUTRANKED / OTHER) — the two never overlap, so don't cross-use them.",
-      },
-      note: {
-        type: "string",
-        description:
-          "The user's actual reason for pausing, in their own words where possible — one sentence. Fill this whenever you have it (ask a short 'why?' first if they didn't say and it isn't clear from context).",
-      },
-    },
-    required: ["reason"],
-  },
   parser: z.object({
-    company: z.string().optional(),
-    reason: z.enum(COMPANY_PAUSE_REASONS),
-    note: z.string().optional(),
+    company: z
+      .string()
+      .optional()
+      .describe("The company's slug — the company the user means."),
+    reason: z
+      .enum(COMPANY_PAUSE_REASONS)
+      .describe(
+        "USER_PAUSED when the user asked to set it aside; OTHER otherwise. COMPANY-level values: parking a single role is defer_job, whose reasons are a separate list (OUTRANKED / OTHER) — the two never overlap, so don't cross-use them.",
+      ),
+    note: z
+      .string()
+      .optional()
+      .describe(
+        "The user's actual reason for pausing, in their own words where possible — one sentence. Fill this whenever you have it (ask a short 'why?' first if they didn't say and it isn't clear from context).",
+      ),
   }),
   async handle(input, ctx) {
     const resolved = await resolveCompanyArg(ctx, input.company, {

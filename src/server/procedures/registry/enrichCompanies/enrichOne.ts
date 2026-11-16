@@ -11,7 +11,6 @@
 // (`scrape_jobs_for_company`, or the walkthrough on entry). Folding them
 // together is what made five near-identical enrich paths drift apart.
 
-import { companyLogoUrl } from "@/lib/companyLogo";
 import type { RunContext } from "@/server/agent/contracts";
 import { prisma } from "@/server/db/prisma";
 import { runReconBoard } from "@/server/procedures/registry/reconBoard";
@@ -19,6 +18,7 @@ import { runVerifyCompanyLogo } from "@/server/procedures/registry/verifyCompany
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import { companyBasicInfoSubAgent } from "@/server/subagents/registry/companyBasicInfo";
 import type { LogoVerifierResult } from "@/server/subagents/registry/logoVerifier";
+import { companyLogoUrl } from "@/shared/companyLogo";
 
 import { applyLogoVerdict } from "./applyLogoVerdict";
 import { commitHuntedUrl } from "./commitHuntedUrl";
@@ -136,10 +136,12 @@ async function runChain(
     let verdict: LogoVerifierResult | null = null;
     if (candidate.length > 0) {
       try {
-        verdict = await runVerifyCompanyLogo(
-          { companyName: name, candidateLogoUrl: candidate, companyId },
-          args,
-        );
+        verdict = await runVerifyCompanyLogo({
+          ...args,
+          companyName: name,
+          candidateLogoUrl: candidate,
+          companyId,
+        });
       } catch (err) {
         console.warn(`[enrichCompanies] logo verify failed for ${name}:`, err);
       }

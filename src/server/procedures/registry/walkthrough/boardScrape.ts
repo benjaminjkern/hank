@@ -15,10 +15,11 @@ import {
   caughtUpCompany,
 } from "@/server/entities/companies/setCompanyAside";
 import { syncCompanyBoard } from "@/server/entities/jobs/syncCompanyBoard";
+import type { ScrapeFailureKind } from "@/server/platform/scrape/types";
+import { streamingProcedure } from "@/server/procedures/lib/procedure";
 import { runReconBoard } from "@/server/procedures/registry/reconBoard";
 import type { ReconBoardResult } from "@/server/procedures/registry/reconBoard";
-import type { ScrapeFailureKind } from "@/server/scrape/types";
-import { urlHost } from "@/utils/url";
+import { urlHost } from "@/shared/utils/url";
 
 import { narrateCompanyBlock, narrateCompanyCaughtUp } from "./narration";
 import { yieldStateChange } from "./yieldStateChange";
@@ -51,126 +52,135 @@ type BoardScrapeResult =
   // as a contradiction ("Found 4 new… first pass over 75 new").
   | { wrapped: false; delta: number };
 
-export async function* runBoardScrape(
-  companyId: string,
-  sourceUrl: string,
-  displayName: string,
-  hadRoles: boolean,
-  args: WalkthroughArgs,
-): AsyncGenerator<TurnEvent, BoardScrapeResult> {
-  yield statusEvent(
-    hadRoles
-      ? `Checking ${displayName}'s board for anything new…`
-      : `Scanning ${urlHost(sourceUrl) ?? sourceUrl} for openings…`,
-  );
-
-  let fetched = await syncCompanyBoard({
-    userId: args.userId,
-    companyId,
-    sourceUrl,
-    signal: args.signal,
-  });
-
-  // Unreadable in a way a better read-plan could fix — work one out and try
-  // once more, rather than setting the company aside for a board shape we've
-  // simply never met. Narrated because it takes a while and the user should
-  // know what the pause is.
-  let reconVerdict: ReconBoardResult["kind"] | null = null;
-  if (!fetched.ok && RECON_WORTHY_FAILURES.has(fetched.kind)) {
+export const runBoardScrape = streamingProcedure(
+  "board_scrape",
+  async function* (
+    input: WalkthroughArgs & {
+      companyId: string;
+      sourceUrl: string;
+      displayName: string;
+      hadRoles: boolean;
+    },
+  ): AsyncGenerator<TurnEvent, BoardScrapeResult> {
+    const { companyId, sourceUrl, displayName, hadRoles, ...args } = input;
     yield statusEvent(
-      `${displayName}'s site isn't one of the usual job boards — working out how to read it…`,
+      hadRoles
+        ? `Checking ${displayName}'s board for anything new…`
+        : `Scanning ${urlHost(sourceUrl) ?? sourceUrl} for openings…`,
     );
-    const recon = await runReconBoard({
-      ...args,
-      companyId,
-      companyName: displayName,
-      sourceUrl,
-    });
-    reconVerdict = recon.kind;
-    if (recon.kind === "learned") {
-      fetched = await syncCompanyBoard({
-        userId: args.userId,
-        companyId,
-        sourceUrl,
-        signal: args.signal,
-      });
-    } else if (recon.kind === "needs_browser") {
-      yield statusEvent(
-        `${displayName}'s openings only show up once their page fully loads in a browser, which I can't do from here — send me a specific role's link and I can still work it.`,
-      );
-    }
-  }
 
-  if (!fetched.ok) {
-    if (hadRoles) {
-      yield statusEvent(
-        `Couldn't refresh ${displayName}'s board just now — showing what I already have.`,
-      );
-      return { wrapped: false, delta: 0 };
-    }
-    yield statusEvent(
-      `I couldn't reach ${displayName}'s board just now — I'll set it aside until it's readable again.`,
-    );
-    // A login or bot wall is a different fact from "we couldn't parse it", and
-    // only recon can tell them apart — it's the only thing that looked at the
-    // page rather than at an endpoint.
-    const blocked = {
-      reason:
-        reconVerdict === "needs_auth"
-          ? CompanyBlockReason.AUTH_WALLED
-          : CompanyBlockReason.CANNOT_SCRAPE,
-      note: `scrape failed: ${fetched.error}`,
-    };
-    await blockCompany({ userId: args.userId, companyId, ...blocked });
-    yield* yieldStateChange(
-      narrateCompanyBlock({ companyId, companyName: displayName, ...blocked }),
-    );
-    return { wrapped: true, endedCompanyId: companyId };
-  }
-
-  if (fetched.totalJobs === 0 && !hadRoles) {
-    yield statusEvent(
-      `No openings posted at ${displayName} right now — marking caught up.`,
-    );
-    // Land the right engagement tail (IN_FLIGHT/IN_PROCESS if apps went out
-    // this round, else CAUGHT_UP) instead of forcing CAUGHT_UP.
-    const { status } = await caughtUpCompany({
+    let fetched = await syncCompanyBoard({
       userId: args.userId,
       companyId,
-      derive: true,
+      sourceUrl,
+      signal: args.signal,
     });
-    yield* yieldStateChange(
-      narrateCompanyCaughtUp({ companyId, companyName: displayName, status }),
-    );
-    return { wrapped: true, endedCompanyId: companyId };
-  }
 
-  if (hadRoles) {
-    if (fetched.newJobInteractions > 0) {
+    // Unreadable in a way a better read-plan could fix — work one out and try
+    // once more, rather than setting the company aside for a board shape we've
+    // simply never met. Narrated because it takes a while and the user should
+    // know what the pause is.
+    let reconVerdict: ReconBoardResult["kind"] | null = null;
+    if (!fetched.ok && RECON_WORTHY_FAILURES.has(fetched.kind)) {
       yield statusEvent(
-        `Found ${fetched.newJobInteractions} new posting${fetched.newJobInteractions === 1 ? "" : "s"} since last time — taking a look…`,
+        `${displayName}'s site isn't one of the usual job boards — working out how to read it…`,
+      );
+      const recon = await runReconBoard({
+        ...args,
+        companyId,
+        companyName: displayName,
+        sourceUrl,
+      });
+      reconVerdict = recon.kind;
+      if (recon.kind === "learned") {
+        fetched = await syncCompanyBoard({
+          userId: args.userId,
+          companyId,
+          sourceUrl,
+          signal: args.signal,
+        });
+      } else if (recon.kind === "needs_browser") {
+        yield statusEvent(
+          `${displayName}'s openings only show up once their page fully loads in a browser, which I can't do from here — send me a specific role's link and I can still work it.`,
+        );
+      }
+    }
+
+    if (!fetched.ok) {
+      if (hadRoles) {
+        yield statusEvent(
+          `Couldn't refresh ${displayName}'s board just now — showing what I already have.`,
+        );
+        return { wrapped: false, delta: 0 };
+      }
+      yield statusEvent(
+        `I couldn't reach ${displayName}'s board just now — I'll set it aside until it's readable again.`,
+      );
+      // A login or bot wall is a different fact from "we couldn't parse it", and
+      // only recon can tell them apart — it's the only thing that looked at the
+      // page rather than at an endpoint.
+      const blocked = {
+        reason:
+          reconVerdict === "needs_auth"
+            ? CompanyBlockReason.AUTH_WALLED
+            : CompanyBlockReason.CANNOT_SCRAPE,
+        note: `scrape failed: ${fetched.error}`,
+      };
+      await blockCompany({ userId: args.userId, companyId, ...blocked });
+      yield* yieldStateChange(
+        narrateCompanyBlock({
+          companyId,
+          companyName: displayName,
+          ...blocked,
+        }),
+      );
+      return { wrapped: true, endedCompanyId: companyId };
+    }
+
+    if (fetched.totalJobs === 0 && !hadRoles) {
+      yield statusEvent(
+        `No openings posted at ${displayName} right now — marking caught up.`,
+      );
+      // Land the right engagement tail (IN_FLIGHT/IN_PROCESS if apps went out
+      // this round, else CAUGHT_UP) instead of forcing CAUGHT_UP.
+      const { status } = await caughtUpCompany({
+        userId: args.userId,
+        companyId,
+        derive: true,
+      });
+      yield* yieldStateChange(
+        narrateCompanyCaughtUp({ companyId, companyName: displayName, status }),
+      );
+      return { wrapped: true, endedCompanyId: companyId };
+    }
+
+    if (hadRoles) {
+      if (fetched.newJobInteractions > 0) {
+        yield statusEvent(
+          `Found ${fetched.newJobInteractions} new posting${fetched.newJobInteractions === 1 ? "" : "s"} since last time — taking a look…`,
+        );
+      }
+    } else {
+      yield statusEvent(
+        `Found ${fetched.totalJobs} job posting${fetched.totalJobs === 1 ? "" : "s"}${fetched.newJobInteractions > 0 ? ` (${fetched.newJobInteractions} new)` : ""}${
+          fetched.learned
+            ? " — their site isn't one of the standard job boards, so I'm reading it directly"
+            : ""
+        } — taking a closer look…`,
       );
     }
-  } else {
-    yield statusEvent(
-      `Found ${fetched.totalJobs} job posting${fetched.totalJobs === 1 ? "" : "s"}${fetched.newJobInteractions > 0 ? ` (${fetched.newJobInteractions} new)` : ""}${
-        fetched.learned
-          ? " — their site isn't one of the standard job boards, so I'm reading it directly"
-          : ""
-      } — taking a closer look…`,
-    );
-  }
 
-  // Roles we hold open that this read didn't return. On a board we're reading
-  // directly we won't mark them gone on our own — the read is good enough to
-  // add roles, not to declare one dead — so the user gets the call instead of
-  // the board silently looking frozen.
-  if (fetched.missingNotDelisted > 0) {
-    yield statusEvent(
-      `${fetched.missingNotDelisted} role${fetched.missingNotDelisted === 1 ? "" : "s"} I have on file didn't come back in that read. Since I'm reading their site directly I won't mark ${fetched.missingNotDelisted === 1 ? "it" : "them"} gone on my own — say the word if ${fetched.missingNotDelisted === 1 ? "it's" : "they're"} down.`,
-    );
-  }
+    // Roles we hold open that this read didn't return. On a board we're reading
+    // directly we won't mark them gone on our own — the read is good enough to
+    // add roles, not to declare one dead — so the user gets the call instead of
+    // the board silently looking frozen.
+    if (fetched.missingNotDelisted > 0) {
+      yield statusEvent(
+        `${fetched.missingNotDelisted} role${fetched.missingNotDelisted === 1 ? "" : "s"} I have on file didn't come back in that read. Since I'm reading their site directly I won't mark ${fetched.missingNotDelisted === 1 ? "it" : "them"} gone on my own — say the word if ${fetched.missingNotDelisted === 1 ? "it's" : "they're"} down.`,
+      );
+    }
 
-  // Fall through to Step 1, which prescans + scans whatever is NEW.
-  return { wrapped: false, delta: fetched.newJobInteractions };
-}
+    // Fall through to Step 1, which prescans + scans whatever is NEW.
+    return { wrapped: false, delta: fetched.newJobInteractions };
+  },
+);

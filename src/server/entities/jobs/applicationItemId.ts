@@ -10,8 +10,8 @@
 // Its own file because the form service and the draft-authorship rules both
 // need it, and they need each other in the other direction.
 
-import { fnv1a } from "@/utils/hash";
-import { normalizeForCompare } from "@/utils/text";
+import { fnv1a } from "@/shared/utils/hash";
+import { normalizeForCompare } from "@/shared/utils/text";
 
 // Never collides with a real questionId (those are `q_…`).
 export const COVER_LETTER_ID = "cover_letter";

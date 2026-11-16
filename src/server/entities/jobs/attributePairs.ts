@@ -24,7 +24,7 @@
 //   are gate inputs that prose can leave ambiguous, and a bare scraped city
 //   otherwise reads as possibly-remote downstream. `enrich_job` never sees it:
 //   it's that sub-agent's own output.
-import { truncate } from "@/utils/text";
+import { truncate } from "@/shared/utils/text";
 
 export function attributePairs(attributes: unknown): string[] {
   if (

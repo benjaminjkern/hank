@@ -3,8 +3,8 @@
 // refuses any `doc` not in this set, so the page can never be used to scribble
 // into arbitrary memory paths (companies/{slug}.md etc).
 
+import { writeMemory } from "@/server/entities/memory/store";
 import { RESUME_PATH } from "@/server/entities/resume/store";
-import { writeMemory } from "@/server/memory/store";
 
 export const NARRATIVE_DOC_PATHS = {
   profile: "profile.md",

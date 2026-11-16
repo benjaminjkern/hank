@@ -12,12 +12,12 @@
 
 import { z } from "zod";
 
-import { NEGOTIATION_PANELS } from "@/lib/panelMode";
-import { getCurrentUser } from "@/server/auth/currentUser";
-import { rejectImpersonatedWrite } from "@/server/auth/viewerScope";
 import { discardUnrelayedSuggestionMarks } from "@/server/entities/companies/suggestionMark";
 import { discardUnrelayedApplicationEdits } from "@/server/entities/jobs/applicationDrafts";
 import { discardUnrelayedBoardEdits } from "@/server/entities/jobs/boardStance";
+import { rejectImpersonatedWrite } from "@/server/platform/admin/viewerScope";
+import { getCurrentUser } from "@/server/platform/auth/currentUser";
+import { NEGOTIATION_PANELS } from "@/shared/panelMode";
 
 export const dynamic = "force-dynamic";
 

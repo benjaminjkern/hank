@@ -14,6 +14,7 @@
 
 import type { RunContext } from "@/server/agent/contracts";
 import { isProfileEnrichedByLength } from "@/server/entities/profile/profileInventory";
+import { procedure } from "@/server/procedures/lib/procedure";
 import { runSubAgent } from "@/server/subagents/lib/runSubAgent";
 import {
   profileEnrichmentCheckSubAgent,
@@ -22,16 +23,22 @@ import {
 
 import { loadProfileEnrichmentCheckInput } from "./loadProfileEnrichmentCheckInput";
 
-export async function runProfileEnrichmentGate(
-  ctx: RunContext,
-): Promise<ProfileEnrichmentVerdict> {
-  // One read serves both steps: the length pre-gate is a rule over the same
-  // slots the sub-agent would be handed, so an obviously-full profile costs a
-  // memory read and no LLM call.
-  const input = await loadProfileEnrichmentCheckInput(ctx.userId);
-  if (isProfileEnrichedByLength(input.inventory)) return { enriched: true };
+export const runProfileEnrichmentGate = procedure(
+  "profile_enrichment_gate",
+  async (ctx: RunContext): Promise<ProfileEnrichmentVerdict> => {
+    // One read serves both steps: the length pre-gate is a rule over the same
+    // slots the sub-agent would be handed, so an obviously-full profile costs a
+    // memory read and no LLM call.
+    const input = await loadProfileEnrichmentCheckInput(ctx.userId);
+    if (isProfileEnrichedByLength(input.inventory)) return { enriched: true };
 
-  const result = await runSubAgent(profileEnrichmentCheckSubAgent, input, ctx);
-  if (!result.ok) return { enriched: false, missing: [], suggestedProbes: [] };
-  return result.output;
-}
+    const result = await runSubAgent(
+      profileEnrichmentCheckSubAgent,
+      input,
+      ctx,
+    );
+    if (!result.ok)
+      return { enriched: false, missing: [], suggestedProbes: [] };
+    return result.output;
+  },
+);

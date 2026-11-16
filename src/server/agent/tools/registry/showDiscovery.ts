@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { formatFocusRefToken } from "@/lib/focusRefToken";
 import { buildDiscoveryEvents } from "@/server/views/showEvents";
+import { formatFocusRefToken } from "@/shared/focusRefToken";
 
 import { toolError } from "../lib/toolError";
 
@@ -19,7 +19,6 @@ export const showDiscoveryTool: ToolDef<Record<string, never>> = {
   affectsViewedState: false,
   description:
     'Put the list of companies you last suggested back on the user\'s screen (right panel) and drop a clickable chip in the chat — pure display, no new search and nothing added. Use it when they ask to see the list again ("show me those companies", "what were the ones you found?", "bring that list back") after navigating the panel somewhere else. To look for DIFFERENT companies use find_companies; to add the ones they left checked use commit_discovery.',
-  inputSchema: { type: "object", properties: {} },
   parser: z.object({}),
   async handle(_input, ctx) {
     const show = await buildDiscoveryEvents(ctx.userId);

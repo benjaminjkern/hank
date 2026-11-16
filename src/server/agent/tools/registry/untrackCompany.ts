@@ -16,18 +16,14 @@ export const untrackCompanyTool: ToolDef<{ company?: string }> = {
   affectsViewedState: true,
   description:
     'Hard-delete this user\'s tracking of a company — removes it from the watchlist AND untracks every role the user had at it (each role\'s history goes too). The underlying company and its postings stay on file, so it can be re-added later and comes back fresh. The company-level parity of untrack_job: for true cleanup when the user wants the whole company gone ("I added this by mistake", "this isn\'t even a real company", "junk from discovery"). For a normal "not interested in this company" — which keeps the history — use close_company instead; that\'s the right tool almost every time. `company` is the company\'s slug — pass the one the user means.',
-  inputSchema: {
-    type: "object",
-    properties: {
-      company: {
-        type: "string",
-        description:
-          "The company's slug (e.g. 'stripe') — the company the user means.",
-      },
-    },
-    required: [],
-  },
-  parser: z.object({ company: z.string().optional() }),
+  parser: z.object({
+    company: z
+      .string()
+      .optional()
+      .describe(
+        "The company's slug (e.g. 'stripe') — the company the user means.",
+      ),
+  }),
   async handle({ company }, ctx) {
     const resolved = await resolveCompanyArg(ctx, company, {
       source: "untrack_company",

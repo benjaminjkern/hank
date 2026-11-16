@@ -7,7 +7,6 @@
 // a form item Hank passed over has to be visible or the user can't fill it in.
 
 import { JobInteractionStatus } from "@/generated/prisma/client";
-import { companyLogoUrl } from "@/lib/companyLogo";
 import { prisma } from "@/server/db/prisma";
 import {
   applicationEditsFor,
@@ -27,7 +26,10 @@ import {
   partitionFindings,
   readApplicationReview,
 } from "@/server/entities/jobs/applicationReview";
-import { isCoverLetterQuestion, isStockFieldType } from "@/server/scrape/types";
+import {
+  isCoverLetterQuestion,
+  isStockFieldType,
+} from "@/server/platform/scrape/types";
 import type {
   ApplicationDecision,
   DraftVerdict,
@@ -36,7 +38,8 @@ import type {
   NegotiationRow,
   NegotiationState,
 } from "@/server/views/negotiationPanel";
-import { normalizeForCompare } from "@/utils/text";
+import { companyLogoUrl } from "@/shared/companyLogo";
+import { normalizeForCompare } from "@/shared/utils/text";
 
 export type ApplicationItemStatus =
   // The user wrote or reworked this text.

@@ -6,7 +6,7 @@
 
 import { z } from "zod";
 
-import { stringField } from "@/utils/guards";
+import { stringField } from "@/shared/utils/guards";
 
 const CLIENT_EVENT_SOURCES = [
   "sse_disconnect", // SSE chat stream dropped mid-turn (no terminal event seen)

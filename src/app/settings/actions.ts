@@ -3,8 +3,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { revalidatePath } from "next/cache";
 
-import { getCurrentUser } from "@/server/auth/currentUser";
 import { prisma } from "@/server/db/prisma";
+import { getCurrentUser } from "@/server/platform/auth/currentUser";
 import { allowUserApiKeys } from "@/server/platform/deployment";
 import { DEEPSEEK_ANTHROPIC_BASE_URL } from "@/server/platform/llm/deepseek";
 import { encryptApiKey, keyHint } from "@/server/platform/llm/keyCrypto";

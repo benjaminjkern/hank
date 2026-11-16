@@ -1,5 +1,5 @@
-import { getCurrentUser } from "@/server/auth/currentUser";
 import { prisma } from "@/server/db/prisma";
+import { getCurrentUser } from "@/server/platform/auth/currentUser";
 import {
   allowUserApiKeys,
   hasServerKeyAccess,

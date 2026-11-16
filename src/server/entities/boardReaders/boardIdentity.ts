@@ -21,7 +21,7 @@
 // Postings on a recognized ATS are exempt: a company fronting Ashby or
 // Greenhouse legitimately has its roles on a host that never mentions it.
 
-import { detectAts } from "@/server/scrape/ats";
+import { detectAts } from "@/server/platform/scrape/ats";
 
 // Generic words that identify no one. A company called "Media" or "Labs" would
 // match half the internet, so they can't carry the identification on their own.

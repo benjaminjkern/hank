@@ -17,14 +17,7 @@ export const showShortlistBoardTool: ToolDef<{ company: string }> = {
   affectsViewedState: false,
   description:
     "Put a company's shortlist board on the user's screen (right panel) and read back every tier — the current picks/borderline/pass stances plus every role earlier passes set aside, each with its reason. Use it to pick a negotiation back up, to answer 'why isn't X on the list?', or to check what was filtered before reconsidering something with update_shortlist_proposal. Pure display + read: starts no work, changes nothing. `company` is the company's slug.",
-  inputSchema: {
-    type: "object",
-    properties: {
-      company: { type: "string", description: "The company's slug." },
-    },
-    required: ["company"],
-  },
-  parser: z.object({ company: z.string() }),
+  parser: z.object({ company: z.string().describe("The company's slug.") }),
   async handle(input, ctx) {
     const r = await resolveCompanyBySlug(ctx.userId, input.company);
     if (!r.ok) return slugLookupError(r);

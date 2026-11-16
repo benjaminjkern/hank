@@ -3,8 +3,8 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import styled, { css } from "styled-components";
 
-import { GitHubMark } from "@/components/GitHubMark";
-import { HankLogo } from "@/components/HankLogo";
+import { GitHubMark } from "@/client/components/GitHubMark";
+import { HankLogo } from "@/client/components/HankLogo";
 
 import { HankRain } from "./HankRain";
 

@@ -5,7 +5,7 @@
 // job.
 
 import { prisma } from "@/server/db/prisma";
-import { extractGreenhouseSlugFromBoardUrl } from "@/server/scrape/ats";
+import { extractGreenhouseSlugFromBoardUrl } from "@/server/platform/scrape/ats";
 
 import { companySlug } from "./companySlug";
 
